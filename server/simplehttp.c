@@ -98,6 +98,21 @@ int main(int argc, char **argv)
             break;
         }
     }
+    
+    if (daemon) {
+	    pid = fork();
+	    if (pid < 0) {
+			exit(EXIT_FAILURE);
+	    } else if (pid > 0) {
+			exit(EXIT_SUCCESS);
+	    }
+
+	    umask(0);
+	    sid = setsid();
+	    if (sid < 0) {
+	    	exit(EXIT_FAILURE);
+	    }
+	}
    
     if (uarg != NULL) {
         uid = get_uid(uarg);
