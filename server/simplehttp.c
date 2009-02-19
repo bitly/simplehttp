@@ -8,12 +8,19 @@
 #include <pwd.h>
 #include <grp.h>
 #include <err.h>
-#include <event.h>
-#include <evhttp.h>
 #include <string.h>
 #include <stdio.h>
+#include <fnmatch.h>
 
-#include "queue.h"
+#include "simplehttp.h"
+
+struct cb_entry {
+    char *path;
+    void *cb;
+    void *ctx;
+    TAILQ_ENTRY(cb_entry) entries;
+};
+TAILQ_HEAD(, cb_entry) callbacks;
 
 
 void
@@ -70,16 +77,44 @@ get_user_gid(char *user)
 void
 generic_request_handler(struct evhttp_request *req, void *arg)
 {
+    struct cb_entry *entry;
     struct evbuffer *evb = evbuffer_new();
     
     fprintf(stderr, "Request for %s from %s\n", req->uri, req->remote_host);
+
+    TAILQ_FOREACH(entry, &callbacks, entries) {
+        if (fnmatch(entry->path, req->uri, FNM_NOESCAPE) == 0) {
+            printf("D %s\n", entry->path);
+            break;
+        }
+    }
 
     evbuffer_add_printf(evb, "OK");
     evhttp_send_reply(req, HTTP_OK, "", evb);
     evbuffer_free(evb);
 }
 
-int main(int argc, char **argv)
+void
+simplehttp_init()
+{
+    TAILQ_INIT(&callbacks);
+}
+
+void
+simplehttp_set_cb(char *path, void *cb, void *ctx)
+{
+    struct cb_entry *cbPtr;
+
+    printf("%s\n", path);
+    cbPtr = malloc(sizeof(*cbPtr));
+    cbPtr->path = strdup(path);
+    cbPtr->cb = cb;
+    cbPtr->ctx = ctx;
+    TAILQ_INSERT_TAIL(&callbacks, cbPtr, entries);
+}
+
+int
+simplehttp_main(int argc, char **argv)
 {
     uid_t uid = 0;
     gid_t gid = 0;

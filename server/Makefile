@@ -1,8 +1,16 @@
 CFLAGS = -I. -I$(LIBEVENT)/include -Wall -g
-#LIBS = -L$(LIBEVENT)/lib -B static -levent
-LIBS = -L$(LIBEVENT)/lib -levent
+LIBS = -L. -L$(LIBEVENT)/lib -levent
+AR = ar
+AR_FLAGS = rc
+RANLIB = ranlib
 
-simplehttp: simplehttp.c
-	$(CC) $(CFLAGS) -o $@ simplehttp.c $(LIBS)
+libsimplehttp.a: simplehttp.o
+	/bin/rm -f $@
+	$(AR) $(AR_FLAGS) $@ $<
+	$(RANLIB) $@
+
+testserver: testserver.c
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp
+
 clean:
-	rm -f simplehttp *~
+	rm -rf *.a *.o testserver *.dSYM
