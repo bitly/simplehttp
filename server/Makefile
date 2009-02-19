@@ -12,5 +12,7 @@ libsimplehttp.a: simplehttp.o
 testserver: testserver.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp
 
+all: libsimplehttp.a testserver
+
 clean:
 	rm -rf *.a *.o testserver *.dSYM

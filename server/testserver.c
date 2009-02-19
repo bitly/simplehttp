@@ -2,9 +2,10 @@
 #include "simplehttp.h"
 
 void
-cb(struct evhttp_request *req, void *ctx)
+cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 {
-    printf("my callback fired\n");
+    evbuffer_add_printf(evb, "Hello bitches\n%s\n", req->uri);
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
 int

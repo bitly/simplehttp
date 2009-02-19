@@ -16,7 +16,7 @@
 
 struct cb_entry {
     char *path;
-    void *cb;
+    void (*cb)(struct evhttp_request *, struct evbuffer *,void *);
     void *ctx;
     TAILQ_ENTRY(cb_entry) entries;
 };
@@ -77,6 +77,7 @@ get_user_gid(char *user)
 void
 generic_request_handler(struct evhttp_request *req, void *arg)
 {
+    int found_cb = 0;
     struct cb_entry *entry;
     struct evbuffer *evb = evbuffer_new();
     
@@ -84,13 +85,15 @@ generic_request_handler(struct evhttp_request *req, void *arg)
 
     TAILQ_FOREACH(entry, &callbacks, entries) {
         if (fnmatch(entry->path, req->uri, FNM_NOESCAPE) == 0) {
-            printf("D %s\n", entry->path);
+            (*entry->cb)(req, evb, entry->ctx);
+            found_cb = 1;
             break;
         }
     }
 
-    evbuffer_add_printf(evb, "OK");
-    evhttp_send_reply(req, HTTP_OK, "", evb);
+    if (!found_cb) {
+        evhttp_send_reply(req, HTTP_NOTFOUND, "", evb);
+    }
     evbuffer_free(evb);
 }
 
@@ -101,7 +104,7 @@ simplehttp_init()
 }
 
 void
-simplehttp_set_cb(char *path, void *cb, void *ctx)
+simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
 {
     struct cb_entry *cbPtr;
 
