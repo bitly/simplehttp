@@ -108,12 +108,13 @@ simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffe
 {
     struct cb_entry *cbPtr;
 
-    printf("%s\n", path);
     cbPtr = malloc(sizeof(*cbPtr));
     cbPtr->path = strdup(path);
     cbPtr->cb = cb;
     cbPtr->ctx = ctx;
     TAILQ_INSERT_TAIL(&callbacks, cbPtr, entries);
+
+    printf("registering callback for path \"%s\"\n", path);
 }
 
 int
@@ -230,6 +231,13 @@ simplehttp_main(int argc, char **argv)
 
     event_init();
     httpd = evhttp_start(address, port);
+    if (!httpd) {
+        printf("could not bind to %s:%d\n", address, port);
+        return 1;
+    }
+
+    printf("listening on %s:%d\n", address, port);
+
     evhttp_set_gencb(httpd, generic_request_handler, NULL);
     event_dispatch();
 
