@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     
     address = "0.0.0.0";
     port = 8080;
-    
+    opterr = 0;
     while ((ch = getopt(argc, argv, "a:p:d:D:r:u:g:")) != -1) {
         switch (ch) {
         case 'a':
