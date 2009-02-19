@@ -1,4 +1,5 @@
 CFLAGS = -I. -I$(LIBEVENT)/include -Wall -g
+#LIBS = -L$(LIBEVENT)/lib -B static -levent
 LIBS = -L$(LIBEVENT)/lib -levent
 
 simplehttp: simplehttp.c

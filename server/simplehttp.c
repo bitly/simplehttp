@@ -1,4 +1,26 @@
-#include "simplehttp.h"
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/stat.h>
+
+#include <signal.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <grp.h>
+#include <err.h>
+#include <event.h>
+#include <evhttp.h>
+#include <string.h>
+#include <stdio.h>
+
+#include "queue.h"
+
+
+void
+termination_handler (int signum)
+{
+    event_loopbreak();
+}
 
 int 
 get_uid(char *user)
@@ -101,19 +123,19 @@ int main(int argc, char **argv)
     }
     
     if (daemon) {
-	    pid = fork();
-	    if (pid < 0) {
-			exit(EXIT_FAILURE);
-	    } else if (pid > 0) {
-			exit(EXIT_SUCCESS);
-	    }
+        pid = fork();
+        if (pid < 0) {
+            exit(EXIT_FAILURE);
+        } else if (pid > 0) {
+            exit(EXIT_SUCCESS);
+        }
 
-	    umask(0);
-	    sid = setsid();
-	    if (sid < 0) {
-	    	exit(EXIT_FAILURE);
-	    }
-	}
+        umask(0);
+        sid = setsid();
+        if (sid < 0) {
+            exit(EXIT_FAILURE);
+        }
+    }
    
     if (uarg != NULL) {
         uid = get_uid(uarg);
@@ -163,11 +185,17 @@ int main(int argc, char **argv)
         }
     }
     
+    signal(SIGINT, termination_handler);
+    signal(SIGHUP, termination_handler);
+    signal(SIGQUIT, termination_handler);
+    signal(SIGTERM, termination_handler);
+
     event_init();
     httpd = evhttp_start(address, port);
     evhttp_set_gencb(httpd, generic_request_handler, NULL);
     event_dispatch();
 
+    printf("exiting\n");
     /* Not reached in this code as it is now. */
     evhttp_free(httpd);
 
