@@ -53,10 +53,8 @@ generic_request_handler(struct evhttp_request *req, void *arg)
     fprintf(stderr, "Request for %s from %s\n", req->uri, req->remote_host);
 
     evbuffer_add_printf(evb, "OK");
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_send_reply(req, HTTP_OK, "", evb);
     evbuffer_free(evb);
-    
-    return;
 }
 
 int main(int argc, char **argv)
@@ -132,12 +130,6 @@ int main(int argc, char **argv)
     }
     
     if (getuid() == 0) {
-        if (uid == 0) {
-            err(1, "server will not run as root must specify '-u username' parameter");
-        }
-        if (gid == 0) {
-            err(1, "server will not run as gid 0 must specify '-g group' parameter");
-        }
         if (uarg != NULL) {
             if (initgroups(uarg, (int) gid) != 0) {
                 err(1, "initgroups() failed");
