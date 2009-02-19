@@ -68,6 +68,7 @@ int main(int argc, char **argv)
     int debug = 0;
     int daemon = 0;
     int port, ch, errno;
+    pid_t pid, sid;
     struct evhttp *httpd;
     
     address = "0.0.0.0";
