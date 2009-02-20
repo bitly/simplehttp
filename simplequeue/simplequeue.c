@@ -6,8 +6,8 @@
 #include "simplehttp.h"
 
 struct queue_entry {
-	char *data;
-	TAILQ_ENTRY(queue_entry) entries;
+    char *data;
+    TAILQ_ENTRY(queue_entry) entries;
 };
 
 TAILQ_HEAD(, queue_entry) queues;
