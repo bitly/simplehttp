@@ -2,6 +2,7 @@ import sys
 import traceback
 import pycurl
 import cStringIO
+import urllib
 
 class SimpleQueue:
     def __init__(self, address='127.0.0.1', port=8080, debug=False):
@@ -24,7 +25,7 @@ class SimpleQueue:
         return result
       
     def put(self, data, timeout_ms=500):
-        url = "http://%s:%d/put?data=%s" % (self.address, self.port, data)
+        url = "http://%s:%d/put?data=%s" % (self.address, self.port, urllib.quote(data))
         
         try:
             self.request(url, timeout_ms)
