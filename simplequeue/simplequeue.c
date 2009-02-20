@@ -22,8 +22,11 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *reset;
+    char *uri;
     
-    evhttp_parse_query(req->uri, &args);
+    uri = evhttp_decode_uri(req->uri);
+    evhttp_parse_query(uri, &args);
+    free(uri);
     reset = evhttp_find_header(&args, "reset");    
     if (reset != NULL && strcmp(reset, "1") == 0) {
         depth_high_water = 0;
@@ -63,9 +66,12 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq args;
     struct queue_entry *entry;
     const char *data;
+    char *uri;
     
     n_puts++;
-    evhttp_parse_query(req->uri, &args);
+    uri = evhttp_decode_uri(req->uri);
+    evhttp_parse_query(uri, &args);
+    free(uri);
     data = evhttp_find_header(&args, "data");
     entry = malloc(sizeof(*entry));
     entry->data = malloc(strlen(data)+1);
