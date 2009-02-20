@@ -13,7 +13,7 @@ struct queue_entry {
 TAILQ_HEAD(, queue_entry) queues;
 
 int depth = 0;
-int max_depth = 0;
+int depth_high_water = 0;
 int n_puts = 0;
 int n_gets = 0;
 
@@ -25,14 +25,15 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     evhttp_parse_query(req->uri, &args);
     reset = evhttp_find_header(&args, "reset");    
-    evbuffer_add_printf(evb, "puts: %d\n", n_puts);
-    evbuffer_add_printf(evb, "gets: %d\n", n_gets);
-    evbuffer_add_printf(evb, "depth: %d\n", depth);
-    evbuffer_add_printf(evb, "max_depth: %d\n", max_depth);
-    if (reset == "1") {
-        max_depth = 0;
+    if (reset != NULL && strcmp(reset, "1") == 0) {
+        depth_high_water = 0;
         n_puts = 0;
         n_gets = 0;
+    } else {
+        evbuffer_add_printf(evb, "puts:%d\n", n_puts);
+        evbuffer_add_printf(evb, "gets:%d\n", n_gets);
+        evbuffer_add_printf(evb, "depth:%d\n", depth);
+        evbuffer_add_printf(evb, "depth_high_water:%d\n", depth_high_water);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -71,8 +72,8 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     strcpy(entry->data, data);
     TAILQ_INSERT_TAIL(&queues, entry, entries);
     depth++;
-    if (depth > max_depth) {
-        max_depth = depth;
+    if (depth > depth_high_water) {
+        depth_high_water = depth;
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
