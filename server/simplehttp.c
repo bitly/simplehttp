@@ -22,6 +22,7 @@ struct cb_entry {
 };
 TAILQ_HEAD(, cb_entry) callbacks;
 
+int debug = 0;
 
 void
 termination_handler (int signum)
@@ -81,7 +82,9 @@ generic_request_handler(struct evhttp_request *req, void *arg)
     struct cb_entry *entry;
     struct evbuffer *evb = evbuffer_new();
     
-    fprintf(stderr, "Request for %s from %s\n", req->uri, req->remote_host);
+    if (debug) {
+        fprintf(stderr, "request for %s from %s\n", req->uri, req->remote_host);
+    }
 
     TAILQ_FOREACH(entry, &callbacks, entries) {
         if (fnmatch(entry->path, req->uri, FNM_NOESCAPE) == 0) {
@@ -126,7 +129,6 @@ simplehttp_main(int argc, char **argv)
     char *root = NULL;
     char *garg = NULL;
     char *uarg = NULL;
-    int debug = 0;
     int daemon = 0;
     int port, ch, errno;
     pid_t pid, sid;
