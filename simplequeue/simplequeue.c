@@ -33,7 +33,7 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "puts:%d\n", n_puts);
         evbuffer_add_printf(evb, "gets:%d\n", n_gets);
         evbuffer_add_printf(evb, "depth:%d\n", depth);
-        evbuffer_add_printf(evb, "depth_high_water:%d\n", depth_high_water);
+        evbuffer_add_printf(evb, "depth_high_water:%d", depth_high_water);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -47,7 +47,7 @@ get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     n_gets++;
     entry = TAILQ_FIRST(&queues);
     if (entry != NULL) {
-        evbuffer_add_printf(evb, "%s\n", entry->data);
+        evbuffer_add_printf(evb, "%s", entry->data);
         TAILQ_REMOVE(&queues, entry, entries);
         free(entry->data);
         free(entry);
