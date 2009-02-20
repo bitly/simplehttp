@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <fnmatch.h>
 
+#include "queue.h"
 #include "simplehttp.h"
 
 struct cb_entry {

@@ -1,6 +1,5 @@
 #include <event.h>
 #include <evhttp.h>
-#include "queue.h"
 
 void simplehttp_init();
 int simplehttp_main(int argc, char **argv);
