@@ -6,8 +6,8 @@
 #include "simplehttp.h"
 
 struct queue_entry {
-    char *data;
     TAILQ_ENTRY(queue_entry) entries;
+    char data[1];
 };
 
 TAILQ_HEAD(, queue_entry) queues;
@@ -52,7 +52,6 @@ get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (entry != NULL) {
         evbuffer_add_printf(evb, "%s", entry->data);
         TAILQ_REMOVE(&queues, entry, entries);
-        free(entry->data);
         free(entry);
         depth--;
     }
@@ -73,8 +72,7 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
     data = evhttp_find_header(&args, "data");
-    entry = malloc(sizeof(*entry));
-    entry->data = malloc(strlen(data)+1);
+    entry = malloc(sizeof(*entry)+strlen(data));
     strcpy(entry->data, data);
     TAILQ_INSERT_TAIL(&queues, entry, entries);
     depth++;
