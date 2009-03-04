@@ -31,7 +31,6 @@ decrtime(int fd, short what, void *ctx)
     struct decrement *decr = (struct decrement *) ctx;
     int i;
 
-    printf("decr %s %d\n", Tcl_GetHashKey(&ht, decr->hPtr), decr->amt);
     i = (int)Tcl_GetHashValue(decr->hPtr);
     i -= decr->amt;
     Tcl_SetHashValue(decr->hPtr, (void *)i);
