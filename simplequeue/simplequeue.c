@@ -12,10 +12,10 @@ struct queue_entry {
 
 TAILQ_HEAD(, queue_entry) queues;
 
-int depth = 0;
-int depth_high_water = 0;
-int n_puts = 0;
-int n_gets = 0;
+uint32_t depth = 0;
+uint32_t depth_high_water = 0;
+uint32_t n_puts = 0;
+uint32_t n_gets = 0;
 
 void
 stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -72,6 +72,12 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
     data = evhttp_find_header(&args, "data");
+    if (data == NULL) {
+        evhttp_clear_headers(&args);
+        evbuffer_add_printf(evb, "%s\n", "missing data");
+        evhttp_send_reply(req, HTTP_BADREQUEST, "OK", evb);
+        return;
+    }
     entry = malloc(sizeof(*entry)+strlen(data));
     strcpy(entry->data, data);
     TAILQ_INSERT_TAIL(&queues, entry, entries);
@@ -109,4 +115,3 @@ main(int argc, char **argv)
     
     return 0;
 }
-
