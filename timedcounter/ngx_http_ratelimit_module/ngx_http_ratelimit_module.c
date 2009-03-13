@@ -126,9 +126,13 @@ ngx_http_ratelimit_handler(ngx_http_request_t *r)
 #define MAX_URL 1024*16
     u_char                        buf[MAX_URL];
 
-fprintf(stderr, "ngx_http_ratelimit_handler\n");
+//fprintf(stderr, "ngx_http_ratelimit_handler\n");
 
     rlcf = ngx_http_get_module_loc_conf(r, ngx_http_ratelimit_module);
+
+    if (rlcf->rl_lengths == NULL || rlcf->rl_values == NULL) {
+        return NGX_OK;
+    }
 
     if (ngx_http_script_run(r, &rlcf->zone, rlcf->rl_lengths->elts,
                             0, rlcf->rl_values->elts) == NULL) {
@@ -143,9 +147,11 @@ fprintf(stderr, "ngx_http_ratelimit_handler\n");
     ngx_snprintf(buf, MAX_URL, "%V?key=%V&duration=%d", &rlcf->server, 
                  &rlcf->zone, (int)rlcf->interval);
 
+/*
     fprintf(stderr,"url %s zone %s server %s interval %d threshold %d\n",
                    buf, rlcf->zone.data, rlcf->server.data, (int)rlcf->interval, 
                    (int)rlcf->threshold);
+*/
 
     chunk.memory=NULL;
     chunk.size = 0;
@@ -159,7 +165,6 @@ fprintf(stderr, "ngx_http_ratelimit_handler\n");
        fprintf(stderr, "curl(%d): %s\n", res, curlErrorBuf);
     } else {
         int cnt = atoi((char *)chunk.memory);
-        fprintf(stderr, "RES: %d %s\n", cnt, (u_char *)chunk.memory);
         if (cnt >= (int)rlcf->threshold) {
             if(chunk.memory) {
                 free(chunk.memory);
@@ -184,11 +189,8 @@ ngx_http_ratelimit_init(ngx_conf_t *cf)
 
     h = ngx_array_push(&cmcf->phases[NGX_HTTP_PREACCESS_PHASE].handlers);
     if (h == NULL) {
-        fprintf(stderr, "handler not installed\n");
-
         return NGX_ERROR;
     }
-    fprintf(stderr, "handler is installed\n");
 
     *h = ngx_http_ratelimit_handler;
 
