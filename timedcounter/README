@@ -1,0 +1,40 @@
+The timed counter module is a simplehttp daemon which supports the
+nginx rate limit module also included in this directory.
+
+PREQ
+1. libevent - http://bit.ly/nyGSV
+2. tcl - http://bit.ly/v66pr
+3. nginx - http://bit.ly/k8fxD
+
+N.B. In order to rate limit on query args, you must use 0.7.x.
+
+INSTALL
+1. Build the server in ../server. Simplehttp uses static linking
+so "make" is sufficient.
+2. Build timedcounter via make.
+3. Build ngx_http_ratelimit_module with the 
+--add-module=/path/to/ngx_http_ratelimit_module directive to nginx's
+configure.
+
+CONF
+
+This is a snippet from the nginx.conf that rate limits values of
+the query param "h" to a rate of 5,000 requests over a 10 second
+interval.
+
+        location / {
+            ratelimit_zone              $arg_h;
+            ratelimit_server            http://0.0.0.0:8000;
+            ratelimit_interval          10;
+            ratelimit_threshold         5000;
+
+            proxy_set_header Host       $host;
+            proxy_set_header X-Real-IP  $remote_addr;
+            proxy_pass                  http://backend;
+        }
+
+RUN
+1. Sart timed counter. This runs it on 0.0.0.0:8000. See simplehttp.c
+in server for optargs.
+
+./timedcounter -a0.0.0.0 -p8000
