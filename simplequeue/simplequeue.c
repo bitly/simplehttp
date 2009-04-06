@@ -40,6 +40,7 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }   
 
 void
@@ -73,7 +74,6 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     free(uri);
     data = evhttp_find_header(&args, "data");
     if (data == NULL) {
-        evhttp_clear_headers(&args);
         evbuffer_add_printf(evb, "%s\n", "missing data");
         evhttp_send_reply(req, HTTP_BADREQUEST, "OK", evb);
         return;
@@ -87,6 +87,7 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void
