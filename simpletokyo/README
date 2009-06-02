@@ -5,4 +5,4 @@ the following commands.
 get - key, jsonp (opt)
 put - key, value, jsonp (opt)
 del - key, jsonp (opt)
-fwmatch - key, max (opt), jsonp (opt)
+fwmatch - key, max (opt), length(opt), offset (opt), jsonp (opt)

@@ -111,7 +111,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char                *uri, *json, *key, *kbuf, *value;
-    int                 i, max;
+    int                 i, max, off, len;
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
     struct json_object  *jsobj, *jsobj2, *jsarr;
@@ -126,6 +126,8 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
     key = (char *)evhttp_find_header(&args, "key");
     argtoi(&args, "max", &max, 1000);
+    argtoi(&args, "length", &len, 10);
+    argtoi(&args, "offset", &off, 0);
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -136,7 +138,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     jsarr = json_object_new_array();
     
     keylist = tcrdbfwmkeys2(rdb, key, max);
-    for (i=0; keylist!=NULL, i<tclistnum(keylist); i++){
+    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
       kbuf = (char *)tclistval2(keylist, i);
       value = tcrdbget2(rdb, kbuf);
       if (value) {

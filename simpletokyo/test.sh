@@ -16,5 +16,5 @@ done
 # get a few specific keys
 curl "http://localhost:8080/get?key=a1000"
 curl "http://localhost:8080/get?key=a1001"
-curl "http://localhost:8080/fwmatch?key=a&max=10"
+curl "http://localhost:8080/fwmatch?key=a&length=3&offset=2"
 
