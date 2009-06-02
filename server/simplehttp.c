@@ -104,6 +104,7 @@ generic_request_handler(struct evhttp_request *req, void *arg)
 void
 simplehttp_init()
 {
+    event_init();
     TAILQ_INIT(&callbacks);
 }
 
@@ -232,7 +233,7 @@ simplehttp_main(int argc, char **argv)
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
 
-    event_init();
+    //event_init();
     httpd = evhttp_start(address, port);
     if (!httpd) {
         printf("could not bind to %s:%d\n", address, port);
