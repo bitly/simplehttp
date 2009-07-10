@@ -2,33 +2,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <tcrdb.h>
+#include <tcutil.h>
+#include <tcfdb.h>
 
 #include "queue.h"
 #include "simplehttp.h"
 #include "json.h"
 
-#define RECONNECT 5
 #define MAXRES 1000
 #define BUFSZ 1024
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
                     struct evkeyvalq *args, struct json_object *jsobj);
-int open_db(char *addr, int port, TCRDB **rdb);
-void db_reconnect(int fd, short what, void *ctx);
 void argtoi(struct evkeyvalq *args, char *key, int *val, int def);
 void db_error_to_json(int code, struct json_object *jsobj);
-int incr_stat(TCRDB *rdb, char *queue, char *key);
-int decr_stat(TCRDB *rdb, char *queue, char *key);
-char *get_stat(TCRDB *rdb, char *queue, char *key);
 
-struct event ev;
-struct timeval tv = {RECONNECT,0};
-static char *db_host = "0.0.0.0";
-static int db_port = 1978;
-static TCRDB *rdb;
-static int db_status;
-static char *g_progname;
+static TCFDB *fdb;
 
 uint32_t depth = 0;
 uint32_t depth_high_water = 0;
@@ -51,44 +40,6 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
 
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(args);
-}
-
-int open_db(char *addr, int port, TCRDB **rdb)
-{
-    int ecode=0;
-
-    if (*rdb != NULL) {
-        if(!tcrdbclose(*rdb)){
-          ecode = tcrdbecode(*rdb);
-          fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
-        }
-        tcrdbdel(*rdb);
-        *rdb = NULL;
-    }
-    *rdb = tcrdbnew();
-    if(!tcrdbopen(*rdb, addr, port)){
-        ecode = tcrdbecode(*rdb);
-        fprintf(stderr, "open error(%s:%d): %s\n", addr, port, tcrdberrmsg(ecode));
-        *rdb = NULL;
-    } else {
-        char *status = tcrdbstat(*rdb);
-        printf("%s---------------------\n", status);
-        if (status) free(status);
-    }
-    return ecode;
-}
-
-void db_reconnect(int fd, short what, void *ctx)
-{
-    int s;
-
-    s = db_status;
-    if (s != TTESUCCESS && s != TTEINVALID && s != TTEKEEP && s != TTENOREC) {
-        db_status = open_db(db_host, db_port, &rdb);
-    }
-    evtimer_del(&ev);
-    evtimer_set(&ev, db_reconnect, NULL);
-    evtimer_add(&ev, &tv);
 }
 
 void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
@@ -129,36 +80,6 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 	json_object_object_add(jsobj, "gets", json_object_new_int(n_gets));
 	json_object_object_add(jsobj, "depth", json_object_new_int(depth));
 	json_object_object_add(jsobj, "maxDepth", json_object_new_int(depth_high_water));
-	
-	queue = (char *)evhttp_find_header(&args, "queue");
-	if (queue != NULL) {
-        sprintf(kbuf, "%s.gets", queue);
-        total_gets = get_stat(rdb, queue, "gets");
-        if (total_gets == NULL) {
-            json_object_object_add(jsobj, kbuf, json_object_new_int(0));
-        } else {
-            json_object_object_add(jsobj, kbuf, json_object_new_int(atoi(total_gets)));
-            tcfree(total_gets);
-        }
-        
-        sprintf(kbuf, "%s.puts", queue);
-        total_puts = get_stat(rdb, queue, "puts");
-        if (total_puts == NULL) {
-            json_object_object_add(jsobj, kbuf, json_object_new_int(0));
-        } else {
-            json_object_object_add(jsobj, kbuf, json_object_new_int(atoi(total_puts)));
-            tcfree(total_puts);
-        }
-        
-        sprintf(kbuf, "%s.depth", queue);
-        total = get_stat(rdb, queue, "depth");
-        if (total == NULL) {
-            json_object_object_add(jsobj, kbuf, json_object_new_int(0));
-        } else {
-            json_object_object_add(jsobj, kbuf, json_object_new_int(atoi(total)));
-            tcfree(total);
-        }
-	}
 	
 	if (reset) {
         depth_high_water = 0;
@@ -241,35 +162,6 @@ done:
 	finalize_json(req, evb, &args, jsobj);
 }
 
-int
-incr_stat(TCRDB *rdb, char *queue, char *key) {
-    int len;
-    char kbuf[BUFSZ];
-    
-    len = sprintf(kbuf, "s.%s.%s", queue, key);
-    
-    return tcrdbaddint(rdb, kbuf, len+1, 1);
-}
-
-int
-decr_stat(TCRDB *rdb, char *queue, char *key) {
-    int len;
-    char kbuf[BUFSZ];
-    
-    len = sprintf(kbuf, "s.%s.%s", queue, key);
-    
-    return tcrdbaddint(rdb, kbuf, len+1, -1);
-}
-
-char *
-get_stat(TCRDB *rdb, char *queue, char *key) {
-    char kbuf[BUFSZ];
-    
-    sprintf(kbuf, "s.%s.%s", queue, key);
-    
-    return tcrdbget2(rdb, kbuf);
-}
-    
 void
 put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
@@ -325,37 +217,25 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     finalize_json(req, evb, &args, jsobj);
 }
 
-void usage()
-{
-    fprintf(stderr, "%s: HTTP wrapper for Tokyo Tyrant\n", g_progname);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "usage:\n");
-    fprintf(stderr, "  %s [-tchost 0.0.0.0] [-tcport 1978]\n", g_progname);
-    fprintf(stderr, "\n");
-    exit(1);
-}
-
 int
 main(int argc, char **argv)
-{
-	int i;
+{	
+    int ecode;
+    char *db;
     
-    g_progname = argv[0];
-    for (i=1; i < argc; i++) {
-        if(!strcmp(argv[i], "-tchost")) {
-            if(++i >= argc) usage();
-            db_host = argv[i];
-        } else if(!strcmp(argv[i], "-tcport")) {
-            if(++i >= argc) usage();
-            db_port = tcatoi(argv[i]);
-        } else if (!strcmp(argv[i], "-help")) {
-            usage();
-        }
-    }
+	if (argc != 1) {
+        fprintf(stderr, "usage: %s db\n", argv[0]);
+	}
     
-    memset(&db_status, -1, sizeof(db_status));
+    db = argv[1];
+    fdb = tcfdbnew();
+    
+    if (!tcfdbopen(fdb, db, FDBOWRITER | FDBOCREAT)) {
+        ecode = tcfdbecode(fdb);
+        fprintf(stderr, "open error: %s\n", tcfdberrmsg(ecode));
+    }   
+    
     simplehttp_init();
-	db_reconnect(0, 0, NULL);
     simplehttp_set_cb("/put*", put, NULL);
     simplehttp_set_cb("/get*", get, NULL);
     simplehttp_set_cb("/stats*", stats, NULL);
