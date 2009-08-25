@@ -55,7 +55,7 @@ void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
 void
 stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    struct evkeyvalq args;
+    struct evkeyvalq *args;
     struct json_object *jsobj;
     int reset;
     char *uri, *queue, *total_gets, *total_puts, *total;
