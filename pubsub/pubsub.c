@@ -5,6 +5,8 @@
 #include "queue.h"
 #include "json.h"
 
+#define BUFSZ 1024
+
 typedef struct cli {
     struct evbuffer *buf;
     struct evhttp_request *req;
