@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "simplehttp.h"
 #include "queue.h"
-#include "json.h"
+#include "simplehttp.h"
+#include "json/json.h"
 
 #define BUFSZ 1024
 
@@ -55,7 +55,7 @@ void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
 void
 stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    struct evkeyvalq *args;
+    struct evkeyvalq args;
     struct json_object *jsobj;
     int reset;
     char *uri, *queue, *total_gets, *total_puts, *total;
@@ -100,6 +100,7 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct cli *client;
     
     msgRecv++;
+    totalConns++;
   
     TAILQ_FOREACH(client, &clients, entries) {
         msgSent++;
@@ -110,7 +111,7 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_reply_chunk(client->req, client->buf);
         i++;
     }
-
+    
     evbuffer_add_printf(evb, "Published to %d clients.\n", i);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
