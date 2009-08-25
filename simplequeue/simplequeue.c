@@ -64,9 +64,9 @@ void db_error_to_json(int code, struct json_object *jsobj)
 void
 stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    struct evkeyvalq args;
-	struct json_object *jsobj;
-	int reset;
+    struct evkeyvalq *args;
+    struct json_object *jsobj;
+    int reset;
     char *uri, *queue, *total_gets, *total_puts, *total;
     char kbuf[BUFSZ];
     
@@ -74,20 +74,20 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
 
-	argtoi(&args, "reset", &reset, 0);
-	jsobj = json_object_new_object();
-	json_object_object_add(jsobj, "puts", json_object_new_int(n_puts));
-	json_object_object_add(jsobj, "gets", json_object_new_int(n_gets));
-	json_object_object_add(jsobj, "depth", json_object_new_int(depth));
-	json_object_object_add(jsobj, "maxDepth", json_object_new_int(depth_high_water));
-	
-	if (reset) {
-        depth_high_water = 0;
-        n_puts = 0;
-        n_gets = 0;
+    argtoi(&args, "reset", &reset, 0);
+    jsobj = json_object_new_object();
+    json_object_object_add(jsobj, "puts", json_object_new_int(n_puts));
+    json_object_object_add(jsobj, "gets", json_object_new_int(n_gets));
+    json_object_object_add(jsobj, "depth", json_object_new_int(depth));
+    json_object_object_add(jsobj, "maxDepth", json_object_new_int(depth_high_water));
+
+    if (reset) {
+       depth_high_water = 0;
+       n_puts = 0;
+       n_gets = 0;
     } 
 
-	finalize_json(req, evb, &args, jsobj);
+    finalize_json(req, evb, &args, jsobj);
 }   
 
 void
