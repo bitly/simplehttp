@@ -64,7 +64,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
 void
 stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    struct evkeyvalq *args;
+    struct evkeyvalq args;
     struct json_object *jsobj;
     int reset;
     char *uri, *queue, *total_gets, *total_puts, *total;
