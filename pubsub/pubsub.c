@@ -6,6 +6,7 @@
 #include "json/json.h"
 
 #define BUFSZ 1024
+#define BOUNDARY "xXPubSubXx"
 
 typedef struct cli {
     struct evbuffer *buf;
@@ -105,8 +106,13 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     TAILQ_FOREACH(client, &clients, entries) {
         msgSent++;
         evbuffer_drain(client->buf, EVBUFFER_LENGTH(client->buf));
+        
+        evbuffer_add_printf(client->buf, "Content-Type: %s\n\n", "text/html");
         evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
-        evbuffer_add(client->buf, "\r\n", 2);
+        evbuffer_add_printf(client->buf, "--%s\n", BOUNDARY);
+        
+        /* evbuffer_add(client->buf, "\r\n", 2); */
+        
         printf("sending to client\n");
         evhttp_send_reply_chunk(client->req, client->buf);
         i++;
@@ -123,13 +129,15 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     printf("sub_cb\n");
     currentConns++;
     totalConns++;
-    evhttp_send_reply_start(req, HTTP_OK, "OK");
- 
     client = calloc(1, sizeof(*client));
     client->req = req;
     client->buf = evbuffer_new();
+    evhttp_add_header(client->req->output_headers, "Content-Type",
+        "multipart/x-mixed-replace; boundary=" BOUNDARY);
+    evbuffer_add_printf(client->buf, "--%s\n", BOUNDARY);
+    evhttp_send_reply_start(client->req, HTTP_OK, "OK");
+    evhttp_send_reply_chunk(client->req, client->buf);
     TAILQ_INSERT_TAIL(&clients, client, entries);
-
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
 }
 
