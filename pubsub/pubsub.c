@@ -3,7 +3,6 @@
 #include <string.h>
 #include "queue.h"
 #include "simplehttp.h"
-#include "json/json.h"
 
 #define BUFSZ 1024
 #define BOUNDARY "xXPubSubXx"
@@ -15,63 +14,32 @@ typedef struct cli {
 } cli;
 TAILQ_HEAD(, cli) clients;
 
-void argtoi(struct evkeyvalq *args, char *key, int *val, int def);
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-    struct evkeyvalq *args, struct json_object *jsobj);
-
 uint32_t totalConns = 0;
 uint32_t currentConns = 0;
 uint32_t msgRecv = 0;
 uint32_t msgSent = 0;
 
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-    struct evkeyvalq *args, struct json_object *jsobj)
-{
-    char *json, *jsonp;
-    
-    jsonp = (char *)evhttp_find_header(args, "jsonp");
-    json = json_object_to_json_string(jsobj);
-    if (jsonp) {
-        evbuffer_add_printf(evb, "%s(%s)\n", jsonp, json);
-    } else {
-        evbuffer_add_printf(evb, "%s\n", json);
-    }
-    json_object_put(jsobj); // Odd free function
-
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    evhttp_clear_headers(args);
-}
-
-void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
-{
-    char *tmp;
-
-    *val = def;
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
-    if (tmp) {
-        *val = atoi(tmp);
-    }
-}
-
 void
-stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
-    struct json_object *jsobj;
-    int reset;
-    char *uri, *queue, *total_gets, *total_puts, *total;
-    char kbuf[BUFSZ];
+    char *reset, *uri;
+    char buf[33];
     
     uri = evhttp_decode_uri(req->uri);
     evhttp_parse_query(uri, &args);
     free(uri);
-
-    argtoi(&args, "reset", &reset, 0);
-    jsobj = json_object_new_object();
-    json_object_object_add(jsobj, "totalConnections", json_object_new_int(totalConns));
-    json_object_object_add(jsobj, "currentConnections", json_object_new_int(currentConns));
-    json_object_object_add(jsobj, "messagesReceived", json_object_new_int(msgRecv));
-    json_object_object_add(jsobj, "messagesSent", json_object_new_int(msgSent));
+    
+    sprintf(buf, "%ld", totalConns);
+    evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
+    sprintf(buf, "%ld", currentConns);
+    evhttp_add_header(req->output_headers, "X-PUBSUB-CURRENT-CONNECTIONS", buf);
+    sprintf(buf, "%ld", msgRecv);
+    evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-RECEIVED", buf);
+    sprintf(buf, "%ld", msgSent);
+    evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
+    
+    reset = (char *)evhttp_find_header(&args, "reset");
 
     if (reset) {
         totalConns = 0;
@@ -80,7 +48,8 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         msgSent = 0;
     } 
 
-    finalize_json(req, evb, &args, jsobj);
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void on_close(struct evhttp_connection *evcon, void *ctx)
@@ -148,7 +117,7 @@ main(int argc, char **argv)
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
     simplehttp_set_cb("/sub*", sub_cb, NULL);
-    simplehttp_set_cb("/stats*", stats, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;
