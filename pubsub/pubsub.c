@@ -39,6 +39,9 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%ld", msgSent);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
     
+    evbuffer_add_printf(evb, "Active connections: %ld\nTotal connections: %ld\n"
+                             "Messages received: %ld\nMessages sent %ld\n",
+                             currentConns, totalConns, msgRecv, msgSent); 
     reset = (char *)evhttp_find_header(&args, "reset");
 
     if (reset) {
@@ -76,13 +79,13 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         msgSent++;
         evbuffer_drain(client->buf, EVBUFFER_LENGTH(client->buf));
         
-        evbuffer_add_printf(client->buf, "Content-Type: %s\n\n", "text/html");
+        evbuffer_add_printf(client->buf, 
+                            "content-type: %s\r\ncontent-length: %d\r\n\r\n",
+                            "*/*",
+                            EVBUFFER_LENGTH(req->input_buffer));
         evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
-        evbuffer_add_printf(client->buf, "--%s\n", BOUNDARY);
+        evbuffer_add_printf(client->buf, "\r\n--%s\r\n", BOUNDARY);
         
-        /* evbuffer_add(client->buf, "\r\n", 2); */
-        
-        printf("sending to client\n");
         evhttp_send_reply_chunk(client->req, client->buf);
         i++;
     }
@@ -95,13 +98,12 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct cli *client;
 
-    printf("sub_cb\n");
     currentConns++;
     totalConns++;
     client = calloc(1, sizeof(*client));
     client->req = req;
     client->buf = evbuffer_new();
-    evhttp_add_header(client->req->output_headers, "Content-Type",
+    evhttp_add_header(client->req->output_headers, "content-type",
         "multipart/x-mixed-replace; boundary=" BOUNDARY);
     evbuffer_add_printf(client->buf, "--%s\n", BOUNDARY);
     evhttp_send_reply_start(client->req, HTTP_OK, "OK");
@@ -117,7 +119,7 @@ main(int argc, char **argv)
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
     simplehttp_set_cb("/sub*", sub_cb, NULL);
-    simplehttp_set_cb("/stats*", stats_cb, NULL);
+    simplehttp_set_cb("/sta*", stats_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;
