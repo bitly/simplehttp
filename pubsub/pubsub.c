@@ -40,7 +40,7 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
     
     evbuffer_add_printf(evb, "Active connections: %ld\nTotal connections: %ld\n"
-                             "Messages received: %ld\nMessages sent %ld\n",
+                             "Messages received: %ld\nMessages sent: %ld\n",
                              currentConns, totalConns, msgRecv, msgSent); 
     reset = (char *)evhttp_find_header(&args, "reset");
 
