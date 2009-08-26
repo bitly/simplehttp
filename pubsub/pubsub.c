@@ -33,7 +33,7 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%ld", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
     sprintf(buf, "%ld", currentConns);
-    evhttp_add_header(req->output_headers, "X-PUBSUB-CURRENT-CONNECTIONS", buf);
+    evhttp_add_header(req->output_headers, "X-PUBSUB-ACTIVE-CONNECTIONS", buf);
     sprintf(buf, "%ld", msgRecv);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-RECEIVED", buf);
     sprintf(buf, "%ld", msgSent);
