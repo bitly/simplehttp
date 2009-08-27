@@ -105,7 +105,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     client->buf = evbuffer_new();
     evhttp_add_header(client->req->output_headers, "content-type",
         "multipart/x-mixed-replace; boundary=" BOUNDARY);
-    evbuffer_add_printf(client->buf, "--%s\n", BOUNDARY);
+    evbuffer_add_printf(client->buf, "--%s\r\n", BOUNDARY);
     evhttp_send_reply_start(client->req, HTTP_OK, "OK");
     evhttp_send_reply_chunk(client->req, client->buf);
     TAILQ_INSERT_TAIL(&clients, client, entries);
