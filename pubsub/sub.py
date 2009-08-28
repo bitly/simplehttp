@@ -4,7 +4,7 @@ import StringIO
 from pytc import HDB, HDBOWRITER, HDBOCREAT
 
 def read_cb(data):
-    print "data: %s" % (data)
+    print "data: **%s**" % (data)
 
 def dbg_cb(debug_type, debug_msg):
     print "debug(%d): %s" % (debug_type, debug_msg)
@@ -19,4 +19,5 @@ def geturl(url):
     c.setopt(pycurl.DEBUGFUNCTION, dbg_cb)
     c.perform()
     c.close()
-    geturl("http://localhost:8080/sub")
+
+geturl("http://localhost:8080/sub")
