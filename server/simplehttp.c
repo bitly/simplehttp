@@ -8,6 +8,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <err.h>
+#include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include <fnmatch.h>
@@ -24,6 +25,11 @@ struct cb_entry {
 TAILQ_HEAD(, cb_entry) callbacks;
 
 int debug = 0;
+
+static void
+ignore_cb(int sig, short what, void *arg)
+{
+}
 
 void
 termination_handler (int signum)
@@ -135,6 +141,7 @@ simplehttp_main(int argc, char **argv)
     int port, ch, errno;
     pid_t pid, sid;
     struct evhttp *httpd;
+    struct event pipe_ev;
     
     address = "0.0.0.0";
     port = 8080;
@@ -232,6 +239,11 @@ simplehttp_main(int argc, char **argv)
     signal(SIGHUP, termination_handler);
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
+
+    event_init();
+
+    signal_set(&pipe_ev, SIGPIPE, ignore_cb, NULL);
+    signal_add(&pipe_ev, NULL);
 
     //event_init();
     httpd = evhttp_start(address, port);
