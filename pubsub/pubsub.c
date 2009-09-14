@@ -20,6 +20,18 @@ uint32_t msgRecv = 0;
 uint32_t msgSent = 0;
 
 void
+clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    struct cli *client;
+    
+    TAILQ_FOREACH(client, &clients, entries) {
+        evbuffer_add_printf(evb, "%s:%d\n", client->req->remote_host, client->req->remote_port);
+    }
+    
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void
 stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
@@ -30,17 +42,17 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
     
-    sprintf(buf, "%ld", totalConns);
+    sprintf(buf, "%d", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
-    sprintf(buf, "%ld", currentConns);
+    sprintf(buf, "%d", currentConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-ACTIVE-CONNECTIONS", buf);
-    sprintf(buf, "%ld", msgRecv);
+    sprintf(buf, "%d", msgRecv);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-RECEIVED", buf);
-    sprintf(buf, "%ld", msgSent);
+    sprintf(buf, "%d", msgSent);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
     
-    evbuffer_add_printf(evb, "Active connections: %ld\nTotal connections: %ld\n"
-                             "Messages received: %ld\nMessages sent: %ld\n",
+    evbuffer_add_printf(evb, "Active connections: %d\nTotal connections: %d\n"
+                             "Messages received: %d\nMessages sent: %d\n",
                              currentConns, totalConns, msgRecv, msgSent); 
     reset = (char *)evhttp_find_header(&args, "reset");
 
@@ -82,7 +94,7 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(client->buf, 
                             "content-type: %s\r\ncontent-length: %d\r\n\r\n",
                             "*/*",
-                            EVBUFFER_LENGTH(req->input_buffer));
+                            (int)EVBUFFER_LENGTH(req->input_buffer));
         evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
         evbuffer_add_printf(client->buf, "\r\n--%s\r\n", BOUNDARY);
         
@@ -119,7 +131,8 @@ main(int argc, char **argv)
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
     simplehttp_set_cb("/sub*", sub_cb, NULL);
-    simplehttp_set_cb("/sta*", stats_cb, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
+    simplehttp_set_cb("/clients*", clients_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;
