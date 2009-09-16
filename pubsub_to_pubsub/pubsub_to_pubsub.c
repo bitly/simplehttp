@@ -10,9 +10,10 @@
 
 
 struct global_data {
-    void (*cb)(char *data, struct evbuffer *evb);
+    int (*cb)(char *data, struct evbuffer *evb, void *cbarg);
     struct evhttp_connection *evhttp_target_connection;
     char *target_address;
+    void *cbarg;
 };
 
 void 
@@ -55,8 +56,9 @@ source_callback (struct evhttp_request *req, void *arg){
     // empty buffer
     evbuffer_drain(req->input_buffer, EVBUFFER_LENGTH(req->input_buffer));
     // write to output buffer
-    (*client_data->cb)(data, evhttp_target_request->output_buffer);
+    int flag = (*client_data->cb)(data, evhttp_target_request->output_buffer, client_data->cbarg);
     free(data);
+    if (!flag){return;} // don't make the request
 
     if (evhttp_make_request(client_data->evhttp_target_connection, evhttp_target_request, EVHTTP_REQ_POST, "/pub") == -1) {
 		fprintf(stdout, "FAILED make_request\n");
@@ -77,7 +79,7 @@ http_chunked_request_done(struct evhttp_request *req, void *arg)
 
 
 int
-pubsub_to_pubsub_main(char *source_address, int source_port, char *target_address, int target_port, void (*cb)(char *data, struct evbuffer *evb))
+pubsub_to_pubsub_main(char *source_address, int source_port, char *target_address, int target_port, int (*cb)(char *data, struct evbuffer *evb, void *arg), void *cbarg)
 {
 
     event_init();
@@ -105,6 +107,7 @@ pubsub_to_pubsub_main(char *source_address, int source_port, char *target_addres
     data->evhttp_target_connection = evhttp_target_connection;
     data->target_address = target_address;
     data->cb = cb;
+    data->cbarg = cbarg;
 
     evhttp_source_request = evhttp_request_new(http_chunked_request_done, data);
     evhttp_add_header(evhttp_source_request->output_headers, "Host", source_address);
