@@ -214,6 +214,11 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_clear_headers(&args);
         return;
     }
+    if (value == NULL) {
+        evhttp_send_error(req, 400, "value is required");
+        evhttp_clear_headers(&args);
+        return;
+    }
     
     jsobj = json_object_new_object();
     if (tcrdbput2(rdb, key, value)) {
