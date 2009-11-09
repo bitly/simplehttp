@@ -1,7 +1,11 @@
-CFLAGS = -I. -I../server/ -I$(LIBEVENT)/include -I/usr/local/include/json -Wall -g
-LIBS = -L. -L../server/ -L$(LIBEVENT)/lib -L/usr/local/lib -levent -ljson -ltokyotyrant -ltokyocabinet -lz -lbz2 -lresolv -ldl -lpthread -lm -lc
+CFLAGS = -I../server/ -I$(LIBEVENT)/include -Wall -g
+LIBS = -L../server/ -L$(LIBEVENT)/lib -levent 
 
 simplequeue: simplequeue.c
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp -ljson
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp -ljson 
+
+install:
+	/usr/bin/install simplequeue $(LIBEVENT)/bin
+
 clean:
-	rm -rf *.a *.o testserver *.dSYM
+	rm -rf *.a *.o simplequeue *.dSYM
