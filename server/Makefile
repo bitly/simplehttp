@@ -14,5 +14,10 @@ testserver: testserver.c
 
 all: libsimplehttp.a testserver
 
+install:
+	/usr/bin/install libsimplehttp.a $(LIBEVENT)/lib/
+	/usr/bin/install -D simplehttp.h $(LIBEVENT)/include/simplehttp/simplehttp.h
+	/usr/bin/install -D queue.h $(LIBEVENT)/include/simplehttp/queue.h
+
 clean:
 	rm -rf *.a *.o testserver *.dSYM
