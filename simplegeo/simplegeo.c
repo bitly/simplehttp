@@ -370,7 +370,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *json, *dataBuf;
+    char *uri, *json;
     double lat, lng, distance, minlat, minlng, maxlat, maxlng, miles, lat2, lng2;
     int x1, x2, y1, y2, id, max;
     int total;
