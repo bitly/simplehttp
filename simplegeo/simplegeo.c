@@ -43,7 +43,7 @@ static double radius = 3958.75587;
 
 typedef struct Geo_Result {
     int id;
-    int cid;
+    char *data;
     double latitude;
     double longitude;
     double distance;
@@ -122,7 +122,6 @@ int open_db(char *addr, int port, TCRDB **rdb)
         printf("adding indices\n---------------------\n");
         tcrdbtblsetindex(*rdb, "x", RDBITDECIMAL);
         tcrdbtblsetindex(*rdb, "y", RDBITDECIMAL);
-        tcrdbtblsetindex(*rdb, "cid", RDBITDECIMAL);
         printf("%s---------------------\n", status);
         if (status) free(status);
     }
@@ -315,7 +314,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *id, *cid, *json, *key, *value;
+    char *uri, *id, *data, *json, *key, *value;
     double lat, lng;
     int x, y;
     char buf[16];
@@ -334,7 +333,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     argtof(&args, "lat", &lat, 0);
     argtof(&args, "lng", &lng, 0);
     id = (char *)evhttp_find_header(&args, "id");
-    cid = (char *)evhttp_find_header(&args, "cid");
+    data = (char *)evhttp_find_header(&args, "data");
     
     if (id == NULL) {
         evhttp_send_error(req, 400, "id is required");
@@ -342,15 +341,11 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (cid == NULL) {
-        cid = "";
-    }
-    
     x = (lat * 10000) + 1800000;
     y = (lng * 10000) + 1800000;
       
     cols = tcmapnew();
-    tcmapput2(cols, "cid", cid);
+    tcmapput2(cols, "data", data);
     sprintf(buf, "%d", x);
     tcmapput2(cols, "x", buf);
     sprintf(buf, "%d", y);
@@ -361,21 +356,23 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     tcmapput2(cols, "lng", buf);
     
     jsobj = json_object_new_object();
-    if (tcrdbtblput(rdb, id, sizeof(id), cols)) {
+    if (tcrdbtblput(rdb, id, strlen(id), cols)) {
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
     } else {
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
+    
+    tcmapdel(cols);
 
     finalize_json(req, evb, &args, jsobj);
 }
 
 void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *json, *cid;
+    char *uri, *json, *dataBuf;
     double lat, lng, distance, minlat, minlng, maxlat, maxlng, miles, lat2, lng2;
-    int x1, x2, y1, y2, id, cid2;
+    int x1, x2, y1, y2, id, max;
     int total;
     struct evkeyvalq args;
     int ecode, pksiz, i, rsiz;
@@ -403,7 +400,7 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     argtof(&args, "lat", &lat, 0);
     argtof(&args, "lng", &lng, 0);
     argtof(&args, "miles", &miles, 0);
-    cid = (char *)evhttp_find_header(&args, "cid");
+    argtoi(&args, "max", &max, 1);
     
     geo_box(lat, lng, miles, &minlat, &minlng, &maxlat, &maxlng);
     
@@ -422,11 +419,6 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     tcrdbqryaddcond(query, "x", RDBQCNUMLT, maxx);
     tcrdbqryaddcond(query, "y", RDBQCNUMGT, miny);
     tcrdbqryaddcond(query, "y", RDBQCNUMLT, maxy);
-    
-    if (cid != NULL) {
-        tcrdbqryaddcond(query, "cid", RDBQCNUMEQ, cid);
-    }
-    
     tcrdbqrysetorder(query, "x", RDBQONUMASC);
     
     cols = tcmapnew();
@@ -449,12 +441,9 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             buf = tcmapget2(cols, "lng");
             lng2 = atof(buf);
             georesultPtr->longitude = lng2;
-            buf = tcmapget2(cols, "cid");
-            cid2 = atoi(buf);
-            georesultPtr->cid = cid2;
             id = atoi(rbuf);
             georesultPtr->id = id;
-            
+            georesultPtr->data = strdup(tcmapget2(cols, "data"));
             distance = geo_distance(lat, lng, lat2, lng2);
             georesultPtr->distance = distance;
             georesults[i] = georesultPtr;
@@ -472,13 +461,17 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     for(i = 0; i < total; i++){
         georesultPtr = georesults[i];
-        jsobj2 = json_object_new_object();
-        json_object_object_add(jsobj2, "id", json_object_new_int(georesultPtr->id));
-        json_object_object_add(jsobj2, "cid", json_object_new_int(georesultPtr->cid));
-        json_object_object_add(jsobj2, "latitude", json_object_new_double(georesultPtr->latitude));
-        json_object_object_add(jsobj2, "longitude", json_object_new_double(georesultPtr->longitude));
-        json_object_object_add(jsobj2, "distance", json_object_new_double(georesultPtr->distance));
-        json_object_array_add(jsarr, jsobj2);
+
+        if (i < max) {
+            jsobj2 = json_object_new_object();
+            json_object_object_add(jsobj2, "id", json_object_new_int(georesultPtr->id));
+            json_object_object_add(jsobj2, "data", json_object_new_string(georesultPtr->data));
+            json_object_object_add(jsobj2, "latitude", json_object_new_double(georesultPtr->latitude));
+            json_object_object_add(jsobj2, "longitude", json_object_new_double(georesultPtr->longitude));
+            json_object_object_add(jsobj2, "distance", json_object_new_double(georesultPtr->distance));
+            json_object_array_add(jsarr, jsobj2);
+        }
+        free(georesultPtr->data);
         free(georesultPtr);
     }
     
@@ -503,7 +496,7 @@ void usage()
 int
 main(int argc, char **argv)
 {
-    int i;
+    int i, errCode;
     double magic, rlat, s, c;
     int lat;
     
@@ -539,6 +532,12 @@ main(int argc, char **argv)
     simplehttp_set_cb("/distance*", distance_cb, NULL);
     simplehttp_set_cb("/box*", box_cb, NULL);
     simplehttp_main(argc, argv);
+    
+    if (!tcrdbclose(rdb)) {
+        errCode = tcrdbecode(rdb);
+        fprintf(stderr, "close error: %s\n", tcrdberrmsg(errCode));
+    }
+    tcrdbdel(rdb);
 
     return 0;
 }
