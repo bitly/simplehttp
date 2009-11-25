@@ -39,7 +39,8 @@ except ImportError:
 
 
 class Subscription:
-    def __init__(self, subcb, debug=False):
+    def __init__(self, subcb, timeout=300, debug=False):
+        self.timeout = timeout
         self.debug = debug
         self.chunk = ""
         self.nchunks = 0 
@@ -91,6 +92,8 @@ class Subscription:
         c.setopt(pycurl.WRITEFUNCTION, self.body_cb)
         c.setopt(pycurl.FOLLOWLOCATION, 1)
         c.setopt(pycurl.NOSIGNAL, 1)
+        if (self.timeout):
+          c.setopt(pycurl.TIMEOUT, self.timeout)
         if self.debug is True:
             c.setopt(pycurl.DEBUGFUNCTION, self.dbg_cb)
             c.setopt(pycurl.VERBOSE, 1)
@@ -101,5 +104,6 @@ class Subscription:
             c.close()
             raise
         c.close()
+
 
 
