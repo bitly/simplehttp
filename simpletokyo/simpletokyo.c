@@ -1,11 +1,11 @@
 #include <tcrdb.h>
-#include "queue.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "simplehttp.h"
+#include <simplehttp/queue.h> 
+#include <simplehttp/simplehttp.h>
 #include "json/json.h"
 
 
@@ -77,8 +77,7 @@ int open_db(char *addr, int port, TCRDB **rdb)
 
 void db_reconnect(int fd, short what, void *ctx)
 {
-    int i, s;
-
+    int s;
     s = db_status;
     if (s != TTESUCCESS && s != TTEINVALID && s != TTEKEEP && s != TTENOREC) {
         db_status = open_db(db_host, db_port, &rdb);
@@ -110,7 +109,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *uri, *json, *key, *kbuf, *value;
+    char                *key, *kbuf, *value;
     int                 i, max, off, len;
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
@@ -120,9 +119,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
     argtoi(&args, "max", &max, 1000);
@@ -163,7 +160,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *uri, *json, *key;
+    char                *key;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
@@ -171,9 +168,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
     if (key == NULL) {
@@ -195,7 +190,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *uri, *json, *key, *value;
+    char                *key, *value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
@@ -203,9 +198,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
     value = (char *)evhttp_find_header(&args, "value");
@@ -234,7 +227,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *uri, *json, *key, *value;
+    char                *key, *value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
@@ -243,9 +236,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
 
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
     if (key == NULL) {

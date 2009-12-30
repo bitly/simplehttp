@@ -14,7 +14,13 @@ do
     done
 done
 # get a few specific keys
+echo "key should not exist"
 curl "http://localhost:8080/get?key=a1000"
+echo "key should exist"
 curl "http://localhost:8080/get?key=a1001"
+echo "should return 1005, 1007, 1009"
 curl "http://localhost:8080/fwmatch?key=a&length=3&offset=2"
-
+echo "set of odd data"
+curl "http://localhost:8080/put?key=odd&value=%3C%3E%26this%3Dthat%7B%7D*"
+echo "should == '<>&this=that{}*'"
+curl "http://localhost:8080/get?key=odd"

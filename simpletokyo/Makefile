@@ -1,9 +1,11 @@
-CFLAGS = -I. -I../server -I$(LIBEVENT)/include -I/bitly/local/include -g
-LIBS = -L. -L../server -L$(LIBEVENT)/lib -levent -L/usr/local/lib -L/bitly/local/lib -ljson -ltokyotyrant -ltokyocabinet -lz -lbz2 -lresolv -ldl -lpthread -lm -lc
-
+CFLAGS = -I. -I$(LIBEVENT)/include -Wall -g -O2
+LIBS = -L. -L$(LIBEVENT)/lib -levent -ljson -ltokyotyrant -ltokyocabinet -lsimplehttp
 
 simpletokyo: simpletokyo.c
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+
+install:
+	/usr/bin/install -D simpletokyo $(LIBEVENT)/bin/simpletokyo
 
 clean:
 	rm -rf *.o simpletokyo *.dSYM
