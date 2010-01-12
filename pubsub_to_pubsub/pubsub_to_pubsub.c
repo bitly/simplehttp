@@ -10,9 +10,10 @@
 
 
 struct global_data {
-    int (*cb)(char *data, struct evbuffer *evb, void *cbarg);
+    int (*cb)(char *data, struct evbuffer *evb, char **target_path, void *cbarg);
     struct evhttp_connection *evhttp_target_connection;
     char *target_address;
+    char *target_path;
     void *cbarg;
 };
 
@@ -56,11 +57,11 @@ source_callback (struct evhttp_request *req, void *arg){
     // empty buffer
     evbuffer_drain(req->input_buffer, EVBUFFER_LENGTH(req->input_buffer));
     // write to output buffer
-    int flag = (*client_data->cb)(data, evhttp_target_request->output_buffer, client_data->cbarg);
+    int flag = (*client_data->cb)(data, evhttp_target_request->output_buffer, &client_data->target_path, client_data->cbarg);
     free(data);
     if (!flag){return;} // don't make the request
 
-    if (evhttp_make_request(client_data->evhttp_target_connection, evhttp_target_request, EVHTTP_REQ_POST, "/pub") == -1) {
+    if (evhttp_make_request(client_data->evhttp_target_connection, evhttp_target_request, EVHTTP_REQ_POST, client_data->target_path) == -1) {
         fprintf(stdout, "FAILED make_request\n");
         exit(1);
     }
@@ -77,9 +78,13 @@ http_chunked_request_done(struct evhttp_request *req, void *arg)
     if (DEBUG) fprintf(stderr, "DONE on sub connection\n");
 }
 
+int
+pubsub_to_pubsub_main(char *source_address, int source_port, char *target_address, int target_port, int (*cb)(char *data, struct evbuffer *evb, char **target_path, void *arg), void *cbarg){
+    return pubsub_to_pubsub_main_path(source_address, source_port, target_address, target_port, cb, cbarg, "/pub");
+}
 
 int
-pubsub_to_pubsub_main(char *source_address, int source_port, char *target_address, int target_port, int (*cb)(char *data, struct evbuffer *evb, void *arg), void *cbarg)
+pubsub_to_pubsub_main_path(char *source_address, int source_port, char *target_address, int target_port, int (*cb)(char *data, struct evbuffer *evb, char **target_path, void *arg), void *cbarg, char *target_path)
 {
 
     event_init();
@@ -106,6 +111,8 @@ pubsub_to_pubsub_main(char *source_address, int source_port, char *target_addres
     data = calloc(1, sizeof(*data));
     data->evhttp_target_connection = evhttp_target_connection;
     data->target_address = target_address;
+    data->target_path = calloc(4096, sizeof(char *));
+    strcpy(data->target_path, target_path);
     data->cb = cb;
     data->cbarg = cbarg;
 

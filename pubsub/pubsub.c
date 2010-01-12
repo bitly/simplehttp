@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "queue.h"
-#include "simplehttp.h"
+#include "simplehttp/queue.h"
+#include "simplehttp/simplehttp.h"
 
 #define BUFSZ 1024
 #define BOUNDARY "xXPubSubXx"
