@@ -11,6 +11,8 @@ class SimpleQueue:
         self.debug = debug
         
     def request(self, url, timeout_ms=500):
+        if self.debug:
+            print url
         buffer = cStringIO.StringIO()
         curl = pycurl.Curl()
         curl.setopt(pycurl.URL, url)

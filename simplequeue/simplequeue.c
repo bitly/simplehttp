@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "queue.h"
-#include "simplehttp.h"
+#include "simplehttp/queue.h"
+#include "simplehttp/simplehttp.h"
 
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;
@@ -22,11 +22,8 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *reset;
-    char *uri;
     
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
     reset = evhttp_find_header(&args, "reset");    
     if (reset != NULL && strcmp(reset, "1") == 0) {
         depth_high_water = 0;
@@ -66,12 +63,9 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq args;
     struct queue_entry *entry;
     const char *data;
-    char *uri;
     
     n_puts++;
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
     data = evhttp_find_header(&args, "data");
     if (data == NULL) {
         evbuffer_add_printf(evb, "%s\n", "missing data");

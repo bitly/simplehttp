@@ -1,5 +1,5 @@
-CFLAGS = -I../server/ -I$(LIBEVENT)/include -Wall -g
-LIBS = -L../server/ -L$(LIBEVENT)/lib -levent 
+CFLAGS = -I$(LIBEVENT)/include -Wall -g
+LIBS = -L$(LIBEVENT)/lib -levent 
 
 simplequeue: simplequeue.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp -ljson 
