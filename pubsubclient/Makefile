@@ -16,6 +16,7 @@ all: libpubsubclient.a pubsub-reader
 
 install:
 	/usr/bin/install pubsub-reader /usr/bin
+	/usr/bin/install pubsub2simplequeue.sh /usr/bin
 	/usr/bin/install libpubsubclient.a $(LIBEVENT)/lib/
 	/usr/bin/install -D pubsubclient.h $(LIBEVENT)/include/simplehttp/pubsubclient.h
 
