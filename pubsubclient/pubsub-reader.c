@@ -7,9 +7,58 @@
 #include "event.h"
 #include "evhttp.h"
 #include "pubsubclient.h"
+#include "../server/queue.h"
+#include <pthread.h>
+#include <curl/curl.h>
 
 static int debug = false;
 static int encode = false;
+static int threads = true;
+static int numthreads = 4;
+static int exiting = 0;
+static char *simplequeue = "http://localhost:8080";
+static pthread_mutex_t lock;
+
+typedef struct {
+	int id;
+} parm;
+
+struct data_entry {
+    char *data;
+    TAILQ_ENTRY(data_entry) entries;
+} data_entry;
+TAILQ_HEAD(data_list, data_entry) datahead;
+
+
+void *threadfunc(void *arg)
+{
+    CURL *curl;
+    struct data_entry *d;
+    char buf[64*1024];
+    int tnum = (int *)arg;
+
+    printf("starting thread %d\n", tnum);
+    curl = curl_easy_init();
+    while (!exiting) {
+        pthread_mutex_lock(&lock);
+        d = TAILQ_LAST(&(datahead), data_list);
+        if (d) TAILQ_REMOVE(&(datahead), d, entries);
+        pthread_mutex_unlock(&lock);
+        if (d) {
+            //printf("threadfunc: %s\n", d->data);
+            sprintf(buf, "%s/put?data=%s", simplequeue, d->data);
+            curl_easy_setopt(curl, CURLOPT_URL, buf);
+            curl_easy_perform(curl); /* ignores error */
+            if (d->data) free(d->data);
+            free(d);
+        }
+        pthread_yield();
+        usleep(1*1000);
+    }
+    printf("thread exiting %d\n", tnum);
+    curl_easy_cleanup(curl);
+}
+
 
 // Pulled from http://geekhideout.com/urlcode.shtml
 /* Converts a hex character to its integer value */
@@ -129,9 +178,17 @@ int parseurl(char *url, char **pprotocol, char **phost,
     return true;
 }
 
-void callback(char *data, void *arg)
+void pubsub_to_pubsub_cb(char *data, void *arg)
 {
-    if (encode) {
+    struct data_entry *d;
+
+    if (threads) {
+        d = malloc(sizeof(*d));     
+        d->data = url_encode(data);
+        pthread_mutex_lock(&lock);
+        TAILQ_INSERT_TAIL(&(datahead), d, entries);
+        pthread_mutex_unlock(&lock);
+    } else if (encode) {
         char *s = url_encode(data);
         fprintf(stdout, "%s\n", s);
         free(s);
@@ -142,12 +199,16 @@ void callback(char *data, void *arg)
 
 int main(int argc, char **argv)
 {
+    int i, n, ch;
     char *url;
+    parm *p;
     char *protocol, *host, *port, *path, *tail, *baseprotocol,
          *basehost, *baseport, *basepath, *basetail;
-    int ch;
+    pthread_t *tids;
+    pthread_attr_t pthread_custom_attr;
 
-    while ((ch = getopt(argc, argv, "deu:")) != -1) {
+
+    while ((ch = getopt(argc, argv, "det:q:u:")) != -1) {
         switch (ch) {
         case 'd':
             debug = true;
@@ -155,6 +216,13 @@ int main(int argc, char **argv)
         case 'e':
             encode = true;
             break;
+        case 't':
+            threads = true;
+            numthreads = atoi(optarg);
+            break;
+        case 'q':
+            threads = true;
+            simplequeue = optarg;
         case 'u':
             url = strdup(optarg);
             break;
@@ -162,12 +230,30 @@ int main(int argc, char **argv)
     }
 
     if (!url) {
-        fprintf(stderr, "usage: %s [-e] -u 'http://pubsub.host:port'\n", argv[0]);
+        fprintf(stderr, "usage: %s [-e|-t 4|-q 'http://localhost:8080'] -u 'http://pubsub.host:port'\n", argv[0]);
         exit(0);
     }
     parseurl(url, &protocol, &host, &port, &path, &tail);
-    fprintf(stderr, "connecting to %s:%s/%s tail %s\n", host, port, path, tail);
 
-    pubsub_to_pubsub_main(host, atoi(port), callback, NULL);
+    TAILQ_INIT(&datahead);
+
+    if (threads) {
+        p=(parm *)malloc(sizeof(parm)*numthreads);
+
+	tids=(pthread_t *)malloc(numthreads*sizeof(*tids));
+        pthread_attr_init(&pthread_custom_attr);
+        for (i=0; i<numthreads; i++) {
+            p[i].id=i;
+            pthread_create(&tids[i], &pthread_custom_attr, threadfunc, (void *)(i));
+        }
+    }
+
+    pubsub_to_pubsub_main(host, atoi(port), pubsub_to_pubsub_cb, NULL);
+
+    for (i=0; i<numthreads; i++) {
+        pthread_join(tids[i],NULL);
+    }
+    free(p);
+
     return 1;
 }

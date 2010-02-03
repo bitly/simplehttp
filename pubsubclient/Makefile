@@ -1,4 +1,4 @@
-CFLAGS = -I. -I$(LIBEVENT)/include -g -O2
+CFLAGS = -I. -I$(LIBEVENT)/include -g
 LIBS = -L. -L$(LIBEVENT)/lib -levent -ldl -lm -lc 
 AR = ar
 AR_FLAGS = rc
@@ -10,7 +10,7 @@ libpubsubclient.a: pubsubclient.o
 	$(RANLIB) $@
 
 pubsub-reader: pubsub-reader.o
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp -lpubsubclient
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp -lpubsubclient -lpthread -lcurl
 
 all: libpubsubclient.a pubsub-reader
 
