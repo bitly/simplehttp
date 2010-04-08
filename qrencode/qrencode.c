@@ -7,6 +7,17 @@
 #include "qrencode.h"
 #include "simplehttp.h"
 
+/*
+ * libqrencode
+ * http://megaui.net/fukuchi/works/qrencode/index.en.html
+ *
+ * os x installation
+ * http://blog.loudhush.ro/2009/12/creating-qr-codes-on-mac-os-x-snow.html
+ *
+ * libpng
+ * http://www.libpng.org/pub/png/libpng.html
+ *
+ */
 
 
 static FILE *fp; // avoid clobbering by setjmp.
