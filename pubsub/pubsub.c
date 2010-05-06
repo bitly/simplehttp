@@ -1,13 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "simplehttp/queue.h"
-#include "simplehttp/simplehttp.h"
+#include "queue.h"
+#include "simplehttp.h"
 
 #define BUFSZ 1024
 #define BOUNDARY "xXPubSubXx"
 
 typedef struct cli {
+    int multipart;
     struct evbuffer *buf;
     struct evhttp_request *req;
     TAILQ_ENTRY(cli) entries;
@@ -18,6 +19,19 @@ uint32_t totalConns = 0;
 uint32_t currentConns = 0;
 uint32_t msgRecv = 0;
 uint32_t msgSent = 0;
+
+
+void
+argtoi(struct evkeyvalq *args, char *key, int *val, int def)
+{
+    char *tmp;
+
+    *val = def;
+    tmp = (char *)evhttp_find_header(args, (const char *)key);
+    if (tmp) {
+        *val = atoi(tmp);
+    }
+}
 
 void
 clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -91,13 +105,17 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         msgSent++;
         evbuffer_drain(client->buf, EVBUFFER_LENGTH(client->buf));
         
-        evbuffer_add_printf(client->buf, 
-                            "content-type: %s\r\ncontent-length: %d\r\n\r\n",
-                            "*/*",
-                            (int)EVBUFFER_LENGTH(req->input_buffer));
-        evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
-        evbuffer_add_printf(client->buf, "\r\n--%s\r\n", BOUNDARY);
-        
+        if (client->multipart) {
+            evbuffer_add_printf(client->buf, 
+                                "content-type: %s\r\ncontent-length: %d\r\n\r\n",
+                                "*/*",
+                                (int)EVBUFFER_LENGTH(req->input_buffer));
+            evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
+            evbuffer_add_printf(client->buf, "\r\n--%s\r\n", BOUNDARY);
+        } else {
+            evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
+            evbuffer_add_printf(client->buf, "\n");
+        }
         evhttp_send_reply_chunk(client->req, client->buf);
         i++;
     }
@@ -109,19 +127,32 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct cli *client;
+    struct evkeyvalq args;
+    char *uri;
 
     currentConns++;
     totalConns++;
+    uri = evhttp_decode_uri(req->uri);
+    evhttp_parse_query(uri, &args);
+    free(uri);
     client = calloc(1, sizeof(*client));
+    argtoi(&args, "multipart", &client->multipart, 1);
     client->req = req;
     client->buf = evbuffer_new();
-    evhttp_add_header(client->req->output_headers, "content-type",
-        "multipart/x-mixed-replace; boundary=" BOUNDARY);
-    evbuffer_add_printf(client->buf, "--%s\r\n", BOUNDARY);
+    if (client->multipart) {
+        evhttp_add_header(client->req->output_headers, "content-type",
+            "multipart/x-mixed-replace; boundary=" BOUNDARY);
+        evbuffer_add_printf(client->buf, "--%s\r\n", BOUNDARY);
+    } else {
+        evhttp_add_header(client->req->output_headers, "content-type",
+            "application/json");
+        evbuffer_add_printf(client->buf, "\r\n");
+    }
     evhttp_send_reply_start(client->req, HTTP_OK, "OK");
     evhttp_send_reply_chunk(client->req, client->buf);
     TAILQ_INSERT_TAIL(&clients, client, entries);
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
+    evhttp_clear_headers(&args);
 }
 
 int
