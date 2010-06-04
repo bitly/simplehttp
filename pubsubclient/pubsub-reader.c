@@ -37,7 +37,7 @@ void *thread_func(void *arg)
     char buf[64*1024];
     long tnum = (long)arg;
 
-    printf("starting thread %d\n", tnum);
+    printf("starting thread %ld\n", tnum);
     curl = curl_easy_init();
     while (!exiting) {
         pthread_mutex_lock(&lock);
@@ -51,10 +51,14 @@ void *thread_func(void *arg)
             if (d->data) free(d->data);
             free(d);
         }
+#if (defined(__MACH__) && defined(__APPLE__))
+        pthread_yield_np();
+#else
         pthread_yield();
+#endif
         usleep(1*1000);
     }
-    printf("thread exiting %d\n", tnum);
+    printf("thread exiting %ld\n", tnum);
     curl_easy_cleanup(curl);
 }
 
@@ -113,7 +117,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: %s [-e|-t 4|-q 'http://localhost:8080'] -u 'http://pubsub.host:port'\n", argv[0]);
         exit(0);
     }
-    if (sscanf(url, "http://%[^:]:%d", &host, &port) != 2) {
+    if (sscanf(url, "http://%[^:]:%d", (char *)&host, &port) != 2) {
         fprintf(stderr, "pubsub must include host and port: i.e. 'http://localhost:8080'");
         exit(0);
     }

@@ -51,13 +51,13 @@ source_callback_helper(struct evhttp_request *req, void *arg){
     int len = atoi(content_len);
     size_t len_size;
     len_size = (size_t)len;
-    if (DEBUG) fprintf(stdout, "received content_length:%d buffer has:%d\n", len, EVBUFFER_LENGTH(req->input_buffer));
+    if (DEBUG) fprintf(stdout, "received content_length:%d buffer has:%d\n", (int)len, (int)EVBUFFER_LENGTH(req->input_buffer));
 
     struct global_data *client_data = (struct global_data *)arg;
 
     char *data = calloc(len, sizeof(char *));
     evbuffer_remove(req->input_buffer, data, len);
-    if (DEBUG)fprintf(stdout, "data has %d bytes\n", strlen(data));
+    if (DEBUG)fprintf(stdout, "data has %d bytes\n", (int)strlen(data));
     if (DEBUG)fprintf(stdout, "data=%s\n", data);
     (*client_data->cb)(data, client_data->cbarg);
     free(data);

@@ -1,5 +1,5 @@
-CFLAGS = -I. -I$(LIBEVENT)/include -g
-LIBS = -L. -L$(LIBEVENT)/lib -levent -ldl -lm -lc 
+CFLAGS = -I. -I../server -I$(LIBEVENT)/include -g
+LIBS = -L. -L../server -L$(LIBEVENT)/lib -levent -ldl -lm -lc 
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
