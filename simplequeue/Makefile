@@ -1,8 +1,8 @@
-CFLAGS = -I$(LIBEVENT)/include -Wall -g
-LIBS = -L$(LIBEVENT)/lib -levent 
+CFLAGS = -I../server -I$(LIBEVENT)/include -Wall -g -O2
+LIBS = -L../server -L$(LIBEVENT)/lib -levent 
 
 simplequeue: simplequeue.c
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp -ljson 
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp
 
 install:
 	/usr/bin/install simplequeue $(LIBEVENT)/bin
