@@ -236,7 +236,6 @@ simplehttp_main(int argc, char **argv)
     }
     
     signal(SIGINT, termination_handler);
-    signal(SIGHUP, termination_handler);
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
 
@@ -245,7 +244,6 @@ simplehttp_main(int argc, char **argv)
     signal_set(&pipe_ev, SIGPIPE, ignore_cb, NULL);
     signal_add(&pipe_ev, NULL);
 
-    //event_init();
     httpd = evhttp_start(address, port);
     if (!httpd) {
         printf("could not bind to %s:%d\n", address, port);
