@@ -16,6 +16,15 @@
 #include "queue.h"
 #include "simplehttp.h"
 
+struct cb_entry {
+    char *path;
+    void (*cb)(struct evhttp_request *, struct evbuffer *,void *);
+    void *ctx;
+    TAILQ_ENTRY(cb_entry) entries;
+};
+TAILQ_HEAD(, cb_entry) callbacks;
+
+int debug = 0;
 
 static void
 ignore_cb(int sig, short what, void *arg)
@@ -26,6 +35,51 @@ void
 termination_handler (int signum)
 {
     event_loopbreak();
+}
+
+int 
+get_uid(char *user)
+{
+    int retcode;
+    struct passwd *pw;
+
+    pw = getpwnam(user);
+    if (pw == NULL) {
+        retcode = -1;
+    } else {
+        retcode = (unsigned) pw->pw_uid;
+    }
+    return retcode;
+}
+
+int 
+get_gid(char *group)
+{
+    int retcode;
+    struct group *grent;
+
+    grent = getgrnam(group);
+    if (grent == NULL) {
+        retcode = -1;
+    } else {
+        retcode = grent->gr_gid;
+    }
+    return retcode;
+}
+
+int 
+get_user_gid(char *user)
+{
+    int retcode;
+    struct passwd *pw;
+
+    pw = getpwnam(user);
+    if (pw == NULL) {
+        retcode = -1;
+    } else {
+        retcode = pw->pw_gid;
+    }
+    return retcode;
 }
 
 void
@@ -53,17 +107,46 @@ generic_request_handler(struct evhttp_request *req, void *arg)
     evbuffer_free(evb);
 }
 
-
-int main(int argc, char **argv)
+void
+simplehttp_init()
 {
-    char *address = "0.0.0.0";
-    int port = 1957;
-    int ch;
+    event_init();
+    TAILQ_INIT(&callbacks);
+}
+
+void
+simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
+{
+    struct cb_entry *cbPtr;
+
+    cbPtr = malloc(sizeof(*cbPtr));
+    cbPtr->path = strdup(path);
+    cbPtr->cb = cb;
+    cbPtr->ctx = ctx;
+    TAILQ_INSERT_TAIL(&callbacks, cbPtr, entries);
+
+    printf("registering callback for path \"%s\"\n", path);
+}
+
+int
+simplehttp_main(int argc, char **argv)
+{
+    uid_t uid = 0;
+    gid_t gid = 0;
+    char *address;
+    char *root = NULL;
+    char *garg = NULL;
+    char *uarg = NULL;
+    int daemon = 0;
+    int port, ch, errno;
+    pid_t pid, sid;
     struct evhttp *httpd;
     struct event pipe_ev;
     
+    address = "0.0.0.0";
+    port = 8080;
     opterr = 0;
-    while ((ch = getopt(argc, argv, "a:p:d:")) != -1) {
+    while ((ch = getopt(argc, argv, "a:p:d:D:r:u:g:")) != -1) {
         switch (ch) {
         case 'a':
             address = optarg;
@@ -74,6 +157,81 @@ int main(int argc, char **argv)
         case 'd':
             debug = 1;
             break;
+        case 'r':
+            root = optarg;
+            break;
+        case 'D':
+            daemon = 1;
+            break;
+        case 'g':
+            garg = optarg;
+            break;
+        case 'u':
+            uarg = optarg;
+            break;
+        }
+    }
+    
+    if (daemon) {
+        pid = fork();
+        if (pid < 0) {
+            exit(EXIT_FAILURE);
+        } else if (pid > 0) {
+            exit(EXIT_SUCCESS);
+        }
+
+        umask(0);
+        sid = setsid();
+        if (sid < 0) {
+            exit(EXIT_FAILURE);
+        }
+    }
+   
+    if (uarg != NULL) {
+        uid = get_uid(uarg);
+        gid = get_user_gid(uarg);
+        if (uid < 0) {
+            uid = atoi(uarg);
+            uarg = NULL;
+        }
+        if (uid == 0) {
+            err(1, "invalid user");
+        }
+    }
+    if (garg != NULL) {
+        gid = get_gid(garg);
+        if (gid < 0) {
+            gid = atoi(garg);
+            if (gid == 0) {
+                err(1, "invalid group");
+            }
+        }
+    }
+   
+    if (root != NULL) {
+        if (chroot(root) != 0) {
+            err(1, strerror(errno));
+        }
+        if (chdir("/") != 0) {
+            err(1, strerror(errno));
+        }
+    }
+    
+    if (getuid() == 0) {
+        if (uarg != NULL) {
+            if (initgroups(uarg, (int) gid) != 0) {
+                err(1, "initgroups() failed");
+            }
+        } else {
+            if (setgroups(0, NULL) != 0) {
+                err(1, "setgroups() failed");
+            }
+        }
+        if (gid != getgid() && setgid(gid) != 0) {
+            err(1, "setgid() failed");
+        }
+        if (setuid(uid) != 0) {
+            err(1, "setuid() failed");
         }
     }
     
@@ -89,7 +247,7 @@ int main(int argc, char **argv)
     httpd = evhttp_start(address, port);
     if (!httpd) {
         printf("could not bind to %s:%d\n", address, port);
-        exit(1);
+        return 1;
     }
 
     printf("listening on %s:%d\n", address, port);
