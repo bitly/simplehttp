@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "simplehttp/queue.h"
-#include "simplehttp/simplehttp.h"
+#include "queue.h"
+#include "simplehttp.h"
 
 #define BUFSZ 1024
 #define BOUNDARY "xXPubSubXx"
@@ -112,9 +112,9 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             // set to non-chunked so that send_reply_chunked doesn't add \r\n before/after this block
             client->req->chunked = 0;
             // write the frame. a websocket frame is \x00 + msg + \xFF
-        	evbuffer_add(client->buf, "\0", 1);
-            evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
-        	evbuffer_add(client->buf, "\xFF", 1);
+            evbuffer_add(client->buf, "\0", 1);
+            evbuffer_add(client->buf, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
+            evbuffer_add(client->buf, "\xFF", 1);
         }
         else if (client->multipart) {
             /* chunked */
@@ -122,11 +122,11 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                                 "content-type: %s\r\ncontent-length: %d\r\n\r\n",
                                 "*/*",
                                 (int)EVBUFFER_LENGTH(req->input_buffer));
-            evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
+            evbuffer_add(client->buf, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
             evbuffer_add_printf(client->buf, "\r\n--%s\r\n", BOUNDARY);
         } else {
             /* new line terminated */
-            evbuffer_add(client->buf, req->input_buffer->buffer, EVBUFFER_LENGTH(req->input_buffer));
+            evbuffer_add(client->buf, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
             evbuffer_add_printf(client->buf, "\n");
         }
         evhttp_send_reply_chunk(client->req, client->buf);
