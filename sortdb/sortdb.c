@@ -2,6 +2,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -26,7 +27,7 @@ char *prev_line(char *pos)
 
 char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
 {
-    size_t distance;
+    ptrdiff_t distance;
     char *current;
     char *line;
     int rc;
