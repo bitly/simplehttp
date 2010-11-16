@@ -16,12 +16,12 @@
 #include "queue.h"
 #include "simplehttp.h"
 
-struct cb_entry {
+typedef struct cb_entry {
     char *path;
     void (*cb)(struct evhttp_request *, struct evbuffer *,void *);
     void *ctx;
     TAILQ_ENTRY(cb_entry) entries;
-};
+} cb_entry;
 TAILQ_HEAD(, cb_entry) callbacks;
 
 int debug = 0;
@@ -119,7 +119,7 @@ simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffe
 {
     struct cb_entry *cbPtr;
 
-    cbPtr = malloc(sizeof(*cbPtr));
+    cbPtr = (cb_entry *)malloc(sizeof(*cbPtr));
     cbPtr->path = strdup(path);
     cbPtr->cb = cb;
     cbPtr->ctx = ctx;
@@ -238,8 +238,6 @@ simplehttp_main(int argc, char **argv)
     signal(SIGINT, termination_handler);
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
-
-    event_init();
 
     signal_set(&pipe_ev, SIGPIPE, ignore_cb, NULL);
     signal_add(&pipe_ev, NULL);
