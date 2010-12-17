@@ -15,11 +15,16 @@ libpubsub_to_pubsub.a: pubsub_to_pubsub.o
 	$(AR) $(AR_FLAGS) $@ $<
 	$(RANLIB) $@
 
-all: libpubsub_to_pubsub.a
+ps_to_ps: ps_to_ps.c
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lpubsub_to_pubsub
+
+all: libpubsub_to_pubsub.a ps_to_ps
 
 install:
-	/usr/bin/install libpubsub_to_pubsub.a $(LIBEVENT)/lib/
-	/usr/bin/install -D pubsub_to_pubsub.h $(LIBEVENT)/include/simplehttp/pubsub_to_pubsub.h
+	/usr/bin/install libpubsub_to_pubsub.a $(TARGET)/lib/
+	/usr/bin/install -D pubsub_to_pubsub.h $(TARGET)/include/simplehttp/pubsub_to_pubsub.h
+	/usr/bin/install ps_to_ps $(TARGET)/bin/
 
 clean:
 	/bin/rm -f libpubsub_to_pubsub.a pubsub_to_pubsub.o
+	/bin/rm -f ps_to_ps
