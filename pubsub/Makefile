@@ -1,5 +1,10 @@
-CFLAGS = -I. -I../server -I$(LIBEVENT)/include -O2 -g
-LIBS = -L. -L../server -L$(LIBEVENT)/lib -levent -lsimplehttp
+LIBEVENT ?= /usr/local
+LIBSIMPLEHTTP ?= ../simplehttp
+LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)
+LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
+
+CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -O2 -g
+LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -lsimplehttp
 
 pubsub: pubsub.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)

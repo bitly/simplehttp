@@ -1,5 +1,10 @@
-CFLAGS = -I. -I../server -I$(LIBEVENT)/include -I/bitly/local/include -g
-LIBS = -L. -L../server -L$(LIBEVENT)/lib -levent -L/usr/local/lib -L/bitly/local/lib -ljson -ltokyotyrant -ltokyocabinet -lz -lbz2 -lresolv -ldl -lpthread -lm -lc
+LIBEVENT ?= /usr/local
+LIBSIMPLEHTTP ?= ../simplehttp
+LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)
+LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
+
+CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -g
+LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -L/usr/local/lib -levent -ljson -ltokyotyrant -ltokyocabinet -lz -lbz2 -lresolv -ldl -lpthread -lm -lc
 
 
 simpleattributes: simpleattributes.c

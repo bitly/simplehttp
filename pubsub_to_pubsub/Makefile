@@ -1,5 +1,10 @@
-CFLAGS = -I. -I$(LIBEVENT)/include -g -O2
-LIBS = -L. -I$(LIBEVENT)/lib -levent -ljson -ldl -lm -lc
+LIBEVENT ?= /usr/local
+LIBSIMPLEHTTP ?= ../simplehttp
+LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)
+LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
+
+CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -g -O2
+LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -ljson -ldl -lm -lc
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
