@@ -1,4 +1,5 @@
 LIBEVENT ?= /usr/local
+TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
 LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
@@ -10,7 +11,7 @@ sortdb: sortdb.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 install:
-	/usr/bin/install sortdb $(LIBEVENT)/bin
+	/usr/bin/install sortdb $(TARGET)/bin
 
 clean:
 	rm -rf *.a *.o sortdb *.dSYM

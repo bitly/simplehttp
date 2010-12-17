@@ -1,4 +1,5 @@
 LIBEVENT ?= /usr/local
+TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
 LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
@@ -10,7 +11,7 @@ simpletokyo: simpletokyo.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 install:
-	/usr/bin/install -D simpletokyo $(LIBEVENT)/bin/simpletokyo
+	/usr/bin/install -D simpletokyo $(TARGET)/bin/simpletokyo
 
 clean:
 	rm -rf *.o simpletokyo *.dSYM

@@ -1,4 +1,5 @@
 LIBEVENT ?= /usr/local
+TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
 LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
@@ -10,7 +11,7 @@ pubsub: pubsub.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 install:
-	/usr/bin/install pubsub $(LIBEVENT)/bin/
+	/usr/bin/install pubsub $(TARGET)/bin/
 
 clean:
 	rm -rf *.o pubsub *.dSYM
