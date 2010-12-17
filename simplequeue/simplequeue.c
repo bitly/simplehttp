@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-// from ../server
-#include "queue.h"
-#include "simplehttp.h"
+#include "simplehttp/queue.h"
+#include "simplehttp/simplehttp.h"
 
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;

@@ -7,7 +7,7 @@
 #include "event.h"
 #include "evhttp.h"
 #include "pubsubclient.h"
-#include "../server/queue.h"
+#include "simplehttp/queue.h"
 #include <pthread.h>
 #include <curl/curl.h>
 
