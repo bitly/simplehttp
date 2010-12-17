@@ -19,15 +19,17 @@ INSTALL INSTRUCTIONS
 to install any of the simplehttp components you will need to install 
 [libevent](http://www.monkey.org/~provos/libevent/) 1.4.13+ and the 'simplehttp' module first.
 
-# build the main library
-# this provides libsimplehttp.a simplehttp/simplehttp.h and simplehttp/queue.h
-cd simplehttp
-make && make install
+build the main library
+this provides libsimplehttp.a simplehttp/simplehttp.h and simplehttp/queue.h
 
-# now install whichever module you would like
-# this will compile 'simplequeue' and place it in /usr/local/bin
-cd simplequeue
-make && make install
+    cd simplehttp
+    make && make install
+
+now install whichever module you would like
+this will compile 'simplequeue' and place it in /usr/local/bin
+
+    cd simplequeue
+    make && make install
 
 Some modules have additional dependencies:
 
