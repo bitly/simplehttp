@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "queue.h"
 #include "simplehttp.h"
+#include "http-internal.h"
 
 #define BUFSZ 1024
 #define BOUNDARY "xXPubSubXx"
@@ -12,16 +14,18 @@ int ps_debug = 0;
 typedef struct cli {
     int multipart;
     int websocket;
+    uint64_t connection_id;
+    time_t connect_time;
     struct evbuffer *buf;
     struct evhttp_request *req;
     TAILQ_ENTRY(cli) entries;
 } cli;
 TAILQ_HEAD(, cli) clients;
 
-uint32_t totalConns = 0;
-uint32_t currentConns = 0;
-uint32_t msgRecv = 0;
-uint32_t msgSent = 0;
+uint64_t totalConns = 0;
+uint64_t currentConns = 0;
+uint64_t msgRecv = 0;
+uint64_t msgSent = 0;
 
 
 void
@@ -40,9 +44,26 @@ void
 clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct cli *client;
+    struct tm *time_struct;
+    char buf[248];
+    unsigned long output_buffer_length;
+    struct evhttp_connection *evcon;
     
+    if (TAILQ_EMPTY(&clients)) {
+        evbuffer_add_printf(evb, "no /sub connections\n");
+    }
     TAILQ_FOREACH(client, &clients, entries) {
-        evbuffer_add_printf(evb, "%s:%d\n", client->req->remote_host, client->req->remote_port);
+        evcon = (struct evhttp_connection *)client->req->evcon;
+        
+        time_struct = gmtime(&client->connect_time);
+        strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
+        output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
+        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n", 
+            client->req->remote_host, 
+            client->req->remote_port, 
+            buf, 
+            output_buffer_length,
+            (int)evcon->state);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -68,14 +89,12 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%d", msgSent);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
     
-    evbuffer_add_printf(evb, "Active connections: %d\nTotal connections: %d\n"
-                             "Messages received: %d\nMessages sent: %d\n",
+    evbuffer_add_printf(evb, "Active connections: %lu\nTotal connections: %lu\n"
+                             "Messages received: %lu\nMessages sent: %lu\n",
                              currentConns, totalConns, msgRecv, msgSent); 
     reset = (char *)evhttp_find_header(&args, "reset");
 
     if (reset) {
-        totalConns = 0;
-        currentConns = 0;
         msgRecv = 0;
         msgSent = 0;
     } 
@@ -89,10 +108,13 @@ void on_close(struct evhttp_connection *evcon, void *ctx)
     struct cli *client = (struct cli *)ctx;
 
     if (client) {
+        fprintf(stdout, "%lu >> close from  %s:%d\n", client->connection_id, evcon->address, evcon->port);
         currentConns--;
         TAILQ_REMOVE(&clients, client, entries);
         evbuffer_free(client->buf);
         free(client);
+    } else {
+        fprintf(stdout, "[unknown] >> close from  %s:%d\n", evcon->address, evcon->port);
     }
 }
 
@@ -146,6 +168,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char *ws_upgrade;
     char *host;
     char buf[248];
+    struct tm *time_struct;
 
     currentConns++;
     totalConns++;
@@ -155,7 +178,15 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     client = calloc(1, sizeof(*client));
     argtoi(&args, "multipart", &client->multipart, 1);
     client->req = req;
+    client->connection_id = totalConns;
+    client->connect_time = time(NULL);
+    time_struct = gmtime(&client->connect_time);
     client->buf = evbuffer_new();
+
+    strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
+
+    // print out info about this connection
+    fprintf(stdout, "%lu >> /sub connection from  %s:%d %s\n", client->connection_id, req->remote_host, req->remote_port, buf);
 
     // Connection: Upgrade
     // Upgrade: WebSocket
@@ -164,13 +195,13 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     host = (char *) evhttp_find_header(req->input_headers, "Host");
     
     if (ps_debug && ws_upgrade) {
-        fprintf(stderr, "upgrade header is %s\n", ws_upgrade);
-        fprintf(stderr, "multipart is %d\n", client->multipart);
+        fprintf(stderr, "%lu >> upgrade header is %s\n", client->connection_id, ws_upgrade);
+        fprintf(stderr, "%lu >> multipart is %d\n", client->connection_id, client->multipart);
     }
 
     if (ws_upgrade && strstr(ws_upgrade, "WebSocket") != NULL) {
         if (ps_debug) {
-            fprintf(stderr, "upgrading connection to a websocket\n");
+            fprintf(stderr, "%lu >> upgrading connection to a websocket\n", client->connection_id);
         }
         client->websocket = 1;
         client->req->major = 1;
@@ -184,7 +215,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         if (host) {
             sprintf(buf, "ws://%s%s", host, req->uri);
             if (ps_debug) {
-                fprintf(stderr, "setting WebSocket-Location to %s\n", buf);
+                fprintf(stderr, "%lu >> setting WebSocket-Location to %s\n", client->connection_id, buf);
             }
             evhttp_add_header(client->req->output_headers, "WebSocket-Location", buf);
         }
@@ -217,8 +248,8 @@ main(int argc, char **argv)
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
     simplehttp_set_cb("/sub*", sub_cb, NULL);
-    simplehttp_set_cb("/stats*", stats_cb, NULL);
-    simplehttp_set_cb("/clients*", clients_cb, NULL);
+    simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/clients", clients_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;
