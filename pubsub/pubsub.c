@@ -44,11 +44,11 @@ is_slow(struct cli *client) {
     evcon = (struct evhttp_connection *)client->req->evcon;
     output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
     if (output_buffer_length > MAX_PENDING_DATA) {
-        fprintf(stdout, "%lu >> kicking client with %lu pending data\n", client->connection_id, output_buffer_length);
+        fprintf(stdout, "%llu >> kicking client with %llu pending data\n", client->connection_id, output_buffer_length);
         client->kick_client = KICK_CLIENT;
         // clear the clients output buffer
         evbuffer_drain(evcon->output_buffer, EVBUFFER_LENGTH(evcon->output_buffer));
-        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %lu pending bytes\n", output_buffer_length); 
+        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %llu pending bytes\n", output_buffer_length); 
         return 1;
     }
     return 0;
@@ -97,7 +97,7 @@ clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         time_struct = gmtime(&client->connect_time);
         strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
         output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
-        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n", 
+        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%llu state:%d\n", 
             client->req->remote_host, 
             client->req->remote_port, 
             buf, 
@@ -128,8 +128,8 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%d", msgSent);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
     
-    evbuffer_add_printf(evb, "Active connections: %lu\nTotal connections: %lu\n"
-                             "Messages received: %lu\nMessages sent: %lu\n",
+    evbuffer_add_printf(evb, "Active connections: %llu\nTotal connections: %llu\n"
+                             "Messages received: %llu\nMessages sent: %llu\n",
                              currentConns, totalConns, msgRecv, msgSent); 
     reset = (char *)evhttp_find_header(&args, "reset");
 
@@ -147,7 +147,7 @@ void on_close(struct evhttp_connection *evcon, void *ctx)
     struct cli *client = (struct cli *)ctx;
 
     if (client) {
-        fprintf(stdout, "%lu >> close from  %s:%d\n", client->connection_id, evcon->address, evcon->port);
+        fprintf(stdout, "%llu >> close from  %s:%d\n", client->connection_id, evcon->address, evcon->port);
         currentConns--;
         TAILQ_REMOVE(&clients, client, entries);
         evbuffer_free(client->buf);
@@ -232,7 +232,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
 
     // print out info about this connection
-    fprintf(stdout, "%lu >> /sub connection from  %s:%d %s\n", client->connection_id, req->remote_host, req->remote_port, buf);
+    fprintf(stdout, "%llu >> /sub connection from %s:%d %s\n", client->connection_id, req->remote_host, req->remote_port, buf);
 
     // Connection: Upgrade
     // Upgrade: WebSocket
@@ -241,13 +241,13 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     host = (char *) evhttp_find_header(req->input_headers, "Host");
     
     if (ps_debug && ws_upgrade) {
-        fprintf(stderr, "%lu >> upgrade header is %s\n", client->connection_id, ws_upgrade);
-        fprintf(stderr, "%lu >> multipart is %d\n", client->connection_id, client->multipart);
+        fprintf(stderr, "%llu >> upgrade header is %s\n", client->connection_id, ws_upgrade);
+        fprintf(stderr, "%llu >> multipart is %d\n", client->connection_id, client->multipart);
     }
 
     if (ws_upgrade && strstr(ws_upgrade, "WebSocket") != NULL) {
         if (ps_debug) {
-            fprintf(stderr, "%lu >> upgrading connection to a websocket\n", client->connection_id);
+            fprintf(stderr, "%llu >> upgrading connection to a websocket\n", client->connection_id);
         }
         client->websocket = 1;
         client->req->major = 1;
@@ -261,7 +261,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         if (host) {
             sprintf(buf, "ws://%s%s", host, req->uri);
             if (ps_debug) {
-                fprintf(stderr, "%lu >> setting WebSocket-Location to %s\n", client->connection_id, buf);
+                fprintf(stderr, "%llu >> setting WebSocket-Location to %s\n", client->connection_id, buf);
             }
             evhttp_add_header(client->req->output_headers, "WebSocket-Location", buf);
         }
