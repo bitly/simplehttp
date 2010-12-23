@@ -30,6 +30,7 @@ TAILQ_HEAD(, cli) clients;
 
 uint64_t totalConns = 0;
 uint64_t currentConns = 0;
+uint64_t kickedClients = 0;
 uint64_t msgRecv = 0;
 uint64_t msgSent = 0;
 
@@ -44,6 +45,7 @@ is_slow(struct cli *client) {
     evcon = (struct evhttp_connection *)client->req->evcon;
     output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
     if (output_buffer_length > MAX_PENDING_DATA) {
+        kickedClients+=1;
         fprintf(stdout, "%llu >> kicking client with %llu pending data\n", client->connection_id, output_buffer_length);
         client->kick_client = KICK_CLIENT;
         // clear the clients output buffer
@@ -119,18 +121,22 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
     
-    sprintf(buf, "%d", totalConns);
+    sprintf(buf, "%llu", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
-    sprintf(buf, "%d", currentConns);
+    sprintf(buf, "%llu", currentConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-ACTIVE-CONNECTIONS", buf);
-    sprintf(buf, "%d", msgRecv);
+    sprintf(buf, "%llu", msgRecv);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-RECEIVED", buf);
-    sprintf(buf, "%d", msgSent);
+    sprintf(buf, "%llu", msgSent);
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
+    sprintf(buf, "%llu", kickedClients);
+    evhttp_add_header(req->output_headers, "X-PUBSUB-KICKED-CLIENTS", buf);
     
-    evbuffer_add_printf(evb, "Active connections: %llu\nTotal connections: %llu\n"
-                             "Messages received: %llu\nMessages sent: %llu\n",
-                             currentConns, totalConns, msgRecv, msgSent); 
+    evbuffer_add_printf(evb, "Active connections: %llu\n", currentConns);
+    evbuffer_add_printf(evb, "Total connections: %llu\n", totalConns);
+    evbuffer_add_printf(evb, "Messages received: %llu\n", msgRecv);
+    evbuffer_add_printf(evb, "Messages sent: %llu\n", msgSent);
+    evbuffer_add_printf(evb, "Kicked clients: %llu\n", kickedClients);
     reset = (char *)evhttp_find_header(&args, "reset");
 
     if (reset) {
