@@ -6,7 +6,6 @@
 #include "simplehttp.h"
 #include "http-internal.h"
 
-#define BUFSZ 1024
 #define BOUNDARY "xXPubSubXx"
 #define MAX_PENDING_DATA 1024*1024*50
 

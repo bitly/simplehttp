@@ -5,6 +5,11 @@ pubsub (short for publish/subscribe) is a server that brokers new messages
 to all connected subscribers at the time a message is received.
 http://en.wikipedia.org/wiki/Publish/subscribe
 
+Cmdline usage:
+
+    -a 0.0.0.0 (address to bind to)
+    -p 8080 (port to bind to)
+    -D daemonize (default off)
 
 API endpoints:
 
