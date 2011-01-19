@@ -563,6 +563,7 @@ main(int argc, char **argv)
     opterr=0;
     while ((ch = getopt(argc, argv, "s:b:e:h")) != -1) {
         if (ch == '?') {
+            optind--; // re-set for next getopt() parse
             break;
         }
         switch (ch) {
