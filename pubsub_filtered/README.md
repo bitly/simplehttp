@@ -1,5 +1,5 @@
-pubsub_filtered_
-======
+pubsub_filtered
+===============
 
 pubsub_filtered connects to a remote pubsub server and filters out or 
 hashes entries before re-publishing as a pubsub stream

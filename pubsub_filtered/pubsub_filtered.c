@@ -47,12 +47,12 @@ void source_reconnect_cb(int fd, short what, void *ctx);
 void source_req_close_cb(struct evhttp_request *req, void *arg);
 void reconnect_to_source(int retryNow);
 int connect_to_source();
-char* obfuscate(char *string);
-int process_message_cb(struct evhttp_request *req, void *arg);
+char* md5_hash(const char *string);
+void process_message_cb(struct evhttp_request *req, void *arg);
 
 void parse_address_arg(char *optarg, char *addr, int *port);
 void parse_encrypted_fields(char *str);
-void parse_blacklist_fields(char *str);
+void parse_blacklisted_fields(char *str);
 int parse_fields(char *str, char **field_array);
 
 int can_kick(struct cli *client);
@@ -81,8 +81,8 @@ static int  source_port = 0;
 
 static char *encrypted_fields[64];
 static int  num_encrypted_fields = 0;
-static char *blacklist_fields[64];
-static int  num_blacklist_fields = 0;
+static char *blacklisted_fields[64];
+static int  num_blacklisted_fields = 0;
 
 struct global_data *data = NULL;
 
@@ -110,18 +110,18 @@ void parse_address_arg(char *optarg, char *addr, int *port)
 
 /*
  * Parse a comma-delimited  string and populate
- * the blacklist_fields array with the results.
+ * the blacklisted_fields array with the results.
  *
  * See parse_fields().
  */
-void parse_blacklist_fields(char *str)
+void parse_blacklisted_fields(char *str)
 {
     int i;
 
-    num_blacklist_fields = parse_fields(str, blacklist_fields);
+    num_blacklisted_fields = parse_fields(str, blacklisted_fields);
 
-    for (i=0; i < num_blacklist_fields; i++) {
-        fprintf(stdout, "Blacklist field: \"%s\"\n", blacklist_fields[i]);
+    for (i=0; i < num_blacklisted_fields; i++) {
+        fprintf(stdout, "Blacklist field: \"%s\"\n", blacklisted_fields[i]);
     }
 
     return;
@@ -173,9 +173,9 @@ int parse_fields(char *str, char **field_array)
     return i;
 }
 
-/* encrypt a string */
+/* md5 encrypt a string */
 char *
-obfuscate(char *string){
+md5_hash(const char *string){
     char *output = calloc(32, sizeof(char));
     struct cvs_MD5Context context;
     unsigned char checksum[16];
@@ -196,7 +196,7 @@ obfuscate(char *string){
 /*
  * Callback for each fetched pubsub message.
  */
-int process_message_cb(struct evhttp_request *req, void *arg) {
+void process_message_cb(struct evhttp_request *req, void *arg) {
     if (EVBUFFER_LENGTH(req->input_buffer) < 3){
         // if (DEBUG) fprintf(stderr, "skipping\n");
         return;
@@ -207,16 +207,16 @@ int process_message_cb(struct evhttp_request *req, void *arg) {
     evbuffer_remove(req->input_buffer, source, EVBUFFER_LENGTH(req->input_buffer));
     
     struct json_object *json_in;
-    char *encrypted_key;
-    char *raw_string;
+    char *field_key;
+    const char *raw_string;
     char *encrypted_string;
-    char *json_out;
+    const char *json_out;
     struct cli *client;
     int i=0;
     
     if (source == NULL || strlen(source) < 3){
         free(source);
-        return 0;
+        return;
     }
     
     json_in = json_tokener_parse(source);
@@ -224,31 +224,35 @@ int process_message_cb(struct evhttp_request *req, void *arg) {
     if (json_in == NULL) {
         fprintf(stderr, "ERR: unable to parse json %s\n", source);
         free(source);
-        return 0;
+        return ;
     }
     
     // loop through the fields we need to encrypt
     for (i=0; i < num_encrypted_fields; i++){
-        encrypted_key = encrypted_fields[i];
-        raw_string = json_object_get_string(json_object_object_get(json_in, encrypted_key));
+        field_key = encrypted_fields[i];
+        raw_string = json_object_get_string(json_object_object_get(json_in, field_key));
         if (!strlen(raw_string)){
             continue;
         }
-        encrypted_string = obfuscate(raw_string);
-        if (DEBUG)fprintf(stdout, "encrypting %s \"%s\" => \"%s\"\n", encrypted_key, raw_string, encrypted_string);
-        json_object_object_add(json_in, encrypted_key, json_object_new_string(encrypted_string));
+        encrypted_string = md5_hash(raw_string);
+        if (DEBUG)fprintf(stdout, "encrypting %s \"%s\" => \"%s\"\n", field_key, raw_string, encrypted_string);
+        json_object_object_add(json_in, field_key, json_object_new_string(encrypted_string));
         free(encrypted_string);
     }
+    // loop through and remove the blacklisted fields
+    for (i=0; i < num_blacklisted_fields; i++){
+        field_key = blacklisted_fields[i];
+        if (DEBUG)fprintf(stdout, "removing %s\n", field_key);
+        json_object_object_del(json_in, field_key);
+    }
     
-    // TODO: loop through the fields that should be stripped
-
     json_out = json_object_to_json_string(json_in);
     //if (DEBUG)fprintf(stdout, "json_out = %d bytes\n" , strlen(json_out));
     
-    // loop over the clients
-    
+    // loop over the clients and send each this message
     TAILQ_FOREACH(client, &clients, entries) {
         msgSent++;
+        // TODO: why do we need to do this?
         evbuffer_drain(client->buf, EVBUFFER_LENGTH(client->buf));
         if (is_slow(client)) {
             if (can_kick(client)) {
@@ -274,7 +278,7 @@ int process_message_cb(struct evhttp_request *req, void *arg) {
     }
     json_object_put(json_in);
     free(source);
-    return 1;
+    return ;
 }
 
 int
@@ -547,7 +551,7 @@ int connect_to_source()
 
 
 void usage(){
-    fprintf(stderr, "You must specify -sADDR:port -Blacklist_fields -eEncrypt_fields [... normal pubsub options]\n");
+    fprintf(stderr, "You must specify -sADDR:port -Blacklisted_fields -eEncrypt_fields [... normal pubsub options]\n");
 }
 
 
@@ -567,7 +571,7 @@ main(int argc, char **argv)
             break;
         case 'b':
             // blacklist output fields
-            parse_blacklist_fields(optarg);
+            parse_blacklisted_fields(optarg);
             break;
         case 'e':
             // encrypt output fields
