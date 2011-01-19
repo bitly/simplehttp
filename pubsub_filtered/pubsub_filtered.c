@@ -201,7 +201,7 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
         // if (DEBUG) fprintf(stderr, "skipping\n");
         return;
     }
-    if (DEBUG) fprintf(stderr, "handling %d bytes of data\n", EVBUFFER_LENGTH(req->input_buffer));
+    //if (DEBUG) fprintf(stderr, "handling %d bytes of data\n", EVBUFFER_LENGTH(req->input_buffer));
     msgRecv++;
     char *source = calloc(EVBUFFER_LENGTH(req->input_buffer), sizeof(char *));
     evbuffer_remove(req->input_buffer, source, EVBUFFER_LENGTH(req->input_buffer));
@@ -235,14 +235,14 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
             continue;
         }
         encrypted_string = md5_hash(raw_string);
-        if (DEBUG)fprintf(stdout, "encrypting %s \"%s\" => \"%s\"\n", field_key, raw_string, encrypted_string);
+        //if (DEBUG)fprintf(stdout, "encrypting %s \"%s\" => \"%s\"\n", field_key, raw_string, encrypted_string);
         json_object_object_add(json_in, field_key, json_object_new_string(encrypted_string));
         free(encrypted_string);
     }
     // loop through and remove the blacklisted fields
     for (i=0; i < num_blacklisted_fields; i++){
         field_key = blacklisted_fields[i];
-        if (DEBUG)fprintf(stdout, "removing %s\n", field_key);
+        //if (DEBUG)fprintf(stdout, "removing %s\n", field_key);
         json_object_object_del(json_in, field_key);
     }
     
