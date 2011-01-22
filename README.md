@@ -8,7 +8,7 @@ The following daemons are built on simplehttp and included
  * pubsub - a daemon that receives data via http POST events and writes that data to all currently connected long-lived http connections
  * pubsub_to_pubsub - a library for piping data from one pubsub stream to another pubsub server
  * simplequeue - an in memory queue with HTTP /get and /post endpoints to push/pop data
- * simpletokyo - a HTTP /get /post /del /fwmatch interface in front of a tokyocabinet
+ * simpletokyo - a HTTP /get /post /del /fwmatch /incr interface in front of ttserver
  * sortdb - Sorted database server
  * simplegeo
  * qrencode

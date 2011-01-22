@@ -1,0 +1,21 @@
+key should not exist
+{ "status": "error", "code": 7, "message": "no record found" }
+key should exist
+{ "status": "ok", "value": "1001" }
+should return 1005, 1007, 1009
+{ "results": [ { "a1005": "1005" }, { "a1007": "1007" }, { "a1009": "1009" } ], "status": "ok" }
+set of odd data
+{ "status": "ok", "value": "<>&this=that{} +*" }
+should == '<>&this=that{} +*'
+{ "status": "ok", "value": "<>&this=that{} +*" }
+{ "status": "ok" }
+should == '     ' not '+++++'
+{ "status": "ok", "value": "      " }
+{ "status": "ok", "value": "      " }
+{ "status": "ok" }
+key should not exist
+{ "status": "error", "code": 7, "message": "no record found" }
+{ "status": "ok", "value": 1 }
+{ "status": "ok", "value": 5 }
+value should be 6
+{ "status": "ok", "value": 6 }

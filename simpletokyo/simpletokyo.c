@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <simplehttp/queue.h> 
 #include <simplehttp/simplehttp.h>
 #include "json/json.h"
@@ -22,14 +23,16 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 struct event ev;
 struct timeval tv = {RECONNECT,0};
-static char *db_host = "0.0.0.0";
+static char *db_host = "127.0.0.1";
 static int db_port = 1978;
 static TCRDB *rdb;
 static int db_status;
-static char *g_progname;
+static char *g_progname = "simpletokyo";
 
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
@@ -258,12 +261,86 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     finalize_json(req, evb, &args, jsobj);
 }
 
+void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char                *key;
+    int                 *value;
+    struct evkeyvalq    args;
+    struct json_object  *jsobj;
+
+    if (rdb == NULL) {
+        evhttp_send_error(req, 503, "database not connected");
+        return;
+    }
+
+    evhttp_parse_query(req->uri, &args);
+
+    key = (char *)evhttp_find_header(&args, "key");
+    if (key == NULL) {
+        evhttp_send_error(req, 400, "key is required");
+        evhttp_clear_headers(&args);
+        return;
+    }
+    
+    jsobj = json_object_new_object();
+    if (value = (int *)tcrdbget2(rdb, key)) {
+        json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+        json_object_object_add(jsobj, "value", json_object_new_int((int) *value));
+        free(value);
+    } else {
+        db_status = tcrdbecode(rdb);
+        db_error_to_json(db_status, jsobj);
+    }
+
+    finalize_json(req, evb, &args, jsobj);
+}
+void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char                *key, *incr_value;
+    struct evkeyvalq    args;
+    struct json_object  *jsobj;
+    int v;
+    int value = 1;
+
+    if (rdb == NULL) {
+        evhttp_send_error(req, 503, "database not connected");
+        return;
+    }
+    evhttp_parse_query(req->uri, &args);
+
+    key = (char *)evhttp_find_header(&args, "key");
+    if (key == NULL) {
+        evhttp_send_error(req, 400, "key is required");
+        evhttp_clear_headers(&args);
+        return;
+    }
+    incr_value = (char *)evhttp_find_header(&args, "value");
+    if (incr_value != NULL) {
+        value = atoi(incr_value);
+    }
+    
+    jsobj = json_object_new_object();
+    if ((v = tcrdbaddint(rdb, key, strlen(key), value)) == INT_MIN ) {
+      db_status = tcrdbecode(rdb);
+      db_error_to_json(db_status, jsobj);
+    } else {
+      json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+      json_object_object_add(jsobj, "value", json_object_new_int(value));
+    }
+
+    finalize_json(req, evb, &args, jsobj);
+}
+
 void usage()
 {
     fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", g_progname);
     fprintf(stderr, "\n");
     fprintf(stderr, "usage:\n");
-    fprintf(stderr, "  %s [-tchost 0.0.0.0] [-tcport 1978]\n", g_progname);
+    fprintf(stderr, "\t-A ttserver address\n");
+    fprintf(stderr, "\t-P ttserver port\n");
+    fprintf(stderr, "\t-a listen address\n");
+    fprintf(stderr, "\t-p listen port\n");
+    fprintf(stderr, "\t-D daemonize\n");
     fprintf(stderr, "\n");
     exit(1);
 }
@@ -271,28 +348,35 @@ void usage()
 int
 main(int argc, char **argv)
 {
-    int i;
-    
-    g_progname = argv[0];
-    for (i=1; i < argc; i++) {
-        if(!strcmp(argv[i], "-tchost")) {
-            if(++i >= argc) usage();
-            db_host = argv[i];
-        } else if(!strcmp(argv[i], "-tcport")) {
-            if(++i >= argc) usage();
-            db_port = tcatoi(argv[i]);
-        } else if (!strcmp(argv[i], "-help")) {
+    int ch;
+    opterr=0;
+    while ((ch = getopt(argc, argv, "A:P:h")) != -1) {
+        if (ch == '?') {
+            optind--; // re-set for next getopt() parse by simplehttp_init
+            break;
+        }
+        switch (ch) {
+        case 'A':
+            db_host = optarg;
+            break;
+        case 'P':
+            db_port = atoi(optarg);
+            break;
+        case 'h':
             usage();
+            exit(1);
         }
     }
     
     memset(&db_status, -1, sizeof(db_status));
     simplehttp_init();
     db_reconnect(0, 0, NULL);
+    simplehttp_set_cb("/get_int*", get_int_cb, NULL);
     simplehttp_set_cb("/get*", get_cb, NULL);
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/del*", del_cb, NULL);
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
+    simplehttp_set_cb("/incr*", incr_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;

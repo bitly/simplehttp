@@ -14,4 +14,4 @@ install:
 	/usr/bin/install -D simpletokyo $(TARGET)/bin/simpletokyo
 
 clean:
-	rm -rf *.o simpletokyo *.dSYM
+	rm -rf *.o simpletokyo *.dSYM test_output
