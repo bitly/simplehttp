@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <signal.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -14,10 +15,12 @@
 
 static char *version  = "1.1";
 static void *map_base = NULL;
+static char *db_filename;
 static struct stat st;
 char deliminator = '\t';
 uint64_t get_requests = 0;
 uint64_t total_seeks = 0;
+int fd = 0;
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx);
@@ -26,7 +29,8 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
 void usage();
 void info();
 int main(int argc, char **argv);
-void *open_dbfile(char *filename);
+void open_dbfile();
+void hup_handler(int signum);
 
 char *prev_line(char *pos) {
     if (!pos) return NULL; 
@@ -121,25 +125,39 @@ void usage() {
     exit(1);
 }
 
-void * open_dbfile(char *filename) {
-    int fd;
-    static void *map_base = NULL;
-    
-    if ((fd = open(filename, O_RDONLY)) < 0) {
-        fprintf(stderr, "open(%s) failed: %s\n", filename, strerror(errno));
+void
+hup_handler(int signum)
+{
+    signal(SIGHUP, hup_handler);
+    fprintf(stdout, "HUP recieved\n");
+    if (fd) {
+        fprintf(stdout, "closing %s\n", db_filename);
+        close(fd);
+        map_base = NULL;
+    }
+    open_dbfile();
+    if (map_base == NULL) {
+        fprintf(stderr, "no mmaped file; exiting\n");
+        exit(1);
+    }
+}
+
+
+void open_dbfile() {
+    if ((fd = open(db_filename, O_RDONLY)) < 0) {
+        fprintf(stderr, "open(%s) failed: %s\n", db_filename, strerror(errno));
         exit(errno);
     }
     if (fstat(fd, &st) < 0) {
-        fprintf(stderr, "fstat(%s) failed: %s\n", filename, strerror(errno));
+        fprintf(stderr, "fstat(%s) failed: %s\n", db_filename, strerror(errno));
         exit(errno);
     }
-    fprintf(stderr, "opening %s\n", filename);
-    fprintf(stderr, "db size %ld\n", st.st_size);
+    fprintf(stdout, "opening %s\n", db_filename);
+    fprintf(stdout, "db size %ld\n", st.st_size);
     if ((map_base = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
-        fprintf(stderr, "mmap(%s) failed: %s\n", filename, strerror(errno));
+        fprintf(stderr, "mmap(%s) failed: %s\n", db_filename, strerror(errno));
         exit(errno);
     }
-    return map_base;
 }
 
 int main(int argc, char **argv) {
@@ -154,8 +172,8 @@ int main(int argc, char **argv) {
         }
         switch (ch) {
         case 'f':
-            // db file
-            map_base = open_dbfile(optarg);
+            db_filename = optarg;
+            open_dbfile();
             break;
         case 'F':
             // field deliminator
@@ -178,6 +196,7 @@ int main(int argc, char **argv) {
     }
 
     simplehttp_init();
+    signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
     simplehttp_set_cb("/stats", stats_cb, NULL);
     simplehttp_main(argc, argv);

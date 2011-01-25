@@ -14,4 +14,4 @@ install:
 	/usr/bin/install sortdb $(TARGET)/bin
 
 clean:
-	rm -rf *.a *.o sortdb *.dSYM test_output
+	rm -rf *.a *.o sortdb *.dSYM test_output test.db

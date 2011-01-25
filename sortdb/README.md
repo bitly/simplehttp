@@ -16,3 +16,5 @@ API endpoints:
  * /get?key=...   
     
  * /stats
+
+a HUP signal will cause sortdb to reload/remap the db file
