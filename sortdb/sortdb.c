@@ -60,6 +60,8 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
         return map_search(key, keylen, lower, current, seeks);
     } else if (rc > 0) {
         return map_search(key, keylen, current, upper, seeks);
+    } else if (line[keylen] != deliminator) {
+        return map_search(key, keylen, lower, current, seeks);
     } else {
         return line;
     }
@@ -153,7 +155,7 @@ void open_dbfile() {
         exit(errno);
     }
     fprintf(stdout, "opening %s\n", db_filename);
-    fprintf(stdout, "db size %ld\n", st.st_size);
+    fprintf(stdout, "db size %ld\n", (long int)st.st_size);
     if ((map_base = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
         fprintf(stderr, "mmap(%s) failed: %s\n", db_filename, strerror(errno));
         exit(errno);
