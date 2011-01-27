@@ -77,6 +77,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx) {
     free(uri);
     key = (char *)evhttp_find_header(&args, "key");
     if(DEBUG) fprintf(stderr, "/get %s\n", key);
+    get_requests++;
     
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
@@ -103,10 +104,9 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx) {
     evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
 }
 
-void
-stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
-    evbuffer_add_printf(evb, "Get requests: %llu\n", get_requests);
-    evbuffer_add_printf(evb, "Total seeks: %llu\n", total_seeks);
+void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
+    evbuffer_add_printf(evb, "Get requests: %llu\n", (long long unsigned int)get_requests);
+    evbuffer_add_printf(evb, "Total seeks: %llu\n", (long long unsigned int)total_seeks);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
@@ -127,8 +127,7 @@ void usage() {
     exit(1);
 }
 
-void
-hup_handler(int signum)
+void hup_handler(int signum)
 {
     signal(SIGHUP, hup_handler);
     fprintf(stdout, "HUP recieved\n");
