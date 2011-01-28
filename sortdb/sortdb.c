@@ -19,6 +19,8 @@ static char *db_filename;
 static struct stat st;
 char deliminator = '\t';
 uint64_t get_requests = 0;
+uint64_t get_hits = 0;
+uint64_t get_misses = 0;
 uint64_t total_seeks = 0;
 int fd = 0;
 
@@ -29,6 +31,7 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
 void usage();
 void info();
 int main(int argc, char **argv);
+void close_dbfile();
 void open_dbfile();
 void hup_handler(int signum);
 
@@ -98,21 +101,25 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx) {
         } else {
             evbuffer_add_printf(evb, "%s\n", line);
         }
+        get_hits++;
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
         return;
     }
+    get_misses++;
     evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
 }
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
     evbuffer_add_printf(evb, "Get requests: %llu\n", (long long unsigned int)get_requests);
+    evbuffer_add_printf(evb, "Get hits: %llu\n", (long long unsigned int)get_hits);
+    evbuffer_add_printf(evb, "Get misses: %llu\n", (long long unsigned int)get_misses);
     evbuffer_add_printf(evb, "Total seeks: %llu\n", (long long unsigned int)total_seeks);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
 void info() {
-    fprintf(stderr, "sortdb: Sorted database server.\n");
-    fprintf(stderr, "Version %s, https://github.com/bitly/simplehttp/tree/master/sortdb\n", version);
+    fprintf(stdout, "sortdb: Sorted database server.\n");
+    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/sortdb\n", version);
 }
 void usage() {
     fprintf(stderr, "Provides search access to sorted tab delimited files\n");
@@ -131,11 +138,7 @@ void hup_handler(int signum)
 {
     signal(SIGHUP, hup_handler);
     fprintf(stdout, "HUP recieved\n");
-    if (fd) {
-        fprintf(stdout, "closing %s\n", db_filename);
-        close(fd);
-        map_base = NULL;
-    }
+    close_dbfile();
     open_dbfile();
     if (map_base == NULL) {
         fprintf(stderr, "no mmaped file; exiting\n");
@@ -143,6 +146,13 @@ void hup_handler(int signum)
     }
 }
 
+void close_dbfile() {
+    fprintf(stdout, "closing %s\n", db_filename);
+    munmap(0, st.st_size);
+    close(fd);
+    fd = 0;
+    map_base = NULL;
+}
 
 void open_dbfile() {
     if ((fd = open(db_filename, O_RDONLY)) < 0) {
@@ -195,7 +205,7 @@ int main(int argc, char **argv) {
         usage();
         exit(1);
     }
-
+    
     simplehttp_init();
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
