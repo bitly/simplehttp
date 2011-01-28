@@ -26,6 +26,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 struct event ev;
 struct timeval tv = {RECONNECT,0};
@@ -35,6 +36,15 @@ static TCRDB *rdb;
 static int db_status;
 static char *g_progname = "simpletokyo";
 
+uint64_t requests = 0;
+uint64_t get_requests = 0;
+uint64_t get_int_requests = 0;
+uint64_t put_requests = 0;
+uint64_t del_requests = 0;
+uint64_t fwmatch_requests = 0;
+uint64_t incr_requests = 0;
+uint64_t vanish_requests = 0;
+uint64_t db_opened = 0;
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
                     struct evkeyvalq *args, struct json_object *jsobj)
@@ -56,6 +66,7 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
 
 int open_db(char *addr, int port, TCRDB **rdb)
 {
+    db_opened++;
     int ecode=0;
 
     if (*rdb != NULL) {
@@ -118,7 +129,10 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
     struct json_object  *jsobj, *jsobj2, *jsarr;
-
+    
+    requests++;
+    fwmatch_requests++;
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -168,6 +182,9 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
+    requests++;
+    del_requests++;
+
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -198,6 +215,9 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
+    requests++;
+    put_requests++;
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -235,6 +255,9 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
+    requests++;
+    get_requests++;
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -268,6 +291,9 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     int                 *value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
+
+    requests++;
+    get_int_requests++;
 
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -304,6 +330,9 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     int v;
     int value = 1;
 
+    requests++;
+    incr_requests++;
+
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -338,6 +367,9 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj;
     const char *json;
 
+    requests++;
+    vanish_requests++;
+
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -352,6 +384,19 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evbuffer_add_printf(evb, "%s\n", json);
     json_object_put(jsobj); // Odd free function
     
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
+    evbuffer_add_printf(evb, "Total requests: %llu\n", (long long unsigned int)requests);
+    evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
+    evbuffer_add_printf(evb, "/get_int requests: %llu\n", (long long unsigned int)get_int_requests);
+    evbuffer_add_printf(evb, "/put requests: %llu\n", (long long unsigned int)put_requests);
+    evbuffer_add_printf(evb, "/del requests: %llu\n", (long long unsigned int)del_requests);
+    evbuffer_add_printf(evb, "/fwmatch requests: %llu\n", (long long unsigned int)fwmatch_requests);
+    evbuffer_add_printf(evb, "/incr requests: %llu\n", (long long unsigned int)incr_requests);
+    evbuffer_add_printf(evb, "/vanish requests: %llu\n", (long long unsigned int)vanish_requests);
+    evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
@@ -402,6 +447,7 @@ main(int argc, char **argv)
     simplehttp_set_cb("/vanish*", vanish_cb, NULL);
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
+    simplehttp_set_cb("/stats", stats_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;

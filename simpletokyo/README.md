@@ -39,6 +39,17 @@ API endpoints:
  
  * /vanish (empty the database)
 
+ * /stats (example output)
+     Total requests: 439
+     /get requests: 0
+     /get_int requests: 0
+     /put requests: 303
+     /del requests: 136
+     /fwmatch requests: 0
+     /incr requests: 0
+     /vanish requests: 0
+     db opens: 1
+
 Dependencies
 
  * [libevent](http://monkey.org/~provos/libevent/) 1.4.13+
