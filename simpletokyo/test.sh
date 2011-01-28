@@ -60,6 +60,13 @@ curl --silent "http://localhost:8080/incr?key=incr_test&value=5" >> ${OUT}
 echo "value should be 6" >> ${OUT}
 curl --silent "http://localhost:8080/get_int?key=incr_test" >> ${OUT}
 
+echo "set key, get key, vanish db, and get key" >> ${OUT}
+curl --silent "http://localhost:8080/put?key=vanishtest&value=asdf" >> ${OUT}
+curl --silent "http://localhost:8080/get?key=vanishtest" >> ${OUT}
+curl --silent "http://localhost:8080/vanish" >> ${OUT}
+echo "now no key" >> ${OUT}
+curl --silent "http://localhost:8080/get?key=vanishtest" >> ${OUT}
+
 err=0;
 if ! "$CMP" -s "test.expected" "${testsubdir}/test.out" ; then
 	echo "ERROR: test failed:" 1>&2

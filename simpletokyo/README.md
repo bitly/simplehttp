@@ -36,6 +36,8 @@ API endpoints:
 
  * /get_int (to return values added with /incr)
   parameter:key
+ 
+ * /vanish (empty the database)
 
 Dependencies
 

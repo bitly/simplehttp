@@ -19,3 +19,9 @@ key should not exist
 { "status": "ok", "value": 5 }
 value should be 6
 { "status": "ok", "value": 6 }
+set key, get key, vanish db, and get key
+{ "status": "ok", "value": "asdf" }
+{ "status": "ok", "value": "asdf" }
+{ "status": "ok", "value": 1 }
+now no key
+{ "status": "error", "code": 7, "message": "no record found" }

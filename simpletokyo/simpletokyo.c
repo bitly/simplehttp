@@ -25,6 +25,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 struct event ev;
 struct timeval tv = {RECONNECT,0};
@@ -294,6 +295,7 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
     finalize_json(req, evb, &args, jsobj);
 }
+
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char                *key, *incr_value;
@@ -329,6 +331,28 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
 
     finalize_json(req, evb, &args, jsobj);
+}
+
+void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    struct json_object  *jsobj;
+    const char *json;
+
+    if (rdb == NULL) {
+        evhttp_send_error(req, 503, "database not connected");
+        return;
+    }
+    
+    tcrdbvanish(rdb);
+    jsobj = json_object_new_object();
+    json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+    json_object_object_add(jsobj, "value", json_object_new_int(1));
+    
+    json = json_object_to_json_string(jsobj);
+    evbuffer_add_printf(evb, "%s\n", json);
+    json_object_put(jsobj); // Odd free function
+    
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
 void usage()
@@ -375,6 +399,7 @@ main(int argc, char **argv)
     simplehttp_set_cb("/get*", get_cb, NULL);
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/del*", del_cb, NULL);
+    simplehttp_set_cb("/vanish*", vanish_cb, NULL);
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
     simplehttp_main(argc, argv);
