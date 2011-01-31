@@ -16,5 +16,9 @@ API endpoints:
  * /get?key=...   
     
  * /stats
+ 
+ * /reload (reload/remap the db file)
+ 
+ * /exit (cause the current process to exit)
 
-a HUP signal will cause sortdb to reload/remap the db file
+a HUP signal will also cause sortdb to reload/remap the db file
