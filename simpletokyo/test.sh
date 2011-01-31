@@ -8,15 +8,34 @@ if [ -f /tmp/simpletokyo_test.tcb ]; then
     rm -rf /tmp/simpletokyo_test.tcb ;
 fi
 
+SCRIPT=$(readlink -f "$0")
+SCRIPTPATH=`dirname "$SCRIPT"`
+
 testsubdir=test_output
 rm -rf "$testsubdir" > /dev/null 2>&1
 mkdir -p "$testsubdir"
 CMP="${CMP-cmp}"
 
+run_vg (){
+    TEST_COMMAND="$1"
+    TEST_OPTIONS="$2"
+    REDIR_OUTPUT="2>/dev/null 1>/dev/null"
+    # REDIR_OUTPUT=""
+    eval valgrind --tool=memcheck \
+    	--trace-children=yes \
+    	--demangle=yes \
+    	--log-file-exactly="${testsubdir}/vg.out" \
+    	--leak-check=full \
+    	--show-reachable=yes \
+    	--run-libc-freeres=yes \
+    "\"${SCRIPTPATH}/${TEST_COMMAND}\"" $TEST_OPTIONS ${REDIR_OUTPUT} &
+}
+
+
 OUT=$testsubdir/test.out
 
 ttserver -host 127.0.0.1 -port 8079 -thnum 1 /tmp/simpletokyo_test.tcb 2>/dev/null 1>/dev/null &
-./simpletokyo -A 127.0.0.1 -P 8079 -a 127.0.0.1 -p 8080 2>/dev/null 1>/dev/null &
+run_vg simpletokyo "-A 127.0.0.1 -P 8079 -a 127.0.0.1 -p 8080"
 
 sleep 1;
 
@@ -60,6 +79,11 @@ curl --silent "http://localhost:8080/incr?key=incr_test&value=5" >> ${OUT}
 echo "value should be 6" >> ${OUT}
 curl --silent "http://localhost:8080/get_int?key=incr_test" >> ${OUT}
 
+echo "incr on two different keys at the same time. both values should be == 1" >> ${OUT}
+curl --silent "http://localhost:8080/incr?key=double_key1&key=double_key2" >> ${OUT}
+curl --silent "http://localhost:8080/get_int?key=double_key1" >> ${OUT}
+curl --silent "http://localhost:8080/get_int?key=double_key2" >> ${OUT}
+
 echo "set key, get key, vanish db, and get key" >> ${OUT}
 curl --silent "http://localhost:8080/put?key=vanishtest&value=asdf" >> ${OUT}
 curl --silent "http://localhost:8080/get?key=vanishtest" >> ${OUT}
@@ -70,12 +94,29 @@ curl --silent "http://localhost:8080/get?key=vanishtest" >> ${OUT}
 err=0;
 if ! "$CMP" -s "test.expected" "${testsubdir}/test.out" ; then
 	echo "ERROR: test failed:" 1>&2
-	diff "test.expected" "${testsubdir}/test.out" 1>&2
+	diff -C 3 "test.expected" "${testsubdir}/test.out" 1>&2
 	err=1
 else
-    echo "TEST PASSED"
+    echo "FUNCTIONAL TEST PASSED"
 fi
 
-kill %1
-kill %2
+kill %1 # ttserver
+curl --silent "http://localhost:8080/exit" >> ${OUT}
+
+if ! grep -q "ERROR SUMMARY: 0 errors" "${testsubdir}/vg.out" ; then
+	echo "ERROR: valgrind found errors during execution:" 1>&2
+	cat "${testsubdir}/vg.out"
+	err=1
+fi
+if ! grep -q "definitely lost: 0 bytes in 0 blocks." "${testsubdir}/vg.out" ; then
+	echo "ERROR: valgrind found leaks during execution:" 1>&2
+	cat "${testsubdir}/vg.out"
+	err=1
+fi
+if ! grep -q "possibly lost: 0 bytes in 0 blocks." "${testsubdir}/vg.out" ; then
+	echo "ERROR: valgrind found leaks during execution:" 1>&2
+	cat "${testsubdir}/vg.out"
+	err=1
+fi
+
 exit $err;

@@ -35,7 +35,7 @@ API endpoints:
   parameter:value
 
  * /get_int (to return values added with /incr)
-  parameter:key
+  parameter:key (accepts multiple &key= parameters)
  
  * /vanish (empty the database)
 
@@ -49,6 +49,8 @@ API endpoints:
      /incr requests: 0
      /vanish requests: 0
      db opens: 1
+
+ * /exit 
 
 Dependencies
 

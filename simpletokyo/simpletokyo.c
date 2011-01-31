@@ -16,6 +16,7 @@
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
                     struct evkeyvalq *args, struct json_object *jsobj);
 int open_db(char *addr, int port, TCRDB **rdb);
+void close_db(TCRDB **rdb);
 void db_reconnect(int fd, short what, void *ctx);
 void argtoi(struct evkeyvalq *args, char *key, int *val, int def);
 void db_error_to_json(int code, struct json_object *jsobj);
@@ -27,6 +28,7 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 struct event ev;
 struct timeval tv = {RECONNECT,0};
@@ -64,6 +66,16 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
     evhttp_clear_headers(args);
 }
 
+void close_db(TCRDB **rdb) {
+    int ecode=0;
+    if (*rdb != NULL) {
+        if(!tcrdbclose(*rdb)){
+          ecode = tcrdbecode(*rdb);
+          fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
+        }
+        tcrdbdel(*rdb);
+    }
+}
 int open_db(char *addr, int port, TCRDB **rdb)
 {
     db_opened++;
@@ -163,7 +175,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
           tcfree(value);
       }
     }
-    if (keylist) tcfree(keylist);
+    if(keylist) tcfree(keylist);
     json_object_object_add(jsobj, "results", jsarr);
     
     if (keylist != NULL) {
@@ -324,11 +336,14 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *incr_value;
+    char                *incr_value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
     int v;
     int value = 1;
+	struct evkeyval *arg;
+    bool has_key_arg = false;
+    bool error = false;
 
     requests++;
     incr_requests++;
@@ -339,25 +354,32 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     evhttp_parse_query(req->uri, &args);
 
-    key = (char *)evhttp_find_header(&args, "key");
-    if (key == NULL) {
-        evhttp_send_error(req, 400, "key is required");
-        evhttp_clear_headers(&args);
-        return;
-    }
     incr_value = (char *)evhttp_find_header(&args, "value");
     if (incr_value != NULL) {
         value = atoi(incr_value);
     }
-    
+
     jsobj = json_object_new_object();
-    if ((v = tcrdbaddint(rdb, key, strlen(key), value)) == INT_MIN ) {
-      db_status = tcrdbecode(rdb);
-      db_error_to_json(db_status, jsobj);
-    } else {
-      json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-      json_object_object_add(jsobj, "value", json_object_new_int(value));
+    TAILQ_FOREACH(arg, &args, next) {
+        if (strcasecmp(arg->key, "key") == 0) {
+            has_key_arg = true;
+            if ((v = tcrdbaddint(rdb, arg->value, strlen(arg->value), value)) == INT_MIN ) {
+                error = true;
+                db_status = tcrdbecode(rdb);
+                db_error_to_json(db_status, jsobj);
+                break;
+            }
+        }
     }
+
+    if (!has_key_arg) {
+        evhttp_send_error(req, 400, "key is required");
+        evhttp_clear_headers(&args);
+        json_object_put(jsobj);
+        return;
+    }
+    
+    if (!error) json_object_object_add(jsobj, "status", json_object_new_string("ok"));
 
     finalize_json(req, evb, &args, jsobj);
 }
@@ -398,6 +420,12 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
     evbuffer_add_printf(evb, "/vanish requests: %llu\n", (long long unsigned int)vanish_requests);
     evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
+    close_db(&rdb);
+    fprintf(stdout, "/exit request recieved\n");
+    exit(0);
 }
 
 void usage()
@@ -448,6 +476,7 @@ main(int argc, char **argv)
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
     simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
 
     return 0;

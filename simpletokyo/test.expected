@@ -15,10 +15,14 @@ should == '     ' not '+++++'
 { "status": "ok" }
 key should not exist
 { "status": "error", "code": 7, "message": "no record found" }
-{ "status": "ok", "value": 1 }
-{ "status": "ok", "value": 5 }
+{ "status": "ok" }
+{ "status": "ok" }
 value should be 6
 { "status": "ok", "value": 6 }
+incr on two different keys at the same time. both values should be == 1
+{ "status": "ok" }
+{ "status": "ok", "value": 1 }
+{ "status": "ok", "value": 1 }
 set key, get key, vanish db, and get key
 { "status": "ok", "value": "asdf" }
 { "status": "ok", "value": "asdf" }
