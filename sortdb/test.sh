@@ -14,12 +14,12 @@ run_vg (){
     REDIR_OUTPUT="2>/dev/null 1>/dev/null"
     # REDIR_OUTPUT=""
     eval valgrind --tool=memcheck \
-    	--trace-children=yes \
-    	--demangle=yes \
-    	--log-file-exactly="${testsubdir}/vg.out" \
-    	--leak-check=full \
-    	--show-reachable=yes \
-    	--run-libc-freeres=yes \
+        --trace-children=yes \
+        --demangle=yes \
+        --log-file="${testsubdir}/vg.out" \
+        --leak-check=full \
+        --show-reachable=yes \
+        --run-libc-freeres=yes \
     "\"${SCRIPTPATH}/${TEST_COMMAND}\"" $TEST_OPTIONS ${REDIR_OUTPUT} &
 }
 err=$?
@@ -43,9 +43,9 @@ curl --silent "localhost:8080/get/?key=b" >> $testsubdir/test.out
 
 err=0;
 if ! "$CMP" -s "test.expected" "${testsubdir}/test.out" ; then
-	echo "ERROR: test failed:" 1>&2
-	diff "test.expected" "${testsubdir}/test.out" 1>&2
-	err=1
+    echo "ERROR: test failed:" 1>&2
+    diff "test.expected" "${testsubdir}/test.out" 1>&2
+    err=1
 else
     echo "FUNCTIONAL TEST PASSED"
 fi
@@ -53,19 +53,19 @@ fi
 curl --silent "localhost:8080/exit"
 
 if ! grep -q "ERROR SUMMARY: 0 errors" "${testsubdir}/vg.out" ; then
-	echo "ERROR: valgrind found errors during execution:" 1>&2
-	cat "${testsubdir}/vg.out"
-	err=1
+    echo "ERROR: valgrind found errors during execution:" 1>&2
+    cat "${testsubdir}/vg.out"
+    err=1
 fi
-if ! grep -q "definitely lost: 0 bytes in 0 blocks." "${testsubdir}/vg.out" ; then
-	echo "ERROR: valgrind found leaks during execution:" 1>&2
-	cat "${testsubdir}/vg.out"
-	err=1
+if ! grep -q "definitely lost: 0 bytes in 0 blocks" "${testsubdir}/vg.out" ; then
+    echo "ERROR: valgrind found leaks during execution:" 1>&2
+    cat "${testsubdir}/vg.out"
+    err=1
 fi
-if ! grep -q "possibly lost: 0 bytes in 0 blocks." "${testsubdir}/vg.out" ; then
-	echo "ERROR: valgrind found leaks during execution:" 1>&2
-	cat "${testsubdir}/vg.out"
-	err=1
+if ! grep -q "possibly lost: 0 bytes in 0 blocks" "${testsubdir}/vg.out" ; then
+    echo "ERROR: valgrind found leaks during execution:" 1>&2
+    cat "${testsubdir}/vg.out"
+    err=1
 fi
 
 exit $err;
