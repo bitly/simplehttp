@@ -85,6 +85,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx) {
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
+        evhttp_clear_headers(&args);
         return;
     }
     if ((line = map_search(key, strlen(key), (char *)map_base,
@@ -103,10 +104,12 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx) {
         }
         get_hits++;
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
+        evhttp_clear_headers(&args);
         return;
     }
     get_misses++;
     evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
