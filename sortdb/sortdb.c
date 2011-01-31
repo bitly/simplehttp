@@ -177,7 +177,6 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         get_hits++;
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
         evhttp_clear_headers(&args);
-        return;
     } else {
         get_misses++;
         evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
