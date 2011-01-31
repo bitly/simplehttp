@@ -334,6 +334,9 @@ int main(int argc, char **argv)
         exit(1);
     }
     
+    memset(&stats_request, -1, sizeof(stats_request));
+    memset(&stats_request_idx, 0, sizeof(stats_request_idx));
+    
     simplehttp_init();
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
