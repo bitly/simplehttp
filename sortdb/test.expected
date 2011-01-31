@@ -14,6 +14,7 @@ almost-sleepy
 very-sleepy
 /get?key=zzzzzzzzzzzzzzzzzzzzzzzzzz
 already-asleep
+db reloaded
 /get?key=a (should be a new key 'new db')
 new db
 /get?key=b not found

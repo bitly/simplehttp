@@ -26,6 +26,8 @@ int fd = 0;
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx);
+void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 char *prev_line(char *pos);
 char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks);
 void usage();
@@ -118,6 +120,23 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
     evbuffer_add_printf(evb, "Get misses: %llu\n", (long long unsigned int)get_misses);
     evbuffer_add_printf(evb, "Total seeks: %llu\n", (long long unsigned int)total_seeks);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
+    fprintf(stdout, "/reload request recieved\n");
+    close_dbfile();
+    open_dbfile();
+    if (map_base == NULL) {
+        fprintf(stderr, "no mmaped file; exiting\n");
+        exit(1);
+    }
+    evbuffer_add_printf(evb, "db reloaded\n");
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
+    fprintf(stdout, "/exit request recieved\n");
+    exit(0);
 }
 
 void info() {
@@ -213,6 +232,8 @@ int main(int argc, char **argv) {
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
     simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/reload", reload_cb, NULL);
+    simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
     return 0;
 }
