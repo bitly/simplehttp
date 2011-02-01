@@ -79,20 +79,20 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         if ((format != NULL) && (strcmp(format, "json") == 0)) {
             evbuffer_add_printf(evb, "{");
-            evbuffer_add_printf(evb, "\"puts\": %lld,", n_puts);
-            evbuffer_add_printf(evb, "\"gets\": %lld,", n_gets);
-            evbuffer_add_printf(evb, "\"depth\": %lld,", depth);
-            evbuffer_add_printf(evb, "\"depth_high_water\": %lld,", depth_high_water);
+            evbuffer_add_printf(evb, "\"puts\": %llu,", (long long unsigned int)n_puts);
+            evbuffer_add_printf(evb, "\"gets\": %llu,", (long long unsigned int)n_gets);
+            evbuffer_add_printf(evb, "\"depth\": %llu,", (long long unsigned int)depth);
+            evbuffer_add_printf(evb, "\"depth_high_water\": %llu,", (long long unsigned int)depth_high_water);
             evbuffer_add_printf(evb, "\"bytes\": %ld,", n_bytes);
-            evbuffer_add_printf(evb, "\"overflow\": %lld", n_overflow);
+            evbuffer_add_printf(evb, "\"overflow\": %llu", (long long unsigned int)n_overflow);
             evbuffer_add_printf(evb, "}\n");
         } else {
-            evbuffer_add_printf(evb, "puts:%lld\n", n_puts);
-            evbuffer_add_printf(evb, "gets:%lld\n", n_gets);
-            evbuffer_add_printf(evb, "depth:%lld\n", depth);
-            evbuffer_add_printf(evb, "depth_high_water:%lld\n", depth_high_water);
+            evbuffer_add_printf(evb, "puts:%llu\n", (long long unsigned int)n_puts);
+            evbuffer_add_printf(evb, "gets:%llu\n", (long long unsigned int)n_gets);
+            evbuffer_add_printf(evb, "depth:%llu\n", (long long unsigned int)depth);
+            evbuffer_add_printf(evb, "depth_high_water:%llu\n", (long long unsigned int)depth_high_water);
             evbuffer_add_printf(evb, "bytes:%ld\n", n_bytes);
-            evbuffer_add_printf(evb, "overflow:%lld\n", n_overflow);
+            evbuffer_add_printf(evb, "overflow:%llu\n", (long long unsigned int)n_overflow);
         }
     }
     
@@ -194,7 +194,7 @@ main(int argc, char **argv)
         } else if(!strcmp(argv[i], "--max_depth")) {
             if(++i >= argc) usage();
             max_depth = strtod(argv[i], (char **) NULL);
-            fprintf(stdout, "max_depth set to %lld\n", max_depth);
+            fprintf(stdout, "max_depth set to %llu\n", (long long unsigned int)max_depth);
         } else if (!strcmp(argv[i], "--help")) {
             usage();
         }
