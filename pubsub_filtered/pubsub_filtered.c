@@ -348,6 +348,8 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char *reset, *uri;
     char buf[33];
+    struct evkeyvalq args;
+    const char format;
     
     sprintf(buf, "%llu", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
@@ -360,12 +362,28 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%llu", kickedClients);
     evhttp_add_header(req->output_headers, "X-PUBSUB-KICKED-CLIENTS", buf);
     
-    evbuffer_add_printf(evb, "Active connections: %llu\n", currentConns);
-    evbuffer_add_printf(evb, "Total connections: %llu\n", totalConns);
-    evbuffer_add_printf(evb, "Messages received: %llu\n", msgRecv);
-    evbuffer_add_printf(evb, "Messages sent: %llu\n", msgSent);
-    evbuffer_add_printf(evb, "Kicked clients: %llu\n", kickedClients);
-    evbuffer_add_printf(evb, "Reconnects: %llu\n", number_reconnects);
+    format = (char *)evhttp_find_header(&args, "format");
+    
+    if ((format != NULL) && (strcmp(format, "json") == 0)) {
+        evbuffer_add_printf(evb, "{");
+        evbuffer_add_printf(evb, "\"current_connections\": %llu,", currentConns);
+        evbuffer_add_printf(evb, "\"total_connections\": %llu,", totalConns);
+        evbuffer_add_printf(evb, "\"messages_received\": %llu,", msgRecv);
+        evbuffer_add_printf(evb, "\"messages_sent\": %llu,", msgSent);
+        evbuffer_add_printf(evb, "\"kicked_clients\": %llu,", kickedClients);
+        evbuffer_add_printf(evb, "\"number_reconnects\": %llu", number_reconnects);
+        evbuffer_add_printf(evb, "}\n");
+    } else {
+        evbuffer_add_printf(evb, "Active connections: %llu\n", currentConns);
+        evbuffer_add_printf(evb, "Total connections: %llu\n", totalConns);
+        evbuffer_add_printf(evb, "Messages received: %llu\n", msgRecv);
+        evbuffer_add_printf(evb, "Messages sent: %llu\n", msgSent);
+        evbuffer_add_printf(evb, "Kicked clients: %llu\n", kickedClients);
+        evbuffer_add_printf(evb, "Reconnects: %llu\n", number_reconnects);
+    }
+    
+    evhttp_clear_headers(&args);
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 

@@ -409,16 +409,39 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
-void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
-    evbuffer_add_printf(evb, "Total requests: %llu\n", (long long unsigned int)requests);
-    evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
-    evbuffer_add_printf(evb, "/get_int requests: %llu\n", (long long unsigned int)get_int_requests);
-    evbuffer_add_printf(evb, "/put requests: %llu\n", (long long unsigned int)put_requests);
-    evbuffer_add_printf(evb, "/del requests: %llu\n", (long long unsigned int)del_requests);
-    evbuffer_add_printf(evb, "/fwmatch requests: %llu\n", (long long unsigned int)fwmatch_requests);
-    evbuffer_add_printf(evb, "/incr requests: %llu\n", (long long unsigned int)incr_requests);
-    evbuffer_add_printf(evb, "/vanish requests: %llu\n", (long long unsigned int)vanish_requests);
-    evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
+void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    struct evkeyvalq args;
+    const char *format;
+    
+    format = (char *)evhttp_find_header(&args, "format");
+    
+    if ((format != NULL) && (strcmp(format, "json") == 0)) {
+        evbuffer_add_printf(evb, "{");
+        evbuffer_add_printf(evb, "\"total_requests\": %llu,", (long long unsigned int)requests);
+        evbuffer_add_printf(evb, "\"get_requests\": %llu,", (long long unsigned int)get_requests);
+        evbuffer_add_printf(evb, "\"get_int_requests\": %llu,", (long long unsigned int)get_int_requests);
+        evbuffer_add_printf(evb, "\"put_requests\": %llu,", (long long unsigned int)put_requests);
+        evbuffer_add_printf(evb, "\"del_requests\": %llu,", (long long unsigned int)del_requests);
+        evbuffer_add_printf(evb, "\"fwmatch_requests\": %llu,", (long long unsigned int)fwmatch_requests);
+        evbuffer_add_printf(evb, "\"incr_requests\": %llu,", (long long unsigned int)incr_requests);
+        evbuffer_add_printf(evb, "\"vanish_requests\": %llu,", (long long unsigned int)vanish_requests);
+        evbuffer_add_printf(evb, "\"db_opens\": %llu", (long long unsigned int)db_opened);
+        evbuffer_add_printf(evb, "}\n");
+    } else {
+        evbuffer_add_printf(evb, "Total requests: %llu\n", (long long unsigned int)requests);
+        evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
+        evbuffer_add_printf(evb, "/get_int requests: %llu\n", (long long unsigned int)get_int_requests);
+        evbuffer_add_printf(evb, "/put requests: %llu\n", (long long unsigned int)put_requests);
+        evbuffer_add_printf(evb, "/del requests: %llu\n", (long long unsigned int)del_requests);
+        evbuffer_add_printf(evb, "/fwmatch requests: %llu\n", (long long unsigned int)fwmatch_requests);
+        evbuffer_add_printf(evb, "/incr requests: %llu\n", (long long unsigned int)incr_requests);
+        evbuffer_add_printf(evb, "/vanish requests: %llu\n", (long long unsigned int)vanish_requests);
+        evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
+    }
+    
+    evhttp_clear_headers(&args);
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 

@@ -66,25 +66,40 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *reset;
+    const char *format;
     
     evhttp_parse_query(req->uri, &args);
-    reset = evhttp_find_header(&args, "reset");    
+    reset = evhttp_find_header(&args, "reset");
     if (reset != NULL && strcmp(reset, "1") == 0) {
         depth_high_water = 0;
         n_puts = 0;
         n_gets = 0;
     } else {
-        evbuffer_add_printf(evb, "puts:%lld\n", n_puts);
-        evbuffer_add_printf(evb, "gets:%lld\n", n_gets);
-        evbuffer_add_printf(evb, "depth:%lld\n", depth);
-        evbuffer_add_printf(evb, "depth_high_water:%lld\n", depth_high_water);
-        evbuffer_add_printf(evb, "bytes:%ld\n", n_bytes);
-        evbuffer_add_printf(evb, "overflow:%lld\n", n_overflow);
+        format = evhttp_find_header(&args, "format");
+        
+        if ((format != NULL) && (strcmp(format, "json") == 0)) {
+            evbuffer_add_printf(evb, "{");
+            evbuffer_add_printf(evb, "\"puts\": %lld,", n_puts);
+            evbuffer_add_printf(evb, "\"gets\": %lld,", n_gets);
+            evbuffer_add_printf(evb, "\"depth\": %lld,", depth);
+            evbuffer_add_printf(evb, "\"depth_high_water\": %lld,", depth_high_water);
+            evbuffer_add_printf(evb, "\"bytes\": %ld,", n_bytes);
+            evbuffer_add_printf(evb, "\"overflow\": %lld", n_overflow);
+            evbuffer_add_printf(evb, "}\n");
+        } else {
+            evbuffer_add_printf(evb, "puts:%lld\n", n_puts);
+            evbuffer_add_printf(evb, "gets:%lld\n", n_gets);
+            evbuffer_add_printf(evb, "depth:%lld\n", depth);
+            evbuffer_add_printf(evb, "depth_high_water:%lld\n", depth_high_water);
+            evbuffer_add_printf(evb, "bytes:%ld\n", n_bytes);
+            evbuffer_add_printf(evb, "overflow:%lld\n", n_overflow);
+        }
     }
     
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
-}   
+    
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
 
 void
 get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
