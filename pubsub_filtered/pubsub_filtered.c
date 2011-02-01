@@ -3,12 +3,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
-
-#include "json/json.h"
-#include "simplehttp/simplehttp.h"
 #include "simplehttp/queue.h"
-#include "http-internal.h"
+#include "simplehttp/simplehttp.h"
 #include "event.h"
+#include "http-internal.h"
+#include "json/json.h"
 #include "md5.h"
 
 
@@ -349,7 +348,7 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char *reset, *uri;
     char buf[33];
     struct evkeyvalq args;
-    const char format;
+    const char *format;
     
     sprintf(buf, "%llu", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
