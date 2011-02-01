@@ -51,10 +51,10 @@ uint64_t db_opened = 0;
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
                     struct evkeyvalq *args, struct json_object *jsobj)
 {
-    char *json, *jsonp;
+    const char *json, *jsonp;
     
     jsonp = (char *)evhttp_find_header(args, "jsonp");
-    json = json_object_to_json_string(jsobj);
+    json = (char *)json_object_to_json_string(jsobj);
     if (jsonp) {
         evbuffer_add_printf(evb, "%s(%s)\n", jsonp, json);
     } else {
@@ -285,7 +285,8 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     jsobj = json_object_new_object();
-    if (value = tcrdbget2(rdb, key)) {
+    value = tcrdbget2(rdb, key);
+    if (value) {
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         json_object_object_add(jsobj, "value", json_object_new_string(value));
         free(value);
@@ -322,7 +323,8 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     jsobj = json_object_new_object();
-    if (value = (int *)tcrdbget2(rdb, key)) {
+    value = (int *)tcrdbget2(rdb, key);
+    if (value) {
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         json_object_object_add(jsobj, "value", json_object_new_int((int) *value));
         free(value);
