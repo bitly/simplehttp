@@ -159,7 +159,6 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-        evhttp_clear_headers(&args);
     } else if ((line = map_search(key, strlen(key), (char *)map_base,
          (char *)map_base+st.st_size, &seeks))) {
         sprintf(buf, "%d", seeks);
@@ -176,12 +175,13 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         }
         get_hits++;
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
-        evhttp_clear_headers(&args);
     } else {
         get_misses++;
         evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
-        evhttp_clear_headers(&args);
+        
     }
+    
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
     stats_store_request(0, ts_diff(ts1, ts2));
@@ -195,10 +195,12 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     long long unsigned int        average_request;
     int i, j, c, request_array_end;
     
-    evbuffer_add_printf(evb, "Get requests: %llu\n", (long long unsigned int)get_requests);
-    evbuffer_add_printf(evb, "Get hits: %llu\n", (long long unsigned int)get_hits);
-    evbuffer_add_printf(evb, "Get misses: %llu\n", (long long unsigned int)get_misses);
-    evbuffer_add_printf(evb, "Total seeks: %llu\n", (long long unsigned int)total_seeks);
+    evbuffer_add_printf(evb, "{");
+    
+    evbuffer_add_printf(evb, "\"num_requests\": %llu,", (long long unsigned int)get_requests);
+    evbuffer_add_printf(evb, "\"hits\": %llu,", (long long unsigned int)get_hits);
+    evbuffer_add_printf(evb, "\"misses\": %llu,", (long long unsigned int)get_misses);
+    evbuffer_add_printf(evb, "\"seeks\": %llu", (long long unsigned int)total_seeks);
     
     for (i = 0; i < NUM_REQUEST_TYPES; i++) {
         request_total = 0;
@@ -213,8 +215,10 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             //printf("avg = %d / %d\n", request_total, c);
             average_request = request_total / c;
         }
-        evbuffer_add_printf(evb, "Avg. Request uSec: %llu\n", average_request);
+        evbuffer_add_printf(evb, ", \"avg_req_time\": %llu", average_request);
     }
+    
+    evbuffer_add_printf(evb, "}\n");
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
