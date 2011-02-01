@@ -113,12 +113,9 @@ void
 stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
-    char *reset, *uri;
     char buf[33];
-    
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    const char *reset;
+    const char *format;
     
     sprintf(buf, "%llu", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
@@ -131,18 +128,31 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%llu", kickedClients);
     evhttp_add_header(req->output_headers, "X-PUBSUB-KICKED-CLIENTS", buf);
     
-    evbuffer_add_printf(evb, "Active connections: %llu\n", currentConns);
-    evbuffer_add_printf(evb, "Total connections: %llu\n", totalConns);
-    evbuffer_add_printf(evb, "Messages received: %llu\n", msgRecv);
-    evbuffer_add_printf(evb, "Messages sent: %llu\n", msgSent);
-    evbuffer_add_printf(evb, "Kicked clients: %llu\n", kickedClients);
+    evhttp_parse_query(req->uri, &args);
+    format = (char *)evhttp_find_header(&args, "format");
+    
+    if ((format != NULL) && (strcmp(format, "json") == 0)) {
+        evbuffer_add_printf(evb, "{");
+        evbuffer_add_printf(evb, "\"current_connections\": %llu,", currentConns);
+        evbuffer_add_printf(evb, "\"total_connections\": %llu,", totalConns);
+        evbuffer_add_printf(evb, "\"messages_received\": %llu,", msgRecv);
+        evbuffer_add_printf(evb, "\"messages_sent\": %llu,", msgSent);
+        evbuffer_add_printf(evb, "\"kicked_clients\": %llu,", kickedClients);
+        evbuffer_add_printf(evb, "}\n");
+    } else {
+        evbuffer_add_printf(evb, "Active connections: %llu\n", currentConns);
+        evbuffer_add_printf(evb, "Total connections: %llu\n", totalConns);
+        evbuffer_add_printf(evb, "Messages received: %llu\n", msgRecv);
+        evbuffer_add_printf(evb, "Messages sent: %llu\n", msgSent);
+        evbuffer_add_printf(evb, "Kicked clients: %llu\n", kickedClients);
+    }
+    
     reset = (char *)evhttp_find_header(&args, "reset");
-
     if (reset) {
         msgRecv = 0;
         msgSent = 0;
     } 
-
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
 }
@@ -299,7 +309,7 @@ main(int argc, char **argv)
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
     simplehttp_set_cb("/sub*", sub_cb, NULL);
-    simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
     simplehttp_main(argc, argv);
 

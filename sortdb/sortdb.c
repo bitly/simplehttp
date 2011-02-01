@@ -191,8 +191,8 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    long long unsigned int        request_total;
-    long long unsigned int        average_request;
+    long long unsigned int request_total;
+    long long unsigned int average_request = 0;
     int i, j, c, request_array_end;
     struct evkeyvalq args;
     const char *format;
@@ -212,6 +212,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
     }
     
+    evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
@@ -230,9 +231,8 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "Avg. request (usec): %llu\n", average_request);
     }
     
-    evhttp_clear_headers(&args);
-    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -355,7 +355,7 @@ int main(int argc, char **argv)
     simplehttp_init();
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
-    simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/reload", reload_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);

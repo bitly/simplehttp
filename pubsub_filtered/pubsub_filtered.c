@@ -345,7 +345,6 @@ clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void
 stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *reset, *uri;
     char buf[33];
     struct evkeyvalq args;
     const char *format;
@@ -361,6 +360,7 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(buf, "%llu", kickedClients);
     evhttp_add_header(req->output_headers, "X-PUBSUB-KICKED-CLIENTS", buf);
     
+    evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
@@ -381,9 +381,8 @@ stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "Reconnects: %llu\n", number_reconnects);
     }
     
-    evhttp_clear_headers(&args);
-    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 
@@ -608,7 +607,7 @@ main(int argc, char **argv)
     TAILQ_INIT(&clients);
     simplehttp_init();
     simplehttp_set_cb("/sub", sub_cb, NULL);
-    simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
 
     if (connect_to_source() == FAILURE) {

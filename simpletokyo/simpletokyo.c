@@ -416,6 +416,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq args;
     const char *format;
     
+    evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
@@ -442,9 +443,8 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
     }
     
-    evhttp_clear_headers(&args);
-    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
@@ -500,7 +500,7 @@ main(int argc, char **argv)
     simplehttp_set_cb("/vanish*", vanish_cb, NULL);
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
-    simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
 

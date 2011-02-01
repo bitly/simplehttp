@@ -96,9 +96,8 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
     }
     
-    evhttp_clear_headers(&args);
-    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void
