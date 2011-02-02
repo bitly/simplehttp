@@ -40,7 +40,7 @@ static uint64_t get_requests = 0;
 static uint64_t get_hits = 0;
 static uint64_t get_misses = 0;
 static uint64_t total_seeks = 0;
-static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
+static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
 
 void stats_store_request(int index, unsigned int diff)

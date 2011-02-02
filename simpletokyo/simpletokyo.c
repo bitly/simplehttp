@@ -54,7 +54,7 @@ static uint64_t fwmatch_requests = 0;
 static uint64_t incr_requests = 0;
 static uint64_t vanish_requests = 0;
 static uint64_t db_opened = 0;
-static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
+static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
 static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del" };
 
