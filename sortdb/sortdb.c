@@ -16,7 +16,7 @@
 #define NUM_REQUEST_TYPES       1
 #define NUM_REQUESTS_FOR_STATS  1000
 
-static char *version  = "1.1";
+static char *version  = "1.2";
 static void *map_base = NULL;
 static char *db_filename;
 static struct stat st;
@@ -26,7 +26,7 @@ uint64_t get_hits = 0;
 uint64_t get_misses = 0;
 uint64_t total_seeks = 0;
 int fd = 0;
-static long long unsigned int stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
+static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -315,9 +315,10 @@ void open_dbfile()
 
 int main(int argc, char **argv)
 {
-    info();
-
     int ch;
+    
+    info();
+    
     opterr=0;
     while ((ch = getopt(argc, argv, "f:F:h")) != -1) {
         if (ch == '?') {

@@ -30,6 +30,7 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
+static char *version  = "1.2";
 struct event ev;
 struct timeval tv = {RECONNECT,0};
 static char *db_host = "127.0.0.1";
@@ -453,6 +454,12 @@ void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
     exit(0);
 }
 
+void info()
+{
+    fprintf(stdout, "simpletokyo: a light http interface to Tokyo Tyrant.\n");
+    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/simpletokyo\n", version);
+}
+
 void usage()
 {
     fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", g_progname);
@@ -471,6 +478,9 @@ int
 main(int argc, char **argv)
 {
     int ch;
+    
+    info();
+    
     opterr=0;
     while ((ch = getopt(argc, argv, "A:P:h")) != -1) {
         if (ch == '?') {
