@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
 #include "timer/timer.h"
@@ -39,7 +40,7 @@ static uint64_t get_requests = 0;
 static uint64_t get_hits = 0;
 static uint64_t get_misses = 0;
 static uint64_t total_seeks = 0;
-static static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
+static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
 
 void stats_store_request(int index, unsigned int diff)
@@ -165,14 +166,14 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "\"get_hits\": %llu,", (long long unsigned int)get_hits);
         evbuffer_add_printf(evb, "\"get_misses\": %llu,", (long long unsigned int)get_misses);
         evbuffer_add_printf(evb, "\"total_seeks\": %llu,", (long long unsigned int)total_seeks);
-        evbuffer_add_printf(evb, "\"average_request\": %llu", average_request);
+        evbuffer_add_printf(evb, "\"average_request\": %llu", (long long unsigned int)average_request);
         evbuffer_add_printf(evb, "}\n");
     } else {
         evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
         evbuffer_add_printf(evb, "/get hits: %llu\n", (long long unsigned int)get_hits);
         evbuffer_add_printf(evb, "/get misses: %llu\n", (long long unsigned int)get_misses);
         evbuffer_add_printf(evb, "Total seeks: %llu\n", (long long unsigned int)total_seeks);
-        evbuffer_add_printf(evb, "Avg. request (usec): %llu\n", average_request);
+        evbuffer_add_printf(evb, "Avg. request (usec): %llu\n", (long long unsigned int)average_request);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
