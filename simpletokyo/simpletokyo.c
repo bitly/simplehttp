@@ -486,7 +486,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "\"total_requests\": %llu,", (long long unsigned int)requests);
         for (i = 0; i < NUM_REQUEST_TYPES; i++) {
             sprintf(key, "%s_average_request", stats_request_labels[i]);
-            evbuffer_add_printf(evb, "\"%s\": %llu,", key, (long long unsigned int)vanish_requests);
+            evbuffer_add_printf(evb, "\"%s\": %llu,", key, (long long unsigned int)average_requests[i]);
         }
         evbuffer_add_printf(evb, "\"get_requests\": %llu,", (long long unsigned int)get_requests);
         evbuffer_add_printf(evb, "\"get_int_requests\": %llu,", (long long unsigned int)get_int_requests);
@@ -501,7 +501,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
         evbuffer_add_printf(evb, "total requests: %llu\n", (long long unsigned int)requests);
         for (i = 0; i < NUM_REQUEST_TYPES; i++) {
-            evbuffer_add_printf(evb, "/%s average request (usec): %llu\n", stats_request_labels[i], (long long unsigned int)vanish_requests);
+            evbuffer_add_printf(evb, "/%s average request (usec): %llu\n", stats_request_labels[i], (long long unsigned int)average_requests[i]);
         }
         evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
         evbuffer_add_printf(evb, "/get_int requests: %llu\n", (long long unsigned int)get_int_requests);
