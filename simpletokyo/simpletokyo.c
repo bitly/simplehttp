@@ -5,16 +5,22 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <simplehttp/queue.h> 
+#include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
-#include "json/json.h"
+#include <json/json.h>
+#include "timer/timer.h"
 
+#define RECONNECT               5
+#define MAXRES                  1000
+#define NUM_REQUEST_TYPES       5
+#define NUM_REQUESTS_FOR_STATS  1000
+#define STATS_GET               0
+#define STATS_GET_INT           1
+#define STATS_PUT               2
+#define STATS_INCR              3
+#define STATS_DEL               4
 
-#define RECONNECT 5
-#define MAXRES 1000
-
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-                    struct evkeyvalq *args, struct json_object *jsobj);
+void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int open_db(char *addr, int port, TCRDB **rdb);
 void close_db(TCRDB **rdb);
 void db_reconnect(int fd, short what, void *ctx);
@@ -39,18 +45,30 @@ static TCRDB *rdb;
 static int db_status;
 static char *g_progname = "simpletokyo";
 
-uint64_t requests = 0;
-uint64_t get_requests = 0;
-uint64_t get_int_requests = 0;
-uint64_t put_requests = 0;
-uint64_t del_requests = 0;
-uint64_t fwmatch_requests = 0;
-uint64_t incr_requests = 0;
-uint64_t vanish_requests = 0;
-uint64_t db_opened = 0;
+static uint64_t requests = 0;
+static uint64_t get_requests = 0;
+static uint64_t get_int_requests = 0;
+static uint64_t put_requests = 0;
+static uint64_t del_requests = 0;
+static uint64_t fwmatch_requests = 0;
+static uint64_t incr_requests = 0;
+static uint64_t vanish_requests = 0;
+static uint64_t db_opened = 0;
+static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
+static int stats_request_idx[NUM_REQUEST_TYPES];
+static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del" };
 
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-                    struct evkeyvalq *args, struct json_object *jsobj)
+void stats_store_request(int index, unsigned int diff)
+{
+    stats_request[(index * NUM_REQUESTS_FOR_STATS) + stats_request_idx[index]] = diff;
+    stats_request_idx[index]++;
+    
+    if (stats_request_idx[index] >= NUM_REQUESTS_FOR_STATS) {
+        stats_request_idx[index] = 0;
+    }
+}
+
+void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj)
 {
     const char *json, *jsonp;
     
@@ -77,11 +95,12 @@ void close_db(TCRDB **rdb) {
         tcrdbdel(*rdb);
     }
 }
+
 int open_db(char *addr, int port, TCRDB **rdb)
 {
     db_opened++;
     int ecode=0;
-
+    
     if (*rdb != NULL) {
         if(!tcrdbclose(*rdb)){
           ecode = tcrdbecode(*rdb);
@@ -131,8 +150,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
     fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
     json_object_object_add(jsobj, "status", json_object_new_string("error"));
     json_object_object_add(jsobj, "code", json_object_new_int(code));
-    json_object_object_add(jsobj, "message",
-                            json_object_new_string((char *)tcrdberrmsg(code)));
+    json_object_object_add(jsobj, "message", json_object_new_string((char *)tcrdberrmsg(code)));
 }
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -194,16 +212,18 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char                *key;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
-
+    
+    _gettime(&ts1);
+    
     requests++;
     del_requests++;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
@@ -218,8 +238,11 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
+    
     finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_DEL, _ts_diff(ts1, ts2));
 }
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -227,7 +250,9 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char                *key, *value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
-
+    
+    _gettime(&ts1);
+    
     requests++;
     put_requests++;
     
@@ -260,6 +285,9 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
 
     finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_PUT, _ts_diff(ts1, ts2));
 }
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -267,7 +295,9 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char                *key, *value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
-
+    
+    _gettime(&ts1);
+    
     requests++;
     get_requests++;
     
@@ -297,6 +327,9 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
 
     finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_GET, _ts_diff(ts1, ts2));
 }
 
 void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -305,7 +338,9 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     int                 *value;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
-
+    
+    _gettime(&ts1);
+    
     requests++;
     get_int_requests++;
 
@@ -335,6 +370,9 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
 
     finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_GET_INT, _ts_diff(ts1, ts2));
 }
 
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -344,10 +382,12 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj;
     int v;
     int value = 1;
-	struct evkeyval *arg;
+    struct evkeyval *arg;
     bool has_key_arg = false;
     bool error = false;
-
+    
+    _gettime(&ts1);
+    
     requests++;
     incr_requests++;
 
@@ -385,6 +425,9 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (!error) json_object_object_add(jsobj, "status", json_object_new_string("ok"));
 
     finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_INCR, _ts_diff(ts1, ts2));
 }
 
 void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -414,26 +457,52 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
+    uint64_t request_total;
+    uint64_t average_requests[NUM_REQUEST_TYPES];
+    char key[64];
+    int i, j, c, request_array_end;
     struct evkeyvalq args;
     const char *format;
+    
+    memset(&average_requests, 0, sizeof(average_requests));
+    
+    for (i = 0; i < NUM_REQUEST_TYPES; i++) {
+        request_total = 0;
+        for (j = (i * NUM_REQUESTS_FOR_STATS), request_array_end = j + NUM_REQUESTS_FOR_STATS, c = 0; 
+            (j < request_array_end) && (stats_request[j] != -1); j++, c++) {
+            request_total += stats_request[j];
+        }
+        if (c) {
+            average_requests[i] = request_total / c;
+        }
+    }
     
     evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
+        evbuffer_add_printf(evb, "\"db_opens\": %llu,", (long long unsigned int)db_opened);
         evbuffer_add_printf(evb, "\"total_requests\": %llu,", (long long unsigned int)requests);
+        for (i = 0; i < NUM_REQUEST_TYPES; i++) {
+            sprintf(key, "%s_average_request", stats_request_labels[i]);
+            evbuffer_add_printf(evb, "\"%s\": %llu,", key, (long long unsigned int)vanish_requests);
+        }
         evbuffer_add_printf(evb, "\"get_requests\": %llu,", (long long unsigned int)get_requests);
         evbuffer_add_printf(evb, "\"get_int_requests\": %llu,", (long long unsigned int)get_int_requests);
         evbuffer_add_printf(evb, "\"put_requests\": %llu,", (long long unsigned int)put_requests);
         evbuffer_add_printf(evb, "\"del_requests\": %llu,", (long long unsigned int)del_requests);
         evbuffer_add_printf(evb, "\"fwmatch_requests\": %llu,", (long long unsigned int)fwmatch_requests);
         evbuffer_add_printf(evb, "\"incr_requests\": %llu,", (long long unsigned int)incr_requests);
-        evbuffer_add_printf(evb, "\"vanish_requests\": %llu,", (long long unsigned int)vanish_requests);
-        evbuffer_add_printf(evb, "\"db_opens\": %llu", (long long unsigned int)db_opened);
+        evbuffer_add_printf(evb, "\"vanish_requests\": %llu", (long long unsigned int)vanish_requests);
+        
         evbuffer_add_printf(evb, "}\n");
     } else {
-        evbuffer_add_printf(evb, "Total requests: %llu\n", (long long unsigned int)requests);
+        evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
+        evbuffer_add_printf(evb, "total requests: %llu\n", (long long unsigned int)requests);
+        for (i = 0; i < NUM_REQUEST_TYPES; i++) {
+            evbuffer_add_printf(evb, "/%s average request (usec): %llu\n", stats_request_labels[i], (long long unsigned int)vanish_requests);
+        }
         evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
         evbuffer_add_printf(evb, "/get_int requests: %llu\n", (long long unsigned int)get_int_requests);
         evbuffer_add_printf(evb, "/put requests: %llu\n", (long long unsigned int)put_requests);
@@ -441,7 +510,6 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "/fwmatch requests: %llu\n", (long long unsigned int)fwmatch_requests);
         evbuffer_add_printf(evb, "/incr requests: %llu\n", (long long unsigned int)incr_requests);
         evbuffer_add_printf(evb, "/vanish requests: %llu\n", (long long unsigned int)vanish_requests);
-        evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -474,8 +542,7 @@ void usage()
     exit(1);
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     int ch;
     
@@ -500,7 +567,10 @@ main(int argc, char **argv)
         }
     }
     
+    memset(&stats_request, -1, sizeof(stats_request));
+    memset(&stats_request_idx, 0, sizeof(stats_request_idx));
     memset(&db_status, -1, sizeof(db_status));
+    
     simplehttp_init();
     db_reconnect(0, 0, NULL);
     simplehttp_set_cb("/get_int*", get_int_cb, NULL);
@@ -513,6 +583,6 @@ main(int argc, char **argv)
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
-
+    
     return 0;
 }

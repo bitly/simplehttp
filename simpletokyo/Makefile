@@ -7,8 +7,8 @@ LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
 CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -Wall -g -O2
 LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -L/usr/local/lib -levent -ljson -ltokyotyrant -ltokyocabinet -lsimplehttp
 
-simpletokyo: simpletokyo.c
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+simpletokyo: simpletokyo.c ../timer/timer.c
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 install:
 	/usr/bin/install -D simpletokyo $(TARGET)/bin/simpletokyo

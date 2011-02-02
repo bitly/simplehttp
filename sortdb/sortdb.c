@@ -7,27 +7,13 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <time.h>
-#include <unistd.h>
-#include "simplehttp/queue.h"
-#include "simplehttp/simplehttp.h"
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
+#include "timer/timer.h"
 
 #define DEBUG                   1
 #define NUM_REQUEST_TYPES       1
 #define NUM_REQUESTS_FOR_STATS  1000
-
-static char *version  = "1.2";
-static void *map_base = NULL;
-static char *db_filename;
-static struct stat st;
-char deliminator = '\t';
-uint64_t get_requests = 0;
-uint64_t get_hits = 0;
-uint64_t get_misses = 0;
-uint64_t total_seeks = 0;
-int fd = 0;
-static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
-static int stats_request_idx[NUM_REQUEST_TYPES];
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx);
@@ -42,57 +28,19 @@ void close_dbfile();
 void open_dbfile();
 void hup_handler(int signum);
 
-#if _POSIX_TIMERS > 0
-    
-    static struct timespec ts1, ts2;
-    
-    void _gettime(struct timespec *ts)
-    {
-        clock_gettime(CLOCK_REALTIME, ts);
-    }
-    
-    unsigned int ts_diff(struct timespec start, struct timespec end)
-    {
-        struct timespec temp;
-        
-        if ((end.tv_nsec - start.tv_nsec) < 0) {
-            temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-            temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
-        } else {
-            temp.tv_sec = end.tv_sec - start.tv_sec;
-            temp.tv_nsec = end.tv_nsec - start.tv_nsec;
-        }
-        
-        // return usec as int
-        return (temp.tv_sec * 1000000) + (temp.tv_nsec / 1000);
-    }
+static char *version  = "1.2";
+static void *map_base = NULL;
+static char *db_filename;
+static struct stat st;
+char deliminator = '\t';
+int fd = 0;
 
-#else
-
-    static struct timeval ts1, ts2;
-    
-    void _gettime(struct timeval *ts)
-    {
-        gettimeofday(ts, NULL);
-    }
-    
-    unsigned int ts_diff(struct timeval start, struct timeval end)
-    {
-        struct timeval temp;
-        
-        if ((end.tv_usec - start.tv_usec) < 0) {
-            temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-            temp.tv_usec = 1000000 + end.tv_usec - start.tv_usec;
-        } else {
-            temp.tv_sec = end.tv_sec - start.tv_sec;
-            temp.tv_usec = end.tv_usec - start.tv_usec;
-        }
-        
-        // return usec as int
-        return (temp.tv_sec * 1000000) + temp.tv_usec;
-    }
-
-#endif
+static uint64_t get_requests = 0;
+static uint64_t get_hits = 0;
+static uint64_t get_misses = 0;
+static uint64_t total_seeks = 0;
+static static uint64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
+static int stats_request_idx[NUM_REQUEST_TYPES];
 
 void stats_store_request(int index, unsigned int diff)
 {
@@ -184,30 +132,26 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(0, ts_diff(ts1, ts2));
+    stats_store_request(0, _ts_diff(ts1, ts2));
     
     return;
 }
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    long long unsigned int request_total;
-    long long unsigned int average_request = 0;
+    uint64_t request_total;
+    uint64_t average_request = 0;
     int i, j, c, request_array_end;
     struct evkeyvalq args;
     const char *format;
     
     for (i = 0; i < NUM_REQUEST_TYPES; i++) {
         request_total = 0;
-        average_request = 0;
-        //printf("%s\n", stats_request_labels[i]);
         for (j = (i * NUM_REQUESTS_FOR_STATS), request_array_end = j + NUM_REQUESTS_FOR_STATS, c = 0; 
             (j < request_array_end) && (stats_request[j] != -1); j++, c++) {
-            //printf("request %d: %d\n", c, stats_request[j]);
             request_total += stats_request[j];
         }
         if (c) {
-            //printf("avg = %d / %d\n", request_total, c);
             average_request = request_total / c;
         }
     }
