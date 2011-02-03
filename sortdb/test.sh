@@ -51,7 +51,7 @@ else
 fi
 
 curl --silent "localhost:8080/exit"
-
+sleep .5;
 if ! grep -q "ERROR SUMMARY: 0 errors" "${testsubdir}/vg.out" ; then
     echo "ERROR: valgrind found errors during execution:" 1>&2
     cat "${testsubdir}/vg.out"

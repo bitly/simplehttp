@@ -33,8 +33,8 @@ static char *version  = "1.2";
 static void *map_base = NULL;
 static char *db_filename;
 static struct stat st;
-char deliminator = '\t';
-int fd = 0;
+static char deliminator = '\t';
+static int fd = 0;
 
 static uint64_t get_requests = 0;
 static uint64_t get_hits = 0;
@@ -196,7 +196,7 @@ void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     fprintf(stdout, "/exit request recieved\n");
-    exit(0);
+    event_loopbreak();
 }
 
 void info()
@@ -233,9 +233,16 @@ void hup_handler(int signum)
 
 void close_dbfile()
 {
+    
     fprintf(stdout, "closing %s\n", db_filename);
-    munmap(0, st.st_size);
-    close(fd);
+    if (munmap(0, st.st_size) != 0 ) {
+        fprintf(stderr, "failed munmap\n");
+        exit(1);
+    }
+    if (close(fd) != 0) {
+        fprintf(stderr, "failed close() on %d\n", fd);
+        exit(1);
+    }
     fd = 0;
     map_base = NULL;
 }
