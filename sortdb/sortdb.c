@@ -235,7 +235,7 @@ void close_dbfile()
 {
     
     fprintf(stdout, "closing %s\n", db_filename);
-    if (munmap(0, st.st_size) != 0 ) {
+    if (munmap(map_base, st.st_size) != 0 ) {
         fprintf(stderr, "failed munmap\n");
         exit(1);
     }
