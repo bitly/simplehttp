@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
 #include "timer/timer.h"
@@ -108,8 +109,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, strlen(key), (char *)map_base,
-         (char *)map_base+st.st_size, &seeks))) {
+    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks))) {
         sprintf(buf, "%d", seeks);
         evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
         delim = strchr(line, deliminator);
@@ -162,18 +162,18 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
-        evbuffer_add_printf(evb, "\"get_requests\": %llu,", (long long unsigned int)get_requests);
-        evbuffer_add_printf(evb, "\"get_hits\": %llu,", (long long unsigned int)get_hits);
-        evbuffer_add_printf(evb, "\"get_misses\": %llu,", (long long unsigned int)get_misses);
-        evbuffer_add_printf(evb, "\"total_seeks\": %llu,", (long long unsigned int)total_seeks);
-        evbuffer_add_printf(evb, "\"average_request\": %llu", (long long unsigned int)average_request);
+        evbuffer_add_printf(evb, "\"get_requests\": %"PRIu64",", get_requests);
+        evbuffer_add_printf(evb, "\"get_hits\": %"PRIu64",", get_hits);
+        evbuffer_add_printf(evb, "\"get_misses\": %"PRIu64",", get_misses);
+        evbuffer_add_printf(evb, "\"total_seeks\": %"PRIu64",", total_seeks);
+        evbuffer_add_printf(evb, "\"average_request\": %"PRIu64, average_request);
         evbuffer_add_printf(evb, "}\n");
     } else {
-        evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
-        evbuffer_add_printf(evb, "/get hits: %llu\n", (long long unsigned int)get_hits);
-        evbuffer_add_printf(evb, "/get misses: %llu\n", (long long unsigned int)get_misses);
-        evbuffer_add_printf(evb, "Total seeks: %llu\n", (long long unsigned int)total_seeks);
-        evbuffer_add_printf(evb, "Avg. request (usec): %llu\n", (long long unsigned int)average_request);
+        evbuffer_add_printf(evb, "/get requests: %"PRIu64"\n", get_requests);
+        evbuffer_add_printf(evb, "/get hits: %"PRIu64"\n", get_hits);
+        evbuffer_add_printf(evb, "/get misses: %"PRIu64"\n", get_misses);
+        evbuffer_add_printf(evb, "Total seeks: %"PRIu64"\n", total_seeks);
+        evbuffer_add_printf(evb, "Avg. request (usec): %"PRIu64"\n", average_request);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -235,7 +235,7 @@ void close_dbfile()
 {
     
     fprintf(stdout, "closing %s\n", db_filename);
-    if (munmap(map_base, st.st_size) != 0 ) {
+    if (munmap(map_base, st.st_size) != 0) {
         fprintf(stderr, "failed munmap\n");
         exit(1);
     }
@@ -312,5 +312,6 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/reload", reload_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
+    
     return 0;
 }

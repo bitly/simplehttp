@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
 #include <json/json.h>
@@ -482,34 +483,34 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
-        evbuffer_add_printf(evb, "\"db_opens\": %llu,", (long long unsigned int)db_opened);
-        evbuffer_add_printf(evb, "\"total_requests\": %llu,", (long long unsigned int)requests);
+        evbuffer_add_printf(evb, "\"db_opens\": %"PRIu64",", db_opened);
+        evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64",", requests);
         for (i = 0; i < NUM_REQUEST_TYPES; i++) {
             sprintf(key, "%s_average_request", stats_request_labels[i]);
-            evbuffer_add_printf(evb, "\"%s\": %llu,", key, (long long unsigned int)average_requests[i]);
+            evbuffer_add_printf(evb, "\"%s\": %"PRIu64",", key, average_requests[i]);
         }
-        evbuffer_add_printf(evb, "\"get_requests\": %llu,", (long long unsigned int)get_requests);
-        evbuffer_add_printf(evb, "\"get_int_requests\": %llu,", (long long unsigned int)get_int_requests);
-        evbuffer_add_printf(evb, "\"put_requests\": %llu,", (long long unsigned int)put_requests);
-        evbuffer_add_printf(evb, "\"del_requests\": %llu,", (long long unsigned int)del_requests);
-        evbuffer_add_printf(evb, "\"fwmatch_requests\": %llu,", (long long unsigned int)fwmatch_requests);
-        evbuffer_add_printf(evb, "\"incr_requests\": %llu,", (long long unsigned int)incr_requests);
-        evbuffer_add_printf(evb, "\"vanish_requests\": %llu", (long long unsigned int)vanish_requests);
+        evbuffer_add_printf(evb, "\"get_requests\": %"PRIu64",", get_requests);
+        evbuffer_add_printf(evb, "\"get_int_requests\": %"PRIu64",", get_int_requests);
+        evbuffer_add_printf(evb, "\"put_requests\": %"PRIu64",", put_requests);
+        evbuffer_add_printf(evb, "\"del_requests\": %"PRIu64",", del_requests);
+        evbuffer_add_printf(evb, "\"fwmatch_requests\": %"PRIu64",", fwmatch_requests);
+        evbuffer_add_printf(evb, "\"incr_requests\": %"PRIu64",", incr_requests);
+        evbuffer_add_printf(evb, "\"vanish_requests\": %"PRIu64, vanish_requests);
         
         evbuffer_add_printf(evb, "}\n");
     } else {
-        evbuffer_add_printf(evb, "db opens: %llu\n", (long long unsigned int)db_opened);
-        evbuffer_add_printf(evb, "total requests: %llu\n", (long long unsigned int)requests);
+        evbuffer_add_printf(evb, "db opens: %"PRIu64"\n", db_opened);
+        evbuffer_add_printf(evb, "total requests: %"PRIu64"\n", requests);
         for (i = 0; i < NUM_REQUEST_TYPES; i++) {
-            evbuffer_add_printf(evb, "/%s average request (usec): %llu\n", stats_request_labels[i], (long long unsigned int)average_requests[i]);
+            evbuffer_add_printf(evb, "/%s average request (usec): %"PRIu64"\n", stats_request_labels[i], average_requests[i]);
         }
-        evbuffer_add_printf(evb, "/get requests: %llu\n", (long long unsigned int)get_requests);
-        evbuffer_add_printf(evb, "/get_int requests: %llu\n", (long long unsigned int)get_int_requests);
-        evbuffer_add_printf(evb, "/put requests: %llu\n", (long long unsigned int)put_requests);
-        evbuffer_add_printf(evb, "/del requests: %llu\n", (long long unsigned int)del_requests);
-        evbuffer_add_printf(evb, "/fwmatch requests: %llu\n", (long long unsigned int)fwmatch_requests);
-        evbuffer_add_printf(evb, "/incr requests: %llu\n", (long long unsigned int)incr_requests);
-        evbuffer_add_printf(evb, "/vanish requests: %llu\n", (long long unsigned int)vanish_requests);
+        evbuffer_add_printf(evb, "/get requests: %"PRIu64"\n", get_requests);
+        evbuffer_add_printf(evb, "/get_int requests: %"PRIu64"\n", get_int_requests);
+        evbuffer_add_printf(evb, "/put requests: %"PRIu64"\n", put_requests);
+        evbuffer_add_printf(evb, "/del requests: %"PRIu64"\n", del_requests);
+        evbuffer_add_printf(evb, "/fwmatch requests: %"PRIu64"\n", fwmatch_requests);
+        evbuffer_add_printf(evb, "/incr requests: %"PRIu64"\n", incr_requests);
+        evbuffer_add_printf(evb, "/vanish requests: %"PRIu64"\n", vanish_requests);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);

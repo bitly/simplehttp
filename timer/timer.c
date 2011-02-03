@@ -1,5 +1,5 @@
 #include <time.h>
-#include <unistd.h>
+#include <sys/time.h>
 
 #if _POSIX_TIMERS > 0
 

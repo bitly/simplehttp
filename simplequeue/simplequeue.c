@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <inttypes.h>
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
 
@@ -19,7 +20,6 @@ char *overflow_log = NULL;
 FILE *overflow_log_fp = NULL;
 uint64_t max_depth = 0;
 size_t   max_bytes = 0;
-
 uint64_t depth = 0;
 uint64_t depth_high_water = 0;
 uint64_t n_puts = 0;
@@ -79,20 +79,20 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         if ((format != NULL) && (strcmp(format, "json") == 0)) {
             evbuffer_add_printf(evb, "{");
-            evbuffer_add_printf(evb, "\"puts\": %llu,", (long long unsigned int)n_puts);
-            evbuffer_add_printf(evb, "\"gets\": %llu,", (long long unsigned int)n_gets);
-            evbuffer_add_printf(evb, "\"depth\": %llu,", (long long unsigned int)depth);
-            evbuffer_add_printf(evb, "\"depth_high_water\": %llu,", (long long unsigned int)depth_high_water);
+            evbuffer_add_printf(evb, "\"puts\": %"PRIu64",", n_puts);
+            evbuffer_add_printf(evb, "\"gets\": %"PRIu64",", n_gets);
+            evbuffer_add_printf(evb, "\"depth\": %"PRIu64",", depth);
+            evbuffer_add_printf(evb, "\"depth_high_water\": %"PRIu64",", depth_high_water);
             evbuffer_add_printf(evb, "\"bytes\": %ld,", n_bytes);
-            evbuffer_add_printf(evb, "\"overflow\": %llu", (long long unsigned int)n_overflow);
+            evbuffer_add_printf(evb, "\"overflow\": %"PRIu64"", n_overflow);
             evbuffer_add_printf(evb, "}\n");
         } else {
-            evbuffer_add_printf(evb, "puts:%llu\n", (long long unsigned int)n_puts);
-            evbuffer_add_printf(evb, "gets:%llu\n", (long long unsigned int)n_gets);
-            evbuffer_add_printf(evb, "depth:%llu\n", (long long unsigned int)depth);
-            evbuffer_add_printf(evb, "depth_high_water:%llu\n", (long long unsigned int)depth_high_water);
+            evbuffer_add_printf(evb, "puts:%"PRIu64"\n", n_puts);
+            evbuffer_add_printf(evb, "gets:%"PRIu64"\n", n_gets);
+            evbuffer_add_printf(evb, "depth:%"PRIu64"\n", depth);
+            evbuffer_add_printf(evb, "depth_high_water:%"PRIu64"\n", depth_high_water);
             evbuffer_add_printf(evb, "bytes:%ld\n", n_bytes);
-            evbuffer_add_printf(evb, "overflow:%llu\n", (long long unsigned int)n_overflow);
+            evbuffer_add_printf(evb, "overflow:%"PRIu64"\n", n_overflow);
         }
     }
     
@@ -193,7 +193,7 @@ main(int argc, char **argv)
         } else if(!strcmp(argv[i], "--max_depth")) {
             if(++i >= argc) usage();
             max_depth = strtod(argv[i], (char **) NULL);
-            fprintf(stdout, "max_depth set to %llu\n", (long long unsigned int)max_depth);
+            fprintf(stdout, "max_depth set to %"PRIu64"\n", max_depth);
         } else if (!strcmp(argv[i], "--help")) {
             usage();
         }
