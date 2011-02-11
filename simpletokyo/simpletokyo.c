@@ -28,6 +28,7 @@ void db_reconnect(int fd, short what, void *ctx);
 void argtoi(struct evkeyvalq *args, char *key, int *val, int def);
 void db_error_to_json(int code, struct json_object *jsobj);
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -37,7 +38,7 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
-static char *version  = "1.2";
+static char *version  = "1.3";
 struct event ev;
 struct timeval tv = {RECONNECT,0};
 static char *db_host = "127.0.0.1";
@@ -52,6 +53,7 @@ static uint64_t get_int_requests = 0;
 static uint64_t put_requests = 0;
 static uint64_t del_requests = 0;
 static uint64_t fwmatch_requests = 0;
+static uint64_t fwmatch_int_requests = 0;
 static uint64_t incr_requests = 0;
 static uint64_t vanish_requests = 0;
 static uint64_t db_opened = 0;
@@ -152,6 +154,61 @@ void db_error_to_json(int code, struct json_object *jsobj)
     json_object_object_add(jsobj, "status", json_object_new_string("error"));
     json_object_object_add(jsobj, "code", json_object_new_int(code));
     json_object_object_add(jsobj, "message", json_object_new_string((char *)tcrdberrmsg(code)));
+}
+
+void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char                *key, *kbuf;
+    int                 *value;
+    int                 i, max, off, len;
+    TCLIST              *keylist = NULL;
+    struct evkeyvalq    args;
+    struct json_object  *jsobj, *jsobj2, *jsarr;
+    
+    requests++;
+    fwmatch_int_requests++;
+    
+    if (rdb == NULL) {
+        evhttp_send_error(req, 503, "database not connected");
+        return;
+    }
+    evhttp_parse_query(req->uri, &args);
+
+    key = (char *)evhttp_find_header(&args, "key");
+    argtoi(&args, "max", &max, 1000);
+    argtoi(&args, "length", &len, 10);
+    argtoi(&args, "offset", &off, 0);
+    if (key == NULL) {
+        evhttp_send_error(req, 400, "key is required");
+        evhttp_clear_headers(&args);
+        return;
+    }
+    
+    jsobj = json_object_new_object();
+    jsarr = json_object_new_array();
+    
+    keylist = tcrdbfwmkeys2(rdb, key, max);
+    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
+      kbuf = (char *)tclistval2(keylist, i);
+      value = (int *)tcrdbget2(rdb, kbuf);
+      if (value) {
+          jsobj2 = json_object_new_object();
+          json_object_object_add(jsobj2, kbuf, json_object_new_int((int) *value));
+          json_object_array_add(jsarr, jsobj2);
+          tcfree(value);
+      }
+    }
+    if(keylist) tcfree(keylist);
+    json_object_object_add(jsobj, "results", jsarr);
+    
+    if (keylist != NULL) {
+        json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+    } else {
+        db_status = tcrdbecode(rdb);
+        db_error_to_json(db_status, jsobj);
+    }
+
+    finalize_json(req, evb, &args, jsobj);
 }
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -494,6 +551,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "\"put_requests\": %"PRIu64",", put_requests);
         evbuffer_add_printf(evb, "\"del_requests\": %"PRIu64",", del_requests);
         evbuffer_add_printf(evb, "\"fwmatch_requests\": %"PRIu64",", fwmatch_requests);
+        evbuffer_add_printf(evb, "\"fwmatch_int_requests\": %"PRIu64",", fwmatch_int_requests);
         evbuffer_add_printf(evb, "\"incr_requests\": %"PRIu64",", incr_requests);
         evbuffer_add_printf(evb, "\"vanish_requests\": %"PRIu64, vanish_requests);
         
@@ -509,6 +567,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "/put requests: %"PRIu64"\n", put_requests);
         evbuffer_add_printf(evb, "/del requests: %"PRIu64"\n", del_requests);
         evbuffer_add_printf(evb, "/fwmatch requests: %"PRIu64"\n", fwmatch_requests);
+        evbuffer_add_printf(evb, "/fwmatch_int requests: %"PRIu64"\n", fwmatch_int_requests);
         evbuffer_add_printf(evb, "/incr requests: %"PRIu64"\n", incr_requests);
         evbuffer_add_printf(evb, "/vanish requests: %"PRIu64"\n", vanish_requests);
     }
@@ -579,6 +638,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/del*", del_cb, NULL);
     simplehttp_set_cb("/vanish*", vanish_cb, NULL);
+    simplehttp_set_cb("/fwmatch_int*", fwmatch_int_cb, NULL);
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);

@@ -14,40 +14,48 @@ Cmdline usage:
 
 API endpoints:
 
- * /get
+ * /get   
   parameter: key
  
- * /put
-  parameter: key
+ * /put   
+  parameter: key   
   parameter: value
  
- * /del
+ * /del   
   parameter: key
  
- * /fwmatch
-  parameter:key
-  parameter:max (optional)
-  parameter:length (optional)
-  parameter:offset (optional)
+ * /fwmatch   
+  parameter:key   
+  parameter:max (optional)   
+  parameter:length (optional)   
+  parameter:offset (optional)   
 
- * /incr
-  parameter:key
-  parameter:value
+  * /fwmatch_int (returns values added with /incr)   
+   parameter:key   
+   parameter:max (optional)   
+   parameter:length (optional)   
+   parameter:offset (optional)   
 
- * /get_int (to return values added with /incr)
+ * /incr   
+  parameter:key   
+  parameter:value   
+
+ * /get_int (to return values added with /incr)   
   parameter:key (accepts multiple &key= parameters)
  
  * /vanish (empty the database)
 
- * /stats (example output)
-     Total requests: 439
-     /get requests: 0
-     /get_int requests: 0
-     /put requests: 303
-     /del requests: 136
-     /fwmatch requests: 0
-     /incr requests: 0
-     /vanish requests: 0
+ * /stats (example output)   
+  parameter: format=json (optional)   
+     Total requests: 439   
+     /get requests: 0   
+     /get_int requests: 0   
+     /put requests: 303   
+     /del requests: 136   
+     /fwmatch requests: 0   
+     /fwmatch_int_ requests: 0   
+     /incr requests: 0   
+     /vanish requests: 0   
      db opens: 1
 
  * /exit 
