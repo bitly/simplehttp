@@ -95,6 +95,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 {
     struct evkeyvalq args;
     char *uri, *key, *line, *newline, *delim, buf[32];
+    char *tmp;
     int seeks = 0;
     
     _gettime(&ts1);
@@ -103,6 +104,16 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
     key = (char *)evhttp_find_header(&args, "key");
+    
+    // libevent (http.c:2149) is double decoding query string params (already done at http.c:2103)
+    // we dont allow spaces in keys, so convert spaces to +
+    tmp = key;
+    while (*tmp++ != '\0') {
+        if (*tmp == ' ') {
+            *tmp = '+';
+        }
+    } 
+    
     if(DEBUG) fprintf(stderr, "/get %s\n", key);
     get_requests++;
     
