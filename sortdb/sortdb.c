@@ -149,6 +149,73 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     return;
 }
 
+void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    struct evkeyvalq args;
+    struct evkeyval *pair;
+    char *uri, *key, *line, *newline, buf[32];
+    char *tmp;
+    int seeks = 0, nkeys = 0, nfound = 0;
+    
+    _gettime(&ts1);
+    
+    uri = evhttp_decode_uri(req->uri);
+    evhttp_parse_query(uri, &args);
+    free(uri);
+
+    TAILQ_FOREACH(pair, &args, next) {
+        if (pair->key[0] != 'k') continue;
+        key = (char *)pair->value;
+        nkeys++;
+
+        //key = (char *)evhttp_find_header(&args, "key");
+    
+        // libevent (http.c:2149) is double decoding query string params
+        // (already done at http.c:2103)
+        // we dont allow spaces in keys, so convert spaces to +
+        tmp = key;
+        while (*tmp++ != '\0') {
+            if (*tmp == ' ') {
+                *tmp = '+';
+            }
+        } 
+    
+        if(DEBUG) fprintf(stderr, "/mget %s\n", key);
+        get_requests++;
+    
+        if ((line = map_search(key, strlen(key), (char *)map_base, 
+            (char *)map_base+st.st_size, &seeks))) {
+            newline = strchr(line, '\n');
+            if (newline) {
+                evbuffer_add(evb, line, (newline-line)+1);
+            } else {
+                evbuffer_add_printf(evb, "%s\n", line);
+            }
+            get_hits++;
+        } else {
+            get_misses++;
+        }
+    }
+
+    sprintf(buf, "%d", seeks);
+    evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
+    if (!nkeys) {
+        evbuffer_add_printf(evb, "missing argument: key\n");
+        evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
+    } else if (!nfound) {
+        evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
+    } else {
+        evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    }
+
+    evhttp_clear_headers(&args);
+    
+    _gettime(&ts2);
+    stats_store_request(0, _ts_diff(ts1, ts2));
+    
+    return;
+}
+
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     uint64_t request_total;
@@ -319,6 +386,7 @@ int main(int argc, char **argv)
     simplehttp_init();
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
+    simplehttp_set_cb("/mget?*", mget_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/reload", reload_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
