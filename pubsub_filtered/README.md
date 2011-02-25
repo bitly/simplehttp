@@ -9,8 +9,11 @@ if you have a message like '{desc:"ip added", ip:"127.0.0.1"}' to encrypt the ip
 Cmdline Usage: (these options must come before normal pubsub server options)
 
     -s host:port
-    -e keys,to,hash
-    -k keys,to,excude
+    -b comma separated list of keys to blacklist
+    -e comma separated list of keys for values to be encrypted
+    -x key=value (to require a key=value field in the message body)
+    -v print version
+    -h print help
 
 API endpoints:
 
