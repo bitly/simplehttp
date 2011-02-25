@@ -38,6 +38,7 @@ static char deliminator = '\t';
 static int fd = 0;
 
 static uint64_t get_requests = 0;
+static uint64_t mget_requests = 0;
 static uint64_t get_hits = 0;
 static uint64_t get_misses = 0;
 static uint64_t total_seeks = 0;
@@ -163,6 +164,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_parse_query(uri, &args);
     free(uri);
 
+    mget_requests++;
     TAILQ_FOREACH(pair, &args, next) {
         if (pair->key[0] != 'k') continue;
         key = (char *)pair->value;
@@ -181,7 +183,6 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         } 
     
         if(DEBUG) fprintf(stderr, "/mget %s\n", key);
-        get_requests++;
     
         if ((line = map_search(key, strlen(key), (char *)map_base, 
             (char *)map_base+st.st_size, &seeks))) {
@@ -241,6 +242,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
         evbuffer_add_printf(evb, "\"get_requests\": %"PRIu64",", get_requests);
+        evbuffer_add_printf(evb, "\"mget_requests\": %"PRIu64",", mget_requests);
         evbuffer_add_printf(evb, "\"get_hits\": %"PRIu64",", get_hits);
         evbuffer_add_printf(evb, "\"get_misses\": %"PRIu64",", get_misses);
         evbuffer_add_printf(evb, "\"total_seeks\": %"PRIu64",", total_seeks);
@@ -248,6 +250,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "}\n");
     } else {
         evbuffer_add_printf(evb, "/get requests: %"PRIu64"\n", get_requests);
+        evbuffer_add_printf(evb, "/mget requests: %"PRIu64"\n", mget_requests);
         evbuffer_add_printf(evb, "/get hits: %"PRIu64"\n", get_hits);
         evbuffer_add_printf(evb, "/get misses: %"PRIu64"\n", get_misses);
         evbuffer_add_printf(evb, "Total seeks: %"PRIu64"\n", total_seeks);

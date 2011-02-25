@@ -14,6 +14,10 @@ almost-sleepy
 very-sleepy
 /get?key=zzzzzzzzzzzzzzzzzzzzzzzzzz
 already-asleep
+/mget?k=a&k=c&k=o
+a	first record
+c	d
+o	p
 db reloaded
 /get?key=a (should be a new key 'new db')
 new db

@@ -15,6 +15,8 @@ API endpoints:
 
  * /get?key=...   
     
+ * /mget?k=&k=...   
+
  * /stats
  
  * /reload (reload/remap the db file)

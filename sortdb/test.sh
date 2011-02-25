@@ -31,6 +31,8 @@ for key in a b c m o zzzzzzzzzzzzzzzzzzzzzzzz zzzzzzzzzzzzzzzzzzzzzzzzz zzzzzzzz
     echo "/get?key=$key" >> $testsubdir/test.out
     curl --silent "localhost:8080/get/?key=$key" >> $testsubdir/test.out
 done
+echo "/mget?k=a&k=c&k=o" >> $testsubdir/test.out
+curl --silent "localhost:8080/mget?k=a&k=c&k=o" >> $testsubdir/test.out
 
 # now swap the db and check keys again
 ln -s -f test2.tab test.db
