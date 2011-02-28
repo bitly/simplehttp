@@ -156,7 +156,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     struct evkeyval *pair;
     char *uri, *key, *line, *newline, buf[32];
     char *tmp;
-    int seeks = 0, nkeys = 0, nfound = 0;
+    int seeks = 0, nkeys = 0, nfound = 1;
     
     _gettime(&ts1);
     
@@ -192,6 +192,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
             } else {
                 evbuffer_add_printf(evb, "%s\n", line);
             }
+            nfound=0;
             get_hits++;
         } else {
             get_misses++;
@@ -203,7 +204,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!nkeys) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if (!nfound) {
+    } else if (nfound) {
         evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
     } else {
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
