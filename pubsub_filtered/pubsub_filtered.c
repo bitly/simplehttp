@@ -9,6 +9,7 @@
 #include "http-internal.h"
 #include "json/json.h"
 #include "md5.h"
+#include "pcre.h"
 
 
 #define DEBUG 1
@@ -19,10 +20,22 @@
 #define ADDR_BUFSZ 256
 #define BOUNDARY "xXPubSubXx"
 #define MAX_PENDING_DATA 1024*1024*50
+#define OVECCOUNT 30    /* should be a multiple of 3 */
+#define STRDUP(x) (x ? strdup(x) : NULL)
+
 
 enum kick_client_enum {
-	CLIENT_OK = 0,
-	KICK_CLIENT = 1,
+    CLIENT_OK = 0,
+    KICK_CLIENT = 1,
+};
+
+struct filter {
+    int ok; 
+    char *subject;
+    char *pattern;
+    pcre *re;
+    const char *error;
+    int erroroffset;
 };
 
 typedef struct cli {
@@ -32,6 +45,7 @@ typedef struct cli {
     time_t connect_time;
     struct evbuffer *buf;
     struct evhttp_request *req;
+    struct filter fltr;
     TAILQ_ENTRY(cli) entries;
 } cli;
 
@@ -103,7 +117,7 @@ void parse_address_arg(char *optarg, char *addr, int *port)
 
     ptr = strchr(optarg,':');
     if (ptr != NULL && (ptr - optarg) < strlen(optarg)) {
-        sscanf(optarg, "%[^:]:%d", &tmp_addr, port);
+        sscanf(optarg, "%[^:]:%d", (char *)&tmp_addr, port);
         strcpy(addr, tmp_addr);
     } else {
         strcpy(addr, LOCALHOST);
@@ -202,29 +216,35 @@ md5_hash(const char *string){
  * Callback for each fetched pubsub message.
  */
 void process_message_cb(struct evhttp_request *req, void *arg) {
+    struct json_object *json_in;
+    struct json_object *element;
+    char *field_key;
+    char *source;
+    const char *raw_string;
+    char *encrypted_string;
+    const char *json_out;
+    struct cli *client;
+    struct filter *fltr;
+    char *subject;
+    int subject_length;
+    int ovector[OVECCOUNT];
+    int rc, i=0;
+
     if (EVBUFFER_LENGTH(req->input_buffer) < 3){
         // if (DEBUG) fprintf(stderr, "skipping\n");
         return;
     }
     //if (DEBUG) fprintf(stderr, "handling %d bytes of data\n", EVBUFFER_LENGTH(req->input_buffer));
     msgRecv++;
-    char *source = calloc(EVBUFFER_LENGTH(req->input_buffer), sizeof(char *));
+    source = calloc(EVBUFFER_LENGTH(req->input_buffer), sizeof(char *));
     evbuffer_remove(req->input_buffer, source, EVBUFFER_LENGTH(req->input_buffer));
-    
-    struct json_object *json_in;
-    struct json_object *element;
-    char *field_key;
-    const char *raw_string;
-    char *encrypted_string;
-    const char *json_out;
-    struct cli *client;
-    int i=0;
     
     if (source == NULL || strlen(source) < 3){
         free(source);
         return;
     }
     
+    fprintf(stderr, "%s\n", source);
     json_in = json_tokener_parse(source);
     
     if (json_in == NULL) {
@@ -256,8 +276,10 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
     // loop through the fields we need to encrypt
     for (i=0; i < num_encrypted_fields; i++){
         field_key = encrypted_fields[i];
-        raw_string = json_object_get_string(json_object_object_get(json_in, field_key));
-        if (!strlen(raw_string)){
+        element = json_object_object_get(json_in, field_key);
+        if (element) {
+            raw_string = json_object_get_string(element);
+        } else {
             continue;
         }
         encrypted_string = md5_hash(raw_string);
@@ -279,6 +301,7 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
     TAILQ_FOREACH(client, &clients, entries) {
         msgSent++;
         // TODO: why do we need to do this?
+        // A: it just clears any old cruft from the clients buffer
         evbuffer_drain(client->buf, EVBUFFER_LENGTH(client->buf));
         if (is_slow(client)) {
             if (can_kick(client)) {
@@ -286,6 +309,27 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
                 continue;
             }
             continue;
+        }
+        // filter
+        if (client->fltr.ok) {
+            fltr = &client->fltr;
+            element = json_object_object_get(json_in, fltr->subject);
+            if (element) {
+                subject = (char *)json_object_get_string(element);
+            } else {
+                subject = "";
+            }
+            subject_length = strlen(subject);
+            rc = pcre_exec(
+                fltr->re,             /* the compiled pattern */
+                NULL,                 /* no extra data - we didn't study the pattern */
+                subject,              /* the subject string */
+                subject_length,       /* the length of the subject */
+                0,                    /* start at offset 0 in the subject */
+                0,                    /* default options */
+                ovector,              /* output vector for substring information */
+                OVECCOUNT);           /* number of elements in the output vector */
+            if (rc < 0) continue;
         }
         if (client->multipart) {
             /* chunked */
@@ -317,11 +361,11 @@ is_slow(struct cli *client) {
     output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
     if (output_buffer_length > MAX_PENDING_DATA) {
         kickedClients+=1;
-        fprintf(stdout, "%llu >> kicking client with %llu pending data\n", client->connection_id, output_buffer_length);
+        fprintf(stdout, "%llu >> kicking client with %lu pending data\n", client->connection_id, output_buffer_length);
         client->kick_client = KICK_CLIENT;
         // clear the clients output buffer
         evbuffer_drain(evcon->output_buffer, EVBUFFER_LENGTH(evcon->output_buffer));
-        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %llu pending bytes\n", output_buffer_length); 
+        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %lu pending bytes\n", output_buffer_length); 
         return 1;
     }
     return 0;
@@ -358,7 +402,7 @@ clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         time_struct = gmtime(&client->connect_time);
         strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
         output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
-        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%llu state:%d\n", 
+        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n", 
             client->req->remote_host, 
             client->req->remote_port, 
             buf, 
@@ -422,6 +466,9 @@ void on_close(struct evhttp_connection *evcon, void *ctx)
         currentConns--;
         TAILQ_REMOVE(&clients, client, entries);
         evbuffer_free(client->buf);
+        if (client->fltr.subject) free(client->fltr.subject);
+        if (client->fltr.pattern) free(client->fltr.pattern);
+        if (client->fltr.re) pcre_free(client->fltr.re);
         free(client);
     } else {
         fprintf(stdout, "[unknown] >> close from  %s:%d\n", evcon->address, evcon->port);
@@ -432,11 +479,18 @@ void on_close(struct evhttp_connection *evcon, void *ctx)
 void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct cli *client;
+    struct evkeyvalq args;
+    char *uri;
     char buf[248];
+    struct filter *fltr;
     struct tm *time_struct;
 
     currentConns++;
     totalConns++;
+    uri = evhttp_decode_uri(req->uri);
+    evhttp_parse_query(uri, &args);
+    free(uri);
+
     client = calloc(1, sizeof(*client));
     client->multipart = 0;
     client->req = req;
@@ -445,6 +499,19 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     time_struct = gmtime(&client->connect_time);
     client->buf = evbuffer_new();
     client->kick_client = CLIENT_OK;
+
+    fltr = &client->fltr;
+    fltr->subject = STRDUP((char *)evhttp_find_header(&args, "filter_subject"));
+    fltr->pattern = STRDUP((char *)evhttp_find_header(&args, "filter_pattern"));
+    if (fltr->subject && fltr->pattern) {
+        fltr->re = pcre_compile(
+            fltr->pattern,
+            0,
+            &fltr->error,
+            &fltr->erroroffset,
+            NULL);
+        if (fltr->re) fltr->ok = 1;
+    }
 
     strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
 
@@ -459,6 +526,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_send_reply_chunk(client->req, client->buf);
     TAILQ_INSERT_TAIL(&clients, client, entries);
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
+    evhttp_clear_headers(&args);
 }
 
 
@@ -541,12 +609,6 @@ int connect_to_source()
      * started if we fail on this attempt.
      */
     evtimer_del(&reconnect_ev);
-
-    // if (data == NULL) {
-    //     data = calloc(1, sizeof(*data));
-    //     data->cb = (void *) process_message_cb;
-    //     data->cbarg = NULL;
-    // }
 
     fprintf(stdout, "Connecting to http://%s:%d%s\n", source_address, source_port, source_path);
 
@@ -647,7 +709,7 @@ main(int argc, char **argv)
             break;
         case 'x':
             // expected key=value
-            sscanf(optarg, "%[^=]=%s", &expected_key, &expected_value);
+            sscanf(optarg, "%[^=]=%s", (char *)&expected_key, (char *)&expected_value);
             fprintf(stdout, "expecting %s=\"%s\" in messages\n", expected_key, expected_value);
             expect_value=1;
             break;
@@ -663,7 +725,7 @@ main(int argc, char **argv)
 
     TAILQ_INIT(&clients);
     simplehttp_init();
-    simplehttp_set_cb("/sub", sub_cb, NULL);
+    simplehttp_set_cb("/sub*", sub_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
 

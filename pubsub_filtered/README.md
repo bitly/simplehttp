@@ -17,8 +17,10 @@ Cmdline Usage: (these options must come before normal pubsub server options)
 
 API endpoints:
 
- * /sub  
+ * /sub?filter_subject=x&filter_pattern=^a 
   long lived connection which will stream back new messages; one per line.
+  filter_subject (optional): the filter key, exact match
+  filter_pattern (optional): the filter pattern, pcre
   
  * /stats
   response: Active connections, Total connections, Messages received, Messages sent, Kicked clients, upstream reconnect.
