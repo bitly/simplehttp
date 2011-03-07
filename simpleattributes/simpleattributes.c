@@ -109,7 +109,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
 
 void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *uri, *json, *key, *kbuf, *value;
+    char                *json, *key, *kbuf, *value;
     int                 i, max, off, len;
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
@@ -119,9 +119,7 @@ void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
     argtoi(&args, "max", &max, 1000);
@@ -162,7 +160,7 @@ void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *uri, *json, *key;
+    char                *json, *key;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
 
@@ -170,9 +168,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
     if (key == NULL) {
@@ -195,7 +191,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     int i;
-    char *uri, *json, *hash, *kvs, *key, *value;
+    char *json, *hash, *kvs, *key, *value;
     struct evkeyvalq args;
     struct json_object *jsobj, *jsonPtr, *jsonPtr2;
     TCMAP *cols;
@@ -204,9 +200,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     hash = (char *)evhttp_find_header(&args, "hash");
     kvs = (char *)evhttp_find_header(&args, "kvs");
@@ -255,7 +249,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *json, *hash, *key, *value, *name;
+    char *json, *hash, *key, *value, *name;
     struct evkeyvalq args;
     struct json_object *jsobj, *jsobj2, *jsobj3;
     TCMAP *cols;
@@ -265,9 +259,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
 
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     hash = (char *)evhttp_find_header(&args, "hash");
     key = (char *)evhttp_find_header(&args, "key");

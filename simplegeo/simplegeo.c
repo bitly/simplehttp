@@ -175,13 +175,11 @@ void db_error_to_json(int code, struct json_object *jsobj)
 void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     double lat, lng, miles, ulat, ulng, llat, llng;
-    char *uri, *json;
+    char *json;
     struct evkeyvalq args;
     struct json_object *jsobj;
     
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
     
     argtof(&args, "lat", &lat, 0);
     argtof(&args, "lng", &lng, 0);
@@ -201,13 +199,11 @@ void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void distance_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     double lat1, lng1, lat2, lng2;
-    char *uri, *json;
+    char *json;
     struct evkeyvalq args;
     struct json_object *jsobj;
     
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
     
     argtof(&args, "lat1", &lat1, 0);
     argtof(&args, "lng1", &lng1, 0);
@@ -222,7 +218,7 @@ void distance_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *json, *id;
+    char *json, *id;
     struct evkeyvalq args;
     struct json_object *jsobj;
 
@@ -230,9 +226,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     id = (char *)evhttp_find_header(&args, "id");
     if (id == NULL) {
@@ -255,7 +249,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     const char *value, *name;
-    char *uri, *json, *hash, *key; 
+    char *json, *hash, *key; 
     struct evkeyvalq args;
     struct json_object *jsobj, *jsobj2, *jsobj3;
     TCMAP *cols;
@@ -265,9 +259,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
 
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     hash = (char *)evhttp_find_header(&args, "hash");
     key = (char *)evhttp_find_header(&args, "key");
@@ -314,7 +306,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *id, *data, *json, *key, *value;
+    char *id, *data, *json, *key, *value;
     double lat, lng;
     int x, y;
     char buf[16];
@@ -326,9 +318,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     argtof(&args, "lat", &lat, 0);
     argtof(&args, "lng", &lng, 0);
@@ -370,7 +360,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *uri, *json;
+    char *json;
     double lat, lng, distance, minlat, minlng, maxlat, maxlng, miles, lat2, lng2;
     int x1, x2, y1, y2, id, max;
     int total;
@@ -393,9 +383,7 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
 
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     argtof(&args, "lat", &lat, 0);
     argtof(&args, "lng", &lng, 0);

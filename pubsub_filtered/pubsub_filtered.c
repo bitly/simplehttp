@@ -487,9 +487,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
     currentConns++;
     totalConns++;
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     client = calloc(1, sizeof(*client));
     client->multipart = 0;

@@ -96,24 +96,12 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 {
     struct evkeyvalq args;
     char *uri, *key, *line, *newline, *delim, buf[32];
-    char *tmp;
     int seeks = 0;
     
     _gettime(&ts1);
     
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
     key = (char *)evhttp_find_header(&args, "key");
-    
-    // libevent (http.c:2149) is double decoding query string params (already done at http.c:2103)
-    // we dont allow spaces in keys, so convert spaces to +
-    tmp = key;
-    while (*tmp++ != '\0') {
-        if (*tmp == ' ') {
-            *tmp = '+';
-        }
-    } 
     
     if(DEBUG) fprintf(stderr, "/get %s\n", key);
     get_requests++;
@@ -160,9 +148,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     
     _gettime(&ts1);
     
-    uri = evhttp_decode_uri(req->uri);
-    evhttp_parse_query(uri, &args);
-    free(uri);
+    evhttp_parse_query(req->uri, &args);
 
     mget_requests++;
     TAILQ_FOREACH(pair, &args, next) {
@@ -171,16 +157,6 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         nkeys++;
 
         //key = (char *)evhttp_find_header(&args, "key");
-    
-        // libevent (http.c:2149) is double decoding query string params
-        // (already done at http.c:2103)
-        // we dont allow spaces in keys, so convert spaces to +
-        tmp = key;
-        while (*tmp++ != '\0') {
-            if (*tmp == ' ') {
-                *tmp = '+';
-            }
-        } 
     
         if(DEBUG) fprintf(stderr, "/mget %s\n", key);
     
