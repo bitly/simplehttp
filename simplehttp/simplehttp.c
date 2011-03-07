@@ -115,6 +115,18 @@ simplehttp_init()
 }
 
 void
+simplehttp_free()
+{
+    struct cb_entry *entry;
+    
+    while ((entry = TAILQ_FIRST(&callbacks))) {
+        TAILQ_REMOVE(&callbacks, entry, entries);
+        free(entry->path);
+        free(entry);
+    }
+}
+
+void
 simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
 {
     struct cb_entry *cbPtr;
@@ -256,6 +268,7 @@ simplehttp_main(int argc, char **argv)
     printf("exiting\n");
     /* Not reached in this code as it is now. */
     evhttp_free(httpd);
+    simplehttp_free();
 
     return 0;
 }

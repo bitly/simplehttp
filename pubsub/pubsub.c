@@ -12,8 +12,8 @@
 int ps_debug = 0;
 
 enum kick_client_enum {
-	CLIENT_OK = 0,
-	KICK_CLIENT = 1,
+    CLIENT_OK = 0,
+    KICK_CLIENT = 1,
 };
 typedef struct cli {
     int multipart;
@@ -42,14 +42,14 @@ is_slow(struct cli *client) {
     unsigned long output_buffer_length;
     
     evcon = (struct evhttp_connection *)client->req->evcon;
-    output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
+    output_buffer_length = evcon->output_buffer ? (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer) : 0;
     if (output_buffer_length > MAX_PENDING_DATA) {
         kickedClients+=1;
-        fprintf(stdout, "%llu >> kicking client with %llu pending data\n", client->connection_id, output_buffer_length);
+        fprintf(stdout, "%llu >> kicking client with %lu pending data\n", client->connection_id, output_buffer_length);
         client->kick_client = KICK_CLIENT;
         // clear the clients output buffer
         evbuffer_drain(evcon->output_buffer, EVBUFFER_LENGTH(evcon->output_buffer));
-        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %llu pending bytes\n", output_buffer_length); 
+        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %lu pending bytes\n", output_buffer_length); 
         return 1;
     }
     return 0;
@@ -98,7 +98,7 @@ clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         time_struct = gmtime(&client->connect_time);
         strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
         output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
-        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%llu state:%d\n", 
+        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n", 
             client->req->remote_host, 
             client->req->remote_port, 
             buf, 
