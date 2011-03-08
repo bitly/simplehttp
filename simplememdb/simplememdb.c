@@ -30,6 +30,7 @@
 #define STATS_FWMATCH           5
 #define STATS_FWMATCH_INT       6
 
+void set_dump_timer();
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -47,10 +48,9 @@ static uint64_t requests = 0;
 static uint64_t stats_request_counts[NUM_REQUEST_TYPES];
 static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
-
-static struct event ev;
-
 static TCADB *adb;
+static int is_currently_dumping = 0;
+static struct event ev;
 
 void stats_store_request(int index, unsigned int diff)
 {
@@ -518,35 +518,83 @@ void usage()
     exit(1);
 }
 
-void flush_handler(int signum)
+void do_dump(int fd, short what, void *ctx)
 {
-    struct timeval tv = {5,0};
-    
-    tcadbiterinit(adb);
-    
-    evtimer_del(&ev);
-    evtimer_set(&ev, adb_flush, NULL);
-    evtimer_add(&ev, &tv);
-}
-
-void adb_flush(int fd, short what, void *ctx)
-{
-    int n;
+    struct evhttp_request *req;
+    struct evbuffer *evb;
+    int n, c = 0, set_timer = 0;
+    int limit = 500; // dump 500 at a time
     char *key;
     void *value;
+    struct evkeyvalq args;
+    const char *regex;
+    const char *string;
+    int string_mode = 0;
+    
+    req = (struct evhttp_request *)ctx;
+    evb = req->output_buffer;
+    
+    evhttp_parse_query(req->uri, &args);
+    
+    regex = (char *)evhttp_find_header(&args, "regex");
+    string = (char *)evhttp_find_header(&args, "string");
+    if (string) {
+        string_mode = atoi(string);
+    }
     
     while ((key = tcadbiternext2(adb)) != NULL) {
         value = tcadbget(adb, key, strlen(key), &n);
         if (value) {
-            if ((strlen(key) > 2) && (key[0] == 'l') && (key[1] == '.')) {
-                fprintf(stdout, "%s,%s\n", key, (char *)value);
+            if (string_mode) {
+                evbuffer_add_printf(evb, "%s,%s\n", key, (char *)value);
             } else {
-                fprintf(stdout, "%s,%d\n", key, *(int *)value);
+                evbuffer_add_printf(evb, "%s,%d\n", key, *(int *)value);
             }
             free(value);
         }
         free(key);
+        c++;
+        if (c == limit) {
+            set_timer = 1;
+            break;
+        }
     }
+    
+    if (c) {
+        evhttp_send_reply_chunk(req, evb);
+    }
+    
+    if (set_timer) {
+        set_dump_timer(req);
+    } else {
+        evhttp_send_reply_end(req);
+        is_currently_dumping = 0;
+    }
+    
+    evhttp_clear_headers(&args);
+}
+
+void set_dump_timer(struct evhttp_request *req)
+{
+    struct timeval tv = {0,500000}; // loop every 0.5 seconds
+    
+    evtimer_del(&ev);
+    evtimer_set(&ev, do_dump, req);
+    evtimer_add(&ev, &tv);
+}
+
+void dump_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    if (is_currently_dumping) {
+        evbuffer_add_printf(evb, "ALREADY_DUMPING");
+        evhttp_send_reply(req, 500, "ALREADY_DUMPING", evb);
+        return;
+    }
+    
+    is_currently_dumping = 1;
+    tcadbiterinit(adb);
+    evhttp_send_reply_start(req, 200, "OK");
+    set_dump_timer(req);
 }
 
 int main(int argc, char **argv)
@@ -589,7 +637,6 @@ int main(int argc, char **argv)
     }
     
     simplehttp_init();
-    signal(SIGUSR1, flush_handler);
     simplehttp_set_cb("/get_int*", get_int_cb, NULL);
     simplehttp_set_cb("/get*", get_cb, NULL);
     simplehttp_set_cb("/put*", put_cb, NULL);
@@ -598,6 +645,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/fwmatch_int*", fwmatch_int_cb, NULL);
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
+    simplehttp_set_cb("/dump*", dump_cb, NULL);
     simplehttp_set_cb("/stats", stats_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
