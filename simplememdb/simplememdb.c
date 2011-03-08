@@ -15,6 +15,7 @@
 #include <simplehttp/simplehttp.h>
 #include <json/json.h>
 #include "timer/timer.h"
+#include "pcre.h"
 
 #define NAME                    "simplememdb"
 #define VERSION                 "1.0.0"
@@ -51,6 +52,7 @@ static int stats_request_idx[NUM_REQUEST_TYPES];
 static TCADB *adb;
 static int is_currently_dumping = 0;
 static struct event ev;
+static pcre *dump_regex;
 
 void stats_store_request(int index, unsigned int diff)
 {
@@ -522,37 +524,52 @@ void do_dump(int fd, short what, void *ctx)
 {
     struct evhttp_request *req;
     struct evbuffer *evb;
-    int n, c = 0, set_timer = 0;
+    struct evkeyvalq args;
+    int n, c = 0, set_timer = 0, send_reply = 0;
     int limit = 500; // dump 500 at a time
     char *key;
     void *value;
-    struct evkeyvalq args;
-    const char *regex;
     const char *string;
     int string_mode = 0;
+    int ovector[30], rc;
     
     req = (struct evhttp_request *)ctx;
     evb = req->output_buffer;
     
     evhttp_parse_query(req->uri, &args);
-    
-    regex = (char *)evhttp_find_header(&args, "regex");
     string = (char *)evhttp_find_header(&args, "string");
     if (string) {
         string_mode = atoi(string);
     }
+    evhttp_clear_headers(&args);
     
     while ((key = tcadbiternext2(adb)) != NULL) {
-        value = tcadbget(adb, key, strlen(key), &n);
-        if (value) {
-            if (string_mode) {
-                evbuffer_add_printf(evb, "%s,%s\n", key, (char *)value);
-            } else {
-                evbuffer_add_printf(evb, "%s,%d\n", key, *(int *)value);
-            }
-            free(value);
+        if (dump_regex) {
+            rc = pcre_exec(
+                    dump_regex,           /* the compiled pattern */
+                    NULL,                 /* no extra data - we didn't study the pattern */
+                    key,                  /* the subject string */
+                    strlen(key),          /* the length of the subject */
+                    0,                    /* start at offset 0 in the subject */
+                    0,                    /* default options */
+                    ovector,              /* output vector for substring information */
+                    sizeof(ovector));     /* number of elements in the output vector */
         }
-        free(key);
+        
+        if ((dump_regex && (rc > 0)) || !dump_regex) {
+            value = tcadbget(adb, key, strlen(key), &n);
+            if (value) {
+                if (string_mode) {
+                    evbuffer_add_printf(evb, "%s,%s\n", key, (char *)value);
+                } else {
+                    evbuffer_add_printf(evb, "%s,%d\n", key, *(int *)value);
+                }
+                free(value);
+            }
+            free(key);
+            send_reply = 1;
+        }
+        
         c++;
         if (c == limit) {
             set_timer = 1;
@@ -560,7 +577,7 @@ void do_dump(int fd, short what, void *ctx)
         }
     }
     
-    if (c) {
+    if (send_reply) {
         evhttp_send_reply_chunk(req, evb);
     }
     
@@ -568,10 +585,11 @@ void do_dump(int fd, short what, void *ctx)
         set_dump_timer(req);
     } else {
         evhttp_send_reply_end(req);
+        if (dump_regex) {
+            pcre_free(dump_regex);
+        }
         is_currently_dumping = 0;
     }
-    
-    evhttp_clear_headers(&args);
 }
 
 void set_dump_timer(struct evhttp_request *req)
@@ -585,6 +603,11 @@ void set_dump_timer(struct evhttp_request *req)
 
 void dump_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
+    struct evkeyvalq args;
+    int error_offset;
+    const char *error;
+    const char *regex;
+    
     if (is_currently_dumping) {
         evbuffer_add_printf(evb, "ALREADY_DUMPING");
         evhttp_send_reply(req, 500, "ALREADY_DUMPING", evb);
@@ -592,6 +615,20 @@ void dump_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     is_currently_dumping = 1;
+    
+    evhttp_parse_query(req->uri, &args);
+    regex = (char *)evhttp_find_header(&args, "regex");
+    if (regex) {
+        fprintf(stdout, "pcre_compile %s\n", regex);
+        dump_regex = pcre_compile(regex, 0, &error, &error_offset, NULL);
+        if (!dump_regex) {
+            fprintf(stderr, "ERROR: pcre_compile - %s - offset %d\n", error, error_offset);
+        }
+    } else {
+        dump_regex = NULL;
+    }
+    evhttp_clear_headers(&args);
+    
     tcadbiterinit(adb);
     evhttp_send_reply_start(req, 200, "OK");
     set_dump_timer(req);
