@@ -14,15 +14,17 @@
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
 #include <json/json.h>
-#include "timer/timer.h"
+#include "lib/timer.h"
+#include "lib/util.h"
 #include "pcre.h"
 
 #define NAME                    "simplememdb"
-#define VERSION                 "1.0.0"
-#define NUM_REQUEST_TYPES       7
-#define NUM_REQUESTS_FOR_STATS  1000
+#define VERSION                 "1.2"
 #define BUFFER_SZ               1048576
 #define SM_BUFFER_SZ            4096
+
+#define NUM_REQUEST_TYPES       8
+#define NUM_REQUESTS_FOR_STATS  1000
 #define STATS_GET               0
 #define STATS_GET_INT           1
 #define STATS_PUT               2
@@ -30,6 +32,7 @@
 #define STATS_DEL               4
 #define STATS_FWMATCH           5
 #define STATS_FWMATCH_INT       6
+#define STATS_VANISH            7
 
 void set_dump_timer();
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -49,6 +52,8 @@ static uint64_t requests = 0;
 static uint64_t stats_request_counts[NUM_REQUEST_TYPES];
 static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
+static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del", "fwmatch", "fwmatch_int", "vanish" };
+
 static TCADB *adb;
 static int is_currently_dumping = 0;
 static struct event ev;
@@ -465,10 +470,14 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     uint64_t request_total;
-    uint64_t average_request = 0;
+    uint64_t average_requests[NUM_REQUEST_TYPES];
+    uint64_t ninety_five_percents[NUM_REQUEST_TYPES];
     int i, j, c, request_array_end;
     struct evkeyvalq args;
     const char *format;
+    
+    memset(&average_requests, 0, sizeof(average_requests));
+    memset(&ninety_five_percents, 0, sizeof(ninety_five_percents));
     
     for (i = 0; i < NUM_REQUEST_TYPES; i++) {
         request_total = 0;
@@ -477,7 +486,8 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             request_total += stats_request[j];
         }
         if (c) {
-            average_request = request_total / c;
+            average_requests[i] = request_total / c;
+            ninety_five_percents[i] = ninety_five_percent(stats_request + (i * NUM_REQUESTS_FOR_STATS), c);
         }
     }
     
@@ -486,10 +496,20 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
-        evbuffer_add_printf(evb, "\"average_request\": %"PRIu64, average_request);
+        for (i = 0; i < NUM_REQUEST_TYPES; i++) {
+            evbuffer_add_printf(evb, "\"%s_95\": %"PRIu64",", stats_request_labels[i], ninety_five_percents[i]);
+            evbuffer_add_printf(evb, "\"%s_average_request\": %"PRIu64",", stats_request_labels[i], average_requests[i]);
+            evbuffer_add_printf(evb, "\"%s_requests\": %"PRIu64",", stats_request_labels[i], stats_request_counts[i]);
+        }
+        evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64, requests);
         evbuffer_add_printf(evb, "}\n");
     } else {
-        evbuffer_add_printf(evb, "Avg. request (usec): %"PRIu64"\n", average_request);
+        evbuffer_add_printf(evb, "total requests: %"PRIu64"\n", requests);
+        for (i = 0; i < NUM_REQUEST_TYPES; i++) {
+            evbuffer_add_printf(evb, "/%s 95%%: %"PRIu64"\n", stats_request_labels[i], ninety_five_percents[i]);
+            evbuffer_add_printf(evb, "/%s average request (usec): %"PRIu64"\n", stats_request_labels[i], average_requests[i]);
+            evbuffer_add_printf(evb, "/%s requests: %"PRIu64"\n", stats_request_labels[i], stats_request_counts[i]);
+        }
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -683,7 +703,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/incr*", incr_cb, NULL);
     simplehttp_set_cb("/dump*", dump_cb, NULL);
-    simplehttp_set_cb("/stats", stats_cb, NULL);
+    simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
     simplehttp_main(argc, argv);
     

@@ -9,17 +9,21 @@
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
 #include <json/json.h>
-#include "timer/timer.h"
+#include "lib/timer.h"
+#include "lib/util.h"
 
 #define RECONNECT               5
-#define MAXRES                  1000
-#define NUM_REQUEST_TYPES       5
+
+#define NUM_REQUEST_TYPES       8
 #define NUM_REQUESTS_FOR_STATS  1000
 #define STATS_GET               0
 #define STATS_GET_INT           1
 #define STATS_PUT               2
 #define STATS_INCR              3
 #define STATS_DEL               4
+#define STATS_FWMATCH           5
+#define STATS_FWMATCH_INT       6
+#define STATS_VANISH            7
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int open_db(char *addr, int port, TCRDB **rdb);
@@ -38,7 +42,7 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
-static char *version  = "1.3";
+static char *version  = "1.4";
 struct event ev;
 struct timeval tv = {RECONNECT,0};
 static char *db_host = "127.0.0.1";
@@ -47,19 +51,13 @@ static TCRDB *rdb;
 static int db_status;
 static char *g_progname = "simpletokyo";
 
-static uint64_t requests = 0;
-static uint64_t get_requests = 0;
-static uint64_t get_int_requests = 0;
-static uint64_t put_requests = 0;
-static uint64_t del_requests = 0;
-static uint64_t fwmatch_requests = 0;
-static uint64_t fwmatch_int_requests = 0;
-static uint64_t incr_requests = 0;
-static uint64_t vanish_requests = 0;
 static uint64_t db_opened = 0;
+
+static uint64_t requests = 0;
+static uint64_t stats_request_counts[NUM_REQUEST_TYPES];
 static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
-static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del" };
+static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del", "fwmatch", "fwmatch_int", "vanish" };
 
 void stats_store_request(int index, unsigned int diff)
 {
@@ -166,7 +164,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj, *jsobj2, *jsarr;
     
     requests++;
-    fwmatch_int_requests++;
+    stats_request_counts[STATS_FWMATCH_INT]++;
     
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -220,7 +218,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj, *jsobj2, *jsarr;
     
     requests++;
-    fwmatch_requests++;
+    stats_request_counts[STATS_FWMATCH]++;
     
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -274,7 +272,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     _gettime(&ts1);
     
     requests++;
-    del_requests++;
+    stats_request_counts[STATS_DEL]++;
     
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -312,7 +310,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     _gettime(&ts1);
     
     requests++;
-    put_requests++;
+    stats_request_counts[STATS_PUT]++;
     
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -357,7 +355,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     _gettime(&ts1);
     
     requests++;
-    get_requests++;
+    stats_request_counts[STATS_GET]++;
     
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -400,7 +398,7 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     _gettime(&ts1);
     
     requests++;
-    get_int_requests++;
+    stats_request_counts[STATS_GET_INT]++;
 
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -447,7 +445,7 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     _gettime(&ts1);
     
     requests++;
-    incr_requests++;
+    stats_request_counts[STATS_INCR]++;
 
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -492,9 +490,11 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct json_object  *jsobj;
     const char *json;
+    
+    _gettime(&ts1);
 
     requests++;
-    vanish_requests++;
+    stats_request_counts[STATS_VANISH]++;
 
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -511,18 +511,22 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     json_object_put(jsobj); // Odd free function
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_VANISH, _ts_diff(ts1, ts2));
 }
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     uint64_t request_total;
     uint64_t average_requests[NUM_REQUEST_TYPES];
-    char key[64];
+    uint64_t ninety_five_percents[NUM_REQUEST_TYPES];
     int i, j, c, request_array_end;
     struct evkeyvalq args;
     const char *format;
     
     memset(&average_requests, 0, sizeof(average_requests));
+    memset(&ninety_five_percents, 0, sizeof(ninety_five_percents));
     
     for (i = 0; i < NUM_REQUEST_TYPES; i++) {
         request_total = 0;
@@ -532,6 +536,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
         if (c) {
             average_requests[i] = request_total / c;
+            ninety_five_percents[i] = ninety_five_percent(stats_request + (i * NUM_REQUESTS_FOR_STATS), c);
         }
     }
     
@@ -541,35 +546,21 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
         evbuffer_add_printf(evb, "\"db_opens\": %"PRIu64",", db_opened);
-        evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64",", requests);
         for (i = 0; i < NUM_REQUEST_TYPES; i++) {
-            sprintf(key, "%s_average_request", stats_request_labels[i]);
-            evbuffer_add_printf(evb, "\"%s\": %"PRIu64",", key, average_requests[i]);
+            evbuffer_add_printf(evb, "\"%s_95\": %"PRIu64",", stats_request_labels[i], ninety_five_percents[i]);
+            evbuffer_add_printf(evb, "\"%s_average_request\": %"PRIu64",", stats_request_labels[i], average_requests[i]);
+            evbuffer_add_printf(evb, "\"%s_requests\": %"PRIu64",", stats_request_labels[i], stats_request_counts[i]);
         }
-        evbuffer_add_printf(evb, "\"get_requests\": %"PRIu64",", get_requests);
-        evbuffer_add_printf(evb, "\"get_int_requests\": %"PRIu64",", get_int_requests);
-        evbuffer_add_printf(evb, "\"put_requests\": %"PRIu64",", put_requests);
-        evbuffer_add_printf(evb, "\"del_requests\": %"PRIu64",", del_requests);
-        evbuffer_add_printf(evb, "\"fwmatch_requests\": %"PRIu64",", fwmatch_requests);
-        evbuffer_add_printf(evb, "\"fwmatch_int_requests\": %"PRIu64",", fwmatch_int_requests);
-        evbuffer_add_printf(evb, "\"incr_requests\": %"PRIu64",", incr_requests);
-        evbuffer_add_printf(evb, "\"vanish_requests\": %"PRIu64, vanish_requests);
-        
+        evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64, requests);
         evbuffer_add_printf(evb, "}\n");
     } else {
         evbuffer_add_printf(evb, "db opens: %"PRIu64"\n", db_opened);
         evbuffer_add_printf(evb, "total requests: %"PRIu64"\n", requests);
         for (i = 0; i < NUM_REQUEST_TYPES; i++) {
+            evbuffer_add_printf(evb, "/%s 95%%: %"PRIu64"\n", stats_request_labels[i], ninety_five_percents[i]);
             evbuffer_add_printf(evb, "/%s average request (usec): %"PRIu64"\n", stats_request_labels[i], average_requests[i]);
+            evbuffer_add_printf(evb, "/%s requests: %"PRIu64"\n", stats_request_labels[i], stats_request_counts[i]);
         }
-        evbuffer_add_printf(evb, "/get requests: %"PRIu64"\n", get_requests);
-        evbuffer_add_printf(evb, "/get_int requests: %"PRIu64"\n", get_int_requests);
-        evbuffer_add_printf(evb, "/put requests: %"PRIu64"\n", put_requests);
-        evbuffer_add_printf(evb, "/del requests: %"PRIu64"\n", del_requests);
-        evbuffer_add_printf(evb, "/fwmatch requests: %"PRIu64"\n", fwmatch_requests);
-        evbuffer_add_printf(evb, "/fwmatch_int requests: %"PRIu64"\n", fwmatch_int_requests);
-        evbuffer_add_printf(evb, "/incr requests: %"PRIu64"\n", incr_requests);
-        evbuffer_add_printf(evb, "/vanish requests: %"PRIu64"\n", vanish_requests);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -629,6 +620,8 @@ int main(int argc, char **argv)
     
     memset(&stats_request, -1, sizeof(stats_request));
     memset(&stats_request_idx, 0, sizeof(stats_request_idx));
+    memset(&stats_request_counts, 0, sizeof(stats_request_counts));
+    
     memset(&db_status, -1, sizeof(db_status));
     
     simplehttp_init();

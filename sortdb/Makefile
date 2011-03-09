@@ -5,9 +5,9 @@ LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
 
 CFLAGS = -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -Wall -g -O2
-LIBS = -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -lsimplehttp
+LIBS = -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -lsimplehttp -lm
 
-sortdb: sortdb.c ../timer/timer.c
+sortdb: sortdb.c ../lib/timer.c ../lib/util.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 install:
