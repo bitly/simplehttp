@@ -23,7 +23,7 @@
 #define BUFFER_SZ               1048576
 #define SM_BUFFER_SZ            4096
 
-#define NUM_REQUEST_TYPES       8
+#define NUM_REQUEST_TYPES       10
 #define NUM_REQUESTS_FOR_STATS  1000
 #define STATS_GET               0
 #define STATS_GET_INT           1
@@ -33,6 +33,8 @@
 #define STATS_FWMATCH           5
 #define STATS_FWMATCH_INT       6
 #define STATS_VANISH            7
+#define STATS_MGET              8
+#define STATS_MGET_INT          9
 
 void set_dump_timer();
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -52,7 +54,7 @@ static uint64_t requests = 0;
 static uint64_t stats_request_counts[NUM_REQUEST_TYPES];
 static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
 static int stats_request_idx[NUM_REQUEST_TYPES];
-static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del", "fwmatch", "fwmatch_int", "vanish" };
+static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del", "fwmatch", "fwmatch_int", "vanish", "mget", "mget_int" };
 
 static TCADB *adb;
 static int is_currently_dumping = 0;
@@ -154,7 +156,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (keylist != NULL) {
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
     } else {
-        db_error_to_json("tcadbfwmkeys2 failed", jsobj);
+        db_error_to_json("tcadbfwmkeys failed", jsobj);
     }
     
     finalize_json(req, evb, &args, jsobj);
@@ -212,7 +214,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (keylist != NULL) {
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
     } else {
-        db_error_to_json("tcadbfwmkeys2 failed", jsobj);
+        db_error_to_json("tcadbfwmkeys failed", jsobj);
     }
     
     finalize_json(req, evb, &args, jsobj);
@@ -249,7 +251,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (tcadbout(adb, key, strlen(key))) {
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
     } else {
-        db_error_to_json("tcadbout2 failed", jsobj);
+        db_error_to_json("tcadbout failed", jsobj);
     }
     
     finalize_json(req, evb, &args, jsobj);
@@ -293,7 +295,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         json_object_object_add(jsobj, "value", json_object_new_string(value));
     } else {
-        db_error_to_json("tcadbput2 failed", jsobj);
+        db_error_to_json("tcadbput failed", jsobj);
     }
     
     finalize_json(req, evb, &args, jsobj);
@@ -378,13 +380,114 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         json_object_object_add(jsobj, "value", json_object_new_int((int) *value));
         free(value);
     } else {
-        db_error_to_json("tcadbget2 failed", jsobj);
+        db_error_to_json("tcadbget failed", jsobj);
     }
     
     finalize_json(req, evb, &args, jsobj);
     
     _gettime(&ts2);
     stats_store_request(STATS_GET_INT, _ts_diff(ts1, ts2));
+}
+
+void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char                *key, *value;
+    struct evkeyvalq    args;
+    struct evkeyval *pair;
+    struct json_object  *jsobj, *jserr;
+    int nkeys = 0;
+    int n;
+    
+    _gettime(&ts1);
+    
+    requests++;
+    stats_request_counts[STATS_MGET]++;
+    
+    if (adb == NULL) {
+        evhttp_send_error(req, 503, "database not connected");
+        return;
+    }
+    
+    jsobj = json_object_new_object();
+    
+    evhttp_parse_query(req->uri, &args);
+    TAILQ_FOREACH(pair, &args, next) {
+        if (pair->key[0] != 'k') continue;
+        key = (char *)pair->value;
+        nkeys++;
+        
+        value = tcadbget(adb, key, strlen(key), &n);
+        if (value) {
+            json_object_object_add(jsobj, key, json_object_new_string(value));
+            free(value);
+        } else {
+            jserr = json_object_new_object();
+            db_error_to_json("tcadbget failed", jserr);
+            json_object_object_add(jsobj, key, jserr);
+        }
+    }
+    
+    if (!nkeys) {
+        evhttp_send_error(req, 400, "key is required");
+        evhttp_clear_headers(&args);
+        return;
+    }
+    
+    finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_MGET, _ts_diff(ts1, ts2));
+}
+
+void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char                *key;
+    int                 *value;
+    struct evkeyvalq    args;
+    struct evkeyval *pair;
+    struct json_object  *jsobj, *jserr;
+    int nkeys = 0;
+    int n;
+    
+    _gettime(&ts1);
+    
+    requests++;
+    stats_request_counts[STATS_MGET_INT]++;
+    
+    if (adb == NULL) {
+        evhttp_send_error(req, 503, "database not connected");
+        return;
+    }
+    
+    jsobj = json_object_new_object();
+    
+    evhttp_parse_query(req->uri, &args);
+    TAILQ_FOREACH(pair, &args, next) {
+        if (pair->key[0] != 'k') continue;
+        key = (char *)pair->value;
+        nkeys++;
+        
+        value = (int *)tcadbget(adb, key, strlen(key), &n);
+        if (value) {
+            json_object_object_add(jsobj, key, json_object_new_int((int)*value));
+            free(value);
+        } else {
+            jserr = json_object_new_object();
+            db_error_to_json("tcadbget failed", jserr);
+            json_object_object_add(jsobj, key, jserr);
+        }
+    }
+    
+    if (!nkeys) {
+        evhttp_send_error(req, 400, "key is required");
+        evhttp_clear_headers(&args);
+        return;
+    }
+    
+    finalize_json(req, evb, &args, jsobj);
+    
+    _gettime(&ts2);
+    stats_store_request(STATS_MGET_INT, _ts_diff(ts1, ts2));
 }
 
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -696,6 +799,8 @@ int main(int argc, char **argv)
     simplehttp_init();
     simplehttp_set_cb("/get_int*", get_int_cb, NULL);
     simplehttp_set_cb("/get*", get_cb, NULL);
+    simplehttp_set_cb("/mget_int*", mget_int_cb, NULL);
+    simplehttp_set_cb("/mget*", mget_cb, NULL);
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/del*", del_cb, NULL);
     simplehttp_set_cb("/vanish*", vanish_cb, NULL);
