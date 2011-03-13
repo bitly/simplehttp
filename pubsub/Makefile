@@ -11,6 +11,7 @@ pubsub: pubsub.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 install:
+	/usr/bin/install -d $(TARGET)/bin
 	/usr/bin/install pubsub $(TARGET)/bin/
 
 clean:

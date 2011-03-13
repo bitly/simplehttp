@@ -11,7 +11,8 @@ simpletokyo: simpletokyo.c ../lib/timer.c ../lib/util.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 install:
-	/usr/bin/install -D simpletokyo $(TARGET)/bin/simpletokyo
+	/usr/bin/install -d $(TARGET)/bin/
+	/usr/bin/install simpletokyo $(TARGET)/bin/
 
 clean:
 	rm -rf *.o simpletokyo *.dSYM test_output

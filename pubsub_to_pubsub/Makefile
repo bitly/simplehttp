@@ -21,10 +21,12 @@ ps_to_ps: ps_to_ps.c
 all: libpubsub_to_pubsub.a ps_to_ps
 
 install:
+	/usr/bin/install -d $(TARGET)/lib/
+	/usr/bin/install -d $(TARGET)/include/simplehttp/
+	/usr/bin/install -d $(TARGET)/bin/
 	/usr/bin/install libpubsub_to_pubsub.a $(TARGET)/lib/
-	/usr/bin/install -D pubsub_to_pubsub.h $(TARGET)/include/simplehttp/pubsub_to_pubsub.h
+	/usr/bin/install pubsub_to_pubsub.h $(TARGET)/include/simplehttp/
 	/usr/bin/install ps_to_ps $(TARGET)/bin/
 
 clean:
-	/bin/rm -f libpubsub_to_pubsub.a pubsub_to_pubsub.o
-	/bin/rm -f ps_to_ps
+	/bin/rm -f *.o *.a ps_to_ps

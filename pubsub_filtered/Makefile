@@ -11,6 +11,7 @@ pubsub_filtered: pubsub_filtered.c md5.c
 	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS)
 
 install:
+	/usr/bin/install -d $(TARGET)/bin/
 	/usr/bin/install pubsub_filtered $(TARGET)/bin/
 
 clean:

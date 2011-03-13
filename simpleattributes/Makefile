@@ -1,4 +1,5 @@
 LIBEVENT ?= /usr/local
+TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
 LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
@@ -9,6 +10,10 @@ LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -L/usr/local/lib -levent -lj
 
 simpleattributes: simpleattributes.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp
+
+install:
+	/usr/bin/install -d $(TARGET)/bin
+	/usr/bin/install simpleattributes $(TARGET)/bin
 
 clean:
 	rm -rf *.o simpleattributes *.dSYM

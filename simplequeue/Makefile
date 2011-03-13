@@ -11,6 +11,7 @@ simplequeue: simplequeue.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 install:
+	/usr/bin/install -d $(TARGET)/bin
 	/usr/bin/install simplequeue $(TARGET)/bin
 
 clean:

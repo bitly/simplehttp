@@ -1,4 +1,5 @@
 LIBEVENT ?= /usr/local
+TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
 LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
@@ -8,6 +9,10 @@ LIBS = -L. -L$(LIBSIMPLEHTTP_INC) -L$(LIBEVENT)/lib -L/usr/local/lib -levent -lj
 
 simplegeo: simplegeo.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lsimplehttp
+
+install:
+	/usr/bin/install -d $(TARGET)/bin
+	/usr/bin/install simplegeo $(TARGET)/bin
 
 clean:
 	rm -rf *.o simplegeo *.dSYM

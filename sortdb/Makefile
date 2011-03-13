@@ -11,6 +11,7 @@ sortdb: sortdb.c ../lib/timer.c ../lib/util.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 install:
+	/usr/bin/install -d $(TARGET)/bin
 	/usr/bin/install sortdb $(TARGET)/bin
 
 clean:

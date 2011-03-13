@@ -1,4 +1,5 @@
 LIBEVENT ?= /usr/local
+TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
 LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
@@ -20,10 +21,13 @@ pubsub-reader: pubsub-reader.o
 all: libpubsubclient.a pubsub-reader
 
 install:
-	/usr/bin/install pubsub-reader /usr/bin
-	/usr/bin/install pubsub2simplequeue.sh /usr/bin
-	/usr/bin/install libpubsubclient.a $(LIBEVENT)/lib/
-	/usr/bin/install -D pubsubclient.h $(LIBEVENT)/include/simplehttp/pubsubclient.h
+	/usr/bin/install -d $(TARGET)/lib/
+	/usr/bin/install -d $(TARGET)/bin/
+	/usr/bin/install -d $(TARGET)/include/simplehttp
+	/usr/bin/install pubsub-reader $(TARGET)/bin/
+	/usr/bin/install pubsub2simplequeue.sh $(TARGET)/bin/
+	/usr/bin/install libpubsubclient.a $(TARGET)/lib/
+	/usr/bin/install pubsubclient.h $(TARGET)/include/simplehttp
 
 clean:
-	/bin/rm -f libpubsubclient.a pubsubclient.o pubsub-reader pubsub-reader.o
+	/bin/rm -f *.a *.o pubsub-reader

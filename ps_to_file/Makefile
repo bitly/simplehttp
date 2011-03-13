@@ -13,7 +13,8 @@ ps_to_file: ps_to_file.c
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 install:
+	/usr/bin/install -d $(TARGET)/bin/
 	/usr/bin/install ps_to_file $(TARGET)/bin/
 
 clean:
-	rm -f ps_to_file
+	rm -f *.o *.a ps_to_file
