@@ -21,7 +21,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx);
 void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 char *prev_line(char *pos);
-char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks);
+char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks, int allow_prefix);
 void usage();
 void info();
 int main(int argc, char **argv);
@@ -50,7 +50,7 @@ char *prev_line(char *pos)
     return pos;
 }
 
-char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
+char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks, int allow_prefix)
 {
     ptrdiff_t distance;
     char *current;
@@ -66,13 +66,20 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
     line = prev_line(current);
     if (!line) return NULL;
     
+    /*
+    char *tmp = malloc(keylen + 1);
+    memcpy(tmp, line, keylen);
+    tmp[keylen] = '\0';
+    if(DEBUG) fprintf(stderr, "cmp %s to %s is %d\n", key, tmp, strncmp(key, line, keylen));
+    */
+    
     rc = strncmp(key, line, keylen);
     if (rc < 0) {
-        return map_search(key, keylen, lower, current, seeks);
+        return map_search(key, keylen, lower, current, seeks, allow_prefix);
     } else if (rc > 0) {
-        return map_search(key, keylen, current, upper, seeks);
-    } else if (line[keylen] != deliminator) {
-        return map_search(key, keylen, lower, current, seeks);
+        return map_search(key, keylen, current, upper, seeks, allow_prefix);
+    } else if (!allow_prefix && (line[keylen] != deliminator)) {
+        return map_search(key, keylen, lower, current, seeks, allow_prefix);
     } else {
         return line;
     }
@@ -93,9 +100,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, keylen, (char *)map_base,
-               (char *)map_base+st.st_size, &seeks))) {
-
+    } else if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base+st.st_size, &seeks, 1))) {
         /*
          * Walk backwards while key prefix matches.
          * There's probably a better way to do this, however
@@ -150,7 +155,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks))) {
+    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, 0))) {
         sprintf(buf, "%d", seeks);
         evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
         delim = strchr(line, deliminator);
@@ -189,8 +194,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         
         if(DEBUG) fprintf(stderr, "/mget %s\n", key);
         
-        if ((line = map_search(key, strlen(key), (char *)map_base, 
-            (char *)map_base+st.st_size, &seeks))) {
+        if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, 0))) {
             newline = strchr(line, '\n');
             if (newline) {
                 // this is only supported by libevent2+
