@@ -11,6 +11,7 @@ The following daemons are built on simplehttp and included
  * simpletokyo - a HTTP /get /post /del /fwmatch /incr interface in front of ttserver
  * sortdb - Sorted database server
  * simplegeo
+ * simplememdb - an in-memory version of simpletokyo
  * qrencode
 
 INSTALL INSTRUCTIONS
@@ -36,4 +37,5 @@ Some modules have additional dependencies:
 * [json-c](http://oss.metaparadigm.com/json-c/)
 * [tokyocabinet](http://fallabs.com/tokyocabinet/) / [tokyotyrant](http://fallabs.com/tokyotyrant/)
 * [qrencode](http://fukuchi.org/works/qrencode/index.en.html)
+* [pcre](http://www.pcre.org/)
 
