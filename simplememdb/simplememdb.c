@@ -16,6 +16,7 @@
 #include <json/json.h>
 #include "lib/timer.h"
 #include "lib/util.h"
+#include "lib/log.h"
 #include "pcre.h"
 
 #define NAME                    "simplememdb"
@@ -83,9 +84,6 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evke
         evbuffer_add_printf(evb, "%s\n", json);
     }
     json_object_put(jsobj); // Odd free function
-
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    evhttp_clear_headers(args);
 }
 
 void db_error_to_json(const char *err, struct json_object *jsobj)
@@ -108,13 +106,16 @@ void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
 
 void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *kbuf, *format;
-    int                 *value;
-    int                 i, max, off, len;
-    TCLIST              *keylist = NULL;
-    struct evkeyvalq    args;
-    struct json_object  *jsobj = NULL, *jsobj2, *jsarr = NULL;
+    char *key, *kbuf, *format;
+    int *value;
+    int i, max, off, len, n;
+    TCLIST *keylist = NULL;
+    struct evkeyvalq args;
+    struct json_object *jsobj = NULL, *jsobj2, *jsarr = NULL;
     int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
@@ -133,7 +134,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (!strncmp(format, "txt", 3)) {
+    if (format && !strncmp(format, "txt", 3)) {
         txt_format = 1;
     }
     
@@ -145,14 +146,14 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     keylist = tcadbfwmkeys(adb, key, strlen(key), max);
     for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
       kbuf = (char *)tclistval2(keylist, i);
-      value = (int *)tcadbget2(adb, kbuf);
+      value = (int *)tcadbget(adb, kbuf, strlen(kbuf), &n);
       if (value) {
           if (!txt_format) {
               jsobj2 = json_object_new_object();
               json_object_object_add(jsobj2, kbuf, json_object_new_int((int)*value));
               json_object_array_add(jsarr, jsobj2);
           } else {
-              evbuffer_add_printf(evb, "%d\n", (int)*value);
+              evbuffer_add_printf(evb, "%s,%d\n", kbuf, (int)*value);
           }
           tcfree(value);
       }
@@ -168,6 +169,8 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         }
     } else {
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
         if (!txt_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
@@ -179,18 +182,29 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         finalize_json(req, evb, &args, jsobj);
     }
     
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
+    
     _gettime(&ts2);
-    stats_store_request(STATS_FWMATCH_INT, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_FWMATCH_INT, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *kbuf, *value, *format;
-    int                 i, max, off, len, n;
-    TCLIST              *keylist = NULL;
-    struct evkeyvalq    args;
-    struct json_object  *jsobj, *jsobj2, *jsarr;
+    char *key, *kbuf, *value, *format;
+    int i, max, off, len, n;
+    TCLIST *keylist = NULL;
+    struct evkeyvalq args;
+    struct json_object *jsobj = NULL, *jsobj2, *jsarr = NULL;
     int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
@@ -198,18 +212,21 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     stats_request_counts[STATS_FWMATCH]++;
     
     evhttp_parse_query(req->uri, &args);
+    
     key = (char *)evhttp_find_header(&args, "key");
     format = (char *)evhttp_find_header(&args, "format");
+    
     argtoi(&args, "max", &max, 1000);
     argtoi(&args, "length", &len, 10);
     argtoi(&args, "offset", &off, 0);
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
     
-    if (!strncmp(format, "txt", 3)) {
+    if (format && !strncmp(format, "txt", 3)) {
         txt_format = 1;
     }
     
@@ -221,14 +238,14 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     keylist = tcadbfwmkeys(adb, key, strlen(key), max);
     for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++) {
         kbuf = (char *)tclistval2(keylist, i);
-        value = (int *)tcadbget2(adb, kbuf);
+        value = tcadbget(adb, kbuf, strlen(kbuf), &n);
         if (value) {
             if (!txt_format) {
                 jsobj2 = json_object_new_object();
                 json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
                 json_object_array_add(jsarr, jsobj2);
             } else {
-                evbuffer_add_printf(evb, "%d\n", value);
+                evbuffer_add_printf(evb, "%s,%s\n", kbuf, value);
             }
             tcfree(value);
         }
@@ -244,6 +261,8 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         }
     } else {
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
         if (!txt_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
@@ -255,8 +274,16 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         finalize_json(req, evb, &args, jsobj);
     }
     
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
+    
     _gettime(&ts2);
-    stats_store_request(STATS_FWMATCH, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_FWMATCH, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -265,6 +292,9 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
     int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
@@ -272,12 +302,18 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     stats_request_counts[STATS_DEL]++;
     
     evhttp_parse_query(req->uri, &args);
+    
     key = (char *)evhttp_find_header(&args, "key");
     format = (char *)evhttp_find_header(&args, "format");
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
+    }
+    
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
     }
     
     if (!txt_format) {
@@ -291,6 +327,8 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             evbuffer_add_printf(evb, "OK\n");
         }
     } else {
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
         if (!txt_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
@@ -302,161 +340,261 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         finalize_json(req, evb, &args, jsobj);
     }
     
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
+    
     _gettime(&ts2);
-    stats_store_request(STATS_DEL, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_DEL, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *value;
+    char                *key, *value, *format;
     struct evkeyvalq    args;
-    struct json_object  *jsobj;
+    struct json_object  *jsobj = NULL;
+    int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
     requests++;
     stats_request_counts[STATS_PUT]++;
     
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "database not connected");
-        return;
-    }
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
     value = (char *)evhttp_find_header(&args, "value");
+    format = (char *)evhttp_find_header(&args, "format");
+    
     if (key == NULL) {
-        evhttp_send_error(req, 400, "key is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
+    
     if (value == NULL) {
-        evhttp_send_error(req, 400, "value is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_VALUE");
         evhttp_clear_headers(&args);
         return;
+    }
+    
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
+    }
+    
+    if (!txt_format) {
+        jsobj = json_object_new_object();
     }
     
     jsobj = json_object_new_object();
     if (tcadbput(adb, key, strlen(key), value, strlen(value))) {
-        json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-        json_object_object_add(jsobj, "value", json_object_new_string(value));
+        if (!txt_format) {
+            json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+        } else {
+            evbuffer_add_printf(evb, "OK\n");
+        }
     } else {
-        db_error_to_json("tcadbput failed", jsobj);
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
+        if (!txt_format) {
+            db_error_to_json("INTERNAL_ERROR", jsobj);
+        } else {
+            evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
+        }
     }
     
-    finalize_json(req, evb, &args, jsobj);
+    if (!txt_format) {
+        finalize_json(req, evb, &args, jsobj);
+    }
+    
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(STATS_PUT, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_PUT, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *value;
-    struct evkeyvalq    args;
-    struct json_object  *jsobj;
+    char *key, *value, *format;
+    struct evkeyvalq args;
+    struct json_object *jsobj = NULL;
     int n;
+    int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
     requests++;
     stats_request_counts[STATS_GET]++;
     
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "database not connected");
-        return;
-    }
-    
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
+    format = (char *)evhttp_find_header(&args, "format");
+    
     if (key == NULL) {
-        evhttp_send_error(req, 400, "key is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
     
-    jsobj = json_object_new_object();
-    value = tcadbget(adb, key, strlen(key), &n);
-    if (value) {
-        json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-        json_object_object_add(jsobj, "value", json_object_new_string(value));
-        free(value);
-    } else {
-        db_error_to_json("tcadbget2 failed", jsobj);
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
     }
     
-    finalize_json(req, evb, &args, jsobj);
+    if (!txt_format) {
+        jsobj = json_object_new_object();
+    }
+    
+    if ((value = tcadbget(adb, key, strlen(key), &n))) {
+        if (!txt_format) {
+            json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+            json_object_object_add(jsobj, "value", json_object_new_string(value));
+        } else {
+            evbuffer_add_printf(evb, "%s\n", value);
+        }
+        free(value);
+    } else {
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
+        if (!txt_format) {
+            db_error_to_json("INTERNAL_ERROR", jsobj);
+        } else {
+            evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
+        }
+    }
+    
+    if (!txt_format) {
+        finalize_json(req, evb, &args, jsobj);
+    }
+    
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(STATS_GET, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_GET, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key;
-    int                 *value;
-    struct evkeyvalq    args;
-    struct json_object  *jsobj;
+    char *key, *format;
+    int *value;
+    struct evkeyvalq args;
+    struct json_object *jsobj = NULL;
     int n;
+    int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
     requests++;
     stats_request_counts[STATS_GET_INT]++;
     
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "database not connected");
-        return;
-    }
-    
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
+    format = (char *)evhttp_find_header(&args, "format");
+    
     if (key == NULL) {
-        evhttp_send_error(req, 400, "key is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
     
-    jsobj = json_object_new_object();
-    value = (int *)tcadbget(adb, key, strlen(key), &n);
-    if (value) {
-        json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-        json_object_object_add(jsobj, "value", json_object_new_int((int) *value));
-        free(value);
-    } else {
-        db_error_to_json("tcadbget failed", jsobj);
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
     }
     
-    finalize_json(req, evb, &args, jsobj);
+    if (!txt_format) {
+        jsobj = json_object_new_object();
+    }
+    
+    if ((value = (int *)tcadbget(adb, key, strlen(key), &n))) {
+        if (!txt_format) {
+            json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+            json_object_object_add(jsobj, "value", json_object_new_int((int)*value));
+        } else {
+            evbuffer_add_printf(evb, "%d\n", (int)*value);
+        }
+        free(value);
+    } else {
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
+        if (!txt_format) {
+            db_error_to_json("INTERNAL_ERROR", jsobj);
+        } else {
+            evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
+        }
+    }
+    
+    if (!txt_format) {
+        finalize_json(req, evb, &args, jsobj);
+    }
+    
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(STATS_GET_INT, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_GET_INT, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *value;
-    struct evkeyvalq    args;
+    char *key, *value, *format;
+    struct evkeyvalq args;
     struct evkeyval *pair;
-    struct json_object  *jsobj, *jserr;
+    struct json_object *jsobj = NULL;
     int nkeys = 0;
     int n;
+    int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
     requests++;
     stats_request_counts[STATS_MGET]++;
     
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "database not connected");
-        return;
+    evhttp_parse_query(req->uri, &args);
+    
+    format = (char *)evhttp_find_header(&args, "format");
+    
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
     }
     
-    jsobj = json_object_new_object();
+    if (!txt_format) {
+        jsobj = json_object_new_object();
+    }
     
-    evhttp_parse_query(req->uri, &args);
     TAILQ_FOREACH(pair, &args, next) {
         if (pair->key[0] != 'k') continue;
         key = (char *)pair->value;
@@ -464,50 +602,68 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         value = tcadbget(adb, key, strlen(key), &n);
         if (value) {
-            json_object_object_add(jsobj, key, json_object_new_string(value));
-            free(value);
-        } else {
-            jserr = json_object_new_object();
-            db_error_to_json("tcadbget failed", jserr);
-            json_object_object_add(jsobj, key, jserr);
+            if (!txt_format) {
+                json_object_object_add(jsobj, key, json_object_new_string(value));
+            } else {
+                evbuffer_add_printf(evb, "%s,%s\n", key, value);
+            }
         }
+        free(value);
     }
     
     if (!nkeys) {
-        evhttp_send_error(req, 400, "key is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
     
-    finalize_json(req, evb, &args, jsobj);
+    if (!txt_format) {
+        finalize_json(req, evb, &args, jsobj);
+    }
+    
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(STATS_MGET, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_MGET, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key;
-    int                 *value;
-    struct evkeyvalq    args;
+    char *key, *format;
+    int *value;
+    struct evkeyvalq args;
     struct evkeyval *pair;
-    struct json_object  *jsobj, *jserr;
+    struct json_object *jsobj = NULL;
     int nkeys = 0;
     int n;
+    int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
     requests++;
     stats_request_counts[STATS_MGET_INT]++;
     
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "database not connected");
-        return;
+    evhttp_parse_query(req->uri, &args);
+    
+    format = (char *)evhttp_find_header(&args, "format");
+    
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
     }
     
-    jsobj = json_object_new_object();
+    if (!txt_format) {
+        jsobj = json_object_new_object();
+    }
     
-    evhttp_parse_query(req->uri, &args);
     TAILQ_FOREACH(pair, &args, next) {
         if (pair->key[0] != 'k') continue;
         key = (char *)pair->value;
@@ -515,80 +671,121 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         value = (int *)tcadbget(adb, key, strlen(key), &n);
         if (value) {
-            json_object_object_add(jsobj, key, json_object_new_int((int)*value));
-            free(value);
-        } else {
-            jserr = json_object_new_object();
-            db_error_to_json("tcadbget failed", jserr);
-            json_object_object_add(jsobj, key, jserr);
+            if (!txt_format) {
+                json_object_object_add(jsobj, key, json_object_new_int((int)*value));
+            } else {
+                evbuffer_add_printf(evb, "%s,%d\n", key, (int)*value);
+            }
         }
+        free(value);
     }
     
     if (!nkeys) {
-        evhttp_send_error(req, 400, "key is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
     
-    finalize_json(req, evb, &args, jsobj);
+    if (!txt_format) {
+        finalize_json(req, evb, &args, jsobj);
+    }
+    
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(STATS_MGET_INT, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_MGET_INT, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *incr_value;
-    struct json_object  *jsobj;
+    char *incr_value, *format;
+    struct json_object *jsobj = NULL;
     struct evkeyvalq args;
     int v;
     int value = 1;
     struct evkeyval *arg;
     bool has_key_arg = false;
     bool error = false;
+    int txt_format = 0;
+    int status_code = 200;
+    char *status_txt = "OK";
+    uint64_t req_time;
     
     _gettime(&ts1);
     
     requests++;
     stats_request_counts[STATS_INCR]++;
     
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "no database");
-        return;
-    }
-    
     evhttp_parse_query(req->uri, &args);
     
     incr_value = (char *)evhttp_find_header(&args, "value");
+    format = (char *)evhttp_find_header(&args, "format");
+    
     if (incr_value != NULL) {
         value = atoi(incr_value);
     }
     
-    jsobj = json_object_new_object();
+    if (format && !strncmp(format, "txt", 3)) {
+        txt_format = 1;
+    }
+    
+    if (!txt_format) {
+        jsobj = json_object_new_object();
+    }
+    
     TAILQ_FOREACH(arg, &args, next) {
         if (strcasecmp(arg->key, "key") == 0) {
             has_key_arg = true;
             if ((v = tcadbaddint(adb, arg->value, strlen(arg->value), value)) == INT_MIN) {
                 error = true;
-                db_error_to_json("tcadbaddint failed", jsobj);
                 break;
             }
         }
     }
     
     if (!has_key_arg) {
-        evhttp_send_error(req, 400, "key is required");
+        evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         json_object_put(jsobj);
         return;
     }
     
-    if (!error) json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+    if (!error) {
+        if (!txt_format) {
+            json_object_object_add(jsobj, "status", json_object_new_string("ok"));
+        } else {
+            evbuffer_add_printf(evb, "OK\n");
+        }
+    } else {
+        status_code = 500;
+        status_txt = "INTERNAL_ERROR";
+        if (!txt_format) {
+            db_error_to_json("INTERNAL_ERROR", jsobj);
+        } else {
+            evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
+        }
+    }
     
-    finalize_json(req, evb, &args, jsobj);
+    if (!txt_format) {
+        finalize_json(req, evb, &args, jsobj);
+    }
+    
+    evhttp_send_reply(req, status_code, status_txt, evb);
+    evhttp_clear_headers(&args);
     
     _gettime(&ts2);
-    stats_store_request(STATS_INCR, _ts_diff(ts1, ts2));
+    req_time = _ts_diff(ts1, ts2);
+    stats_store_request(STATS_INCR, req_time);
+    
+    char id_buf[256];
+    sprintf(id_buf, "%"PRIu64, requests);
+    simplehttp_log('I', "", req, req_time, id_buf);
 }
 
 void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -597,11 +794,6 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     const char *json;
     
     requests++;
-    
-    if (adb == NULL) {
-        evhttp_send_error(req, 503, "no database");
-        return;
-    }
     
     tcadbvanish(adb);
     
@@ -679,7 +871,7 @@ void info()
 
 void usage()
 {
-    fprintf(stderr, "%s: simplehttp in-memory tokyo cabinet abstract database.n", NAME);
+    fprintf(stderr, "%s: simplehttp in-memory tokyo cabinet abstract database.\n", NAME);
     fprintf(stderr, "\n");
     fprintf(stderr, "usage: %s\n", NAME);
     fprintf(stderr, "\t-a 127.0.0.1 (address to listen on)\n");
