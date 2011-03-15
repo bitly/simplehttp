@@ -9,23 +9,10 @@
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
 #include <json/json.h>
-#include "lib/timer.h"
-#include "lib/util.h"
 
+#define NAME                    "simpletokyo"
+#define VERSION                 "1.6"
 #define RECONNECT               5
-
-#define NUM_REQUEST_TYPES       10
-#define NUM_REQUESTS_FOR_STATS  1000
-#define STATS_GET               0
-#define STATS_GET_INT           1
-#define STATS_PUT               2
-#define STATS_INCR              3
-#define STATS_DEL               4
-#define STATS_FWMATCH           5
-#define STATS_FWMATCH_INT       6
-#define STATS_VANISH            7
-#define STATS_MGET              8
-#define STATS_MGET_INT          9
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int open_db(char *addr, int port, TCRDB **rdb);
@@ -46,9 +33,6 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
-static char *g_progname = "simpletokyo";
-static char *version  = "1.5";
-
 struct event ev;
 struct timeval tv = {RECONNECT,0};
 static char *db_host = "127.0.0.1";
@@ -56,22 +40,6 @@ static int db_port = 1978;
 static TCRDB *rdb;
 static int db_status;
 static uint64_t db_opened = 0;
-
-static uint64_t requests = 0;
-static uint64_t stats_request_counts[NUM_REQUEST_TYPES];
-static int64_t stats_request[NUM_REQUESTS_FOR_STATS * NUM_REQUEST_TYPES];
-static int stats_request_idx[NUM_REQUEST_TYPES];
-static char *stats_request_labels[] = { "get", "get_int", "put", "incr", "del", "fwmatch", "fwmatch_int", "vanish", "mget", "mget_int" };
-
-void stats_store_request(int index, unsigned int diff)
-{
-    stats_request[(index * NUM_REQUESTS_FOR_STATS) + stats_request_idx[index]] = diff;
-    stats_request_idx[index]++;
-    
-    if (stats_request_idx[index] >= NUM_REQUESTS_FOR_STATS) {
-        stats_request_idx[index] = 0;
-    }
-}
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj)
 {
@@ -90,7 +58,8 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evke
     evhttp_clear_headers(args);
 }
 
-void close_db(TCRDB **rdb) {
+void close_db(TCRDB **rdb)
+{
     int ecode=0;
     if (*rdb != NULL) {
         if(!tcrdbclose(*rdb)){
@@ -167,19 +136,19 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj, *jsobj2, *jsarr;
     
-    requests++;
-    stats_request_counts[STATS_FWMATCH_INT]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
+    
     argtoi(&args, "max", &max, 1000);
     argtoi(&args, "length", &len, 10);
     argtoi(&args, "offset", &off, 0);
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -190,15 +159,15 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     jsarr = json_object_new_array();
     
     keylist = tcrdbfwmkeys2(rdb, key, max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
-      kbuf = (char *)tclistval2(keylist, i);
-      value = (int *)tcrdbget2(rdb, kbuf);
-      if (value) {
-          jsobj2 = json_object_new_object();
-          json_object_object_add(jsobj2, kbuf, json_object_new_int((int) *value));
-          json_object_array_add(jsarr, jsobj2);
-          tcfree(value);
-      }
+    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++) {
+        kbuf = (char *)tclistval2(keylist, i);
+        value = (int *)tcrdbget2(rdb, kbuf);
+        if (value) {
+            jsobj2 = json_object_new_object();
+            json_object_object_add(jsobj2, kbuf, json_object_new_int((int) *value));
+            json_object_array_add(jsarr, jsobj2);
+            tcfree(value);
+        }
     }
     if(keylist) tcfree(keylist);
     json_object_object_add(jsobj, "results", jsarr);
@@ -209,7 +178,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -221,19 +190,19 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj, *jsobj2, *jsarr;
     
-    requests++;
-    stats_request_counts[STATS_FWMATCH]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
+    
     argtoi(&args, "max", &max, 1000);
     argtoi(&args, "length", &len, 10);
     argtoi(&args, "offset", &off, 0);
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -245,14 +214,14 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     keylist = tcrdbfwmkeys2(rdb, key, max);
     for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
-      kbuf = (char *)tclistval2(keylist, i);
-      value = tcrdbget2(rdb, kbuf);
-      if (value) {
-          jsobj2 = json_object_new_object();
-          json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
-          json_object_array_add(jsarr, jsobj2);
-          tcfree(value);
-      }
+        kbuf = (char *)tclistval2(keylist, i);
+        value = tcrdbget2(rdb, kbuf);
+        if (value) {
+            jsobj2 = json_object_new_object();
+            json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
+            json_object_array_add(jsarr, jsobj2);
+            tcfree(value);
+        }
     }
     if(keylist) tcfree(keylist);
     json_object_object_add(jsobj, "results", jsarr);
@@ -263,7 +232,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -273,15 +242,11 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_DEL]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
+    
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
@@ -300,9 +265,6 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     finalize_json(req, evb, &args, jsobj);
-    
-    _gettime(&ts2);
-    stats_store_request(STATS_DEL, _ts_diff(ts1, ts2));
 }
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -311,24 +273,22 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_PUT]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
     value = (char *)evhttp_find_header(&args, "value");
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
         return;
     }
+    
     if (value == NULL) {
         evhttp_send_error(req, 400, "value is required");
         evhttp_clear_headers(&args);
@@ -343,11 +303,8 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
-    finalize_json(req, evb, &args, jsobj);
     
-    _gettime(&ts2);
-    stats_store_request(STATS_PUT, _ts_diff(ts1, ts2));
+    finalize_json(req, evb, &args, jsobj);
 }
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -356,19 +313,15 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_GET]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -385,11 +338,8 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
-    finalize_json(req, evb, &args, jsobj);
     
-    _gettime(&ts2);
-    stats_store_request(STATS_GET, _ts_diff(ts1, ts2));
+    finalize_json(req, evb, &args, jsobj);
 }
 
 void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -399,19 +349,15 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq    args;
     struct json_object  *jsobj;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_GET_INT]++;
-
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
+    
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -428,11 +374,8 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
-    finalize_json(req, evb, &args, jsobj);
     
-    _gettime(&ts2);
-    stats_store_request(STATS_GET_INT, _ts_diff(ts1, ts2));
+    finalize_json(req, evb, &args, jsobj);
 }
 
 void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -443,19 +386,15 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj, *jserr;
     int nkeys = 0;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_MGET]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     
+    evhttp_parse_query(req->uri, &args);
+    
     jsobj = json_object_new_object();
     
-    evhttp_parse_query(req->uri, &args);
     TAILQ_FOREACH(pair, &args, next) {
         if (pair->key[0] != 'k') continue;
         key = (char *)pair->value;
@@ -480,9 +419,6 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     finalize_json(req, evb, &args, jsobj);
-    
-    _gettime(&ts2);
-    stats_store_request(STATS_MGET, _ts_diff(ts1, ts2));
 }
 
 void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -494,19 +430,15 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj, *jserr;
     int nkeys = 0;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_MGET_INT]++;
-    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     
+    evhttp_parse_query(req->uri, &args);
+    
     jsobj = json_object_new_object();
     
-    evhttp_parse_query(req->uri, &args);
     TAILQ_FOREACH(pair, &args, next) {
         if (pair->key[0] != 'k') continue;
         key = (char *)pair->value;
@@ -531,9 +463,6 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     finalize_json(req, evb, &args, jsobj);
-    
-    _gettime(&ts2);
-    stats_store_request(STATS_MGET_INT, _ts_diff(ts1, ts2));
 }
 
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -547,23 +476,21 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     bool has_key_arg = false;
     bool error = false;
     
-    _gettime(&ts1);
-    
-    requests++;
-    stats_request_counts[STATS_INCR]++;
-
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     incr_value = (char *)evhttp_find_header(&args, "value");
+    
     if (incr_value != NULL) {
         value = atoi(incr_value);
     }
-
+    
     jsobj = json_object_new_object();
+    
     TAILQ_FOREACH(arg, &args, next) {
         if (strcasecmp(arg->key, "key") == 0) {
             has_key_arg = true;
@@ -575,7 +502,7 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             }
         }
     }
-
+    
     if (!has_key_arg) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -584,11 +511,8 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     if (!error) json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-
-    finalize_json(req, evb, &args, jsobj);
     
-    _gettime(&ts2);
-    stats_store_request(STATS_INCR, _ts_diff(ts1, ts2));
+    finalize_json(req, evb, &args, jsobj);
 }
 
 void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -596,11 +520,6 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj;
     const char *json;
     
-    _gettime(&ts1);
-
-    requests++;
-    stats_request_counts[STATS_VANISH]++;
-
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
@@ -616,57 +535,41 @@ void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     json_object_put(jsobj); // Odd free function
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    
-    _gettime(&ts2);
-    stats_store_request(STATS_VANISH, _ts_diff(ts1, ts2));
 }
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    uint64_t request_total;
-    uint64_t average_requests[NUM_REQUEST_TYPES];
-    uint64_t ninety_five_percents[NUM_REQUEST_TYPES];
-    int i, j, c, request_array_end;
+    int i;
     struct evkeyvalq args;
     const char *format;
     
-    memset(&average_requests, 0, sizeof(average_requests));
-    memset(&ninety_five_percents, 0, sizeof(ninety_five_percents));
+    struct simplehttp_stats *st;
     
-    for (i = 0; i < NUM_REQUEST_TYPES; i++) {
-        request_total = 0;
-        for (j = (i * NUM_REQUESTS_FOR_STATS), request_array_end = j + NUM_REQUESTS_FOR_STATS, c = 0; 
-            (j < request_array_end) && (stats_request[j] != -1); j++, c++) {
-            request_total += stats_request[j];
-        }
-        if (c) {
-            average_requests[i] = request_total / c;
-            ninety_five_percents[i] = ninety_five_percent(stats_request + (i * NUM_REQUESTS_FOR_STATS), c);
-        }
-    }
+    st = simplehttp_stats_new();
+    simplehttp_stats(st);
     
     evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");
     
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
-        evbuffer_add_printf(evb, "\"db_opens\": %"PRIu64",", db_opened);
-        for (i = 0; i < NUM_REQUEST_TYPES; i++) {
-            evbuffer_add_printf(evb, "\"%s_95\": %"PRIu64",", stats_request_labels[i], ninety_five_percents[i]);
-            evbuffer_add_printf(evb, "\"%s_average_request\": %"PRIu64",", stats_request_labels[i], average_requests[i]);
-            evbuffer_add_printf(evb, "\"%s_requests\": %"PRIu64",", stats_request_labels[i], stats_request_counts[i]);
+        for (i = 0; i < st->callback_count; i++) {
+            evbuffer_add_printf(evb, "\"%s_95\": %"PRIu64",", st->stats_labels[i], st->ninety_five_percents[i]);
+            evbuffer_add_printf(evb, "\"%s_average_request\": %"PRIu64",", st->stats_labels[i], st->average_requests[i]);
+            evbuffer_add_printf(evb, "\"%s_requests\": %"PRIu64",", st->stats_labels[i], st->stats_counts[i]);
         }
-        evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64, requests);
+        evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64, st->requests);
         evbuffer_add_printf(evb, "}\n");
     } else {
-        evbuffer_add_printf(evb, "db opens: %"PRIu64"\n", db_opened);
-        evbuffer_add_printf(evb, "total requests: %"PRIu64"\n", requests);
-        for (i = 0; i < NUM_REQUEST_TYPES; i++) {
-            evbuffer_add_printf(evb, "/%s 95%%: %"PRIu64"\n", stats_request_labels[i], ninety_five_percents[i]);
-            evbuffer_add_printf(evb, "/%s average request (usec): %"PRIu64"\n", stats_request_labels[i], average_requests[i]);
-            evbuffer_add_printf(evb, "/%s requests: %"PRIu64"\n", stats_request_labels[i], stats_request_counts[i]);
+        evbuffer_add_printf(evb, "total requests: %"PRIu64"\n", st->requests);
+        for (i = 0; i < st->callback_count; i++) {
+            evbuffer_add_printf(evb, "/%s 95%%: %"PRIu64"\n", st->stats_labels[i], st->ninety_five_percents[i]);
+            evbuffer_add_printf(evb, "/%s average request (usec): %"PRIu64"\n", st->stats_labels[i], st->average_requests[i]);
+            evbuffer_add_printf(evb, "/%s requests: %"PRIu64"\n", st->stats_labels[i], st->stats_counts[i]);
         }
     }
+    
+    simplehttp_stats_free(st);
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
@@ -681,12 +584,12 @@ void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
 void info()
 {
     fprintf(stdout, "simpletokyo: a light http interface to Tokyo Tyrant.\n");
-    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/simpletokyo\n", version);
+    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/simpletokyo\n", VERSION);
 }
 
 void usage()
 {
-    fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", g_progname);
+    fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", NAME);
     fprintf(stderr, "\n");
     fprintf(stderr, "usage:\n");
     fprintf(stderr, "\t-A ttserver address\n");
@@ -722,10 +625,6 @@ int main(int argc, char **argv)
             exit(1);
         }
     }
-    
-    memset(&stats_request, -1, sizeof(stats_request));
-    memset(&stats_request_idx, 0, sizeof(stats_request_idx));
-    memset(&stats_request_counts, 0, sizeof(stats_request_counts));
     
     memset(&db_status, -1, sizeof(db_status));
     

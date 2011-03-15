@@ -3,11 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-
-#include "simplehttp/pubsub_to_pubsub.h"
-#include "event.h"
-#include "evhttp.h"
+#include <simplehttp/pubsub_to_pubsub.h>
+#include <simplehttp/simplehttp.h>
 
 #define DEBUG 0
 

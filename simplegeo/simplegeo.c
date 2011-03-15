@@ -1,13 +1,13 @@
 #include <tcrdb.h>
-#include "queue.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include "simplehttp.h"
-#include "json/json.h"
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
+#include <json/json.h>
 
 #define RECONNECT 5
 #define MAXRES 1000

@@ -2,15 +2,15 @@ LIBEVENT ?= /usr/local
 TARGET ?= /usr/local
 
 CFLAGS = -I. -I$(LIBEVENT)/include -Wall -g -O2
-LIBS = -L. -L$(LIBEVENT)/lib -levent
+LIBS = -L. -L$(LIBEVENT)/lib -levent -lm
 
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
 
-libsimplehttp.a: simplehttp.o
+libsimplehttp.a: simplehttp.o timer.o log.o util.o stat.o
 	/bin/rm -f $@
-	$(AR) $(AR_FLAGS) $@ $<
+	$(AR) $(AR_FLAGS) $@ $^
 	$(RANLIB) $@
 
 testserver: testserver.c

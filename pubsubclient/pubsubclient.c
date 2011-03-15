@@ -1,11 +1,11 @@
-
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "event.h"
-#include "evhttp.h"
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
 #include "pubsubclient.h"
+
 #define DEBUG 0
 #define BOUNDARY_LENGTH 14
 // \r\n--xXPubSubXx\r\n

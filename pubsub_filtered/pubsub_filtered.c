@@ -3,11 +3,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
-#include "simplehttp/queue.h"
-#include "simplehttp/simplehttp.h"
-#include "event.h"
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
+#include <json/json.h>
 #include "http-internal.h"
-#include "json/json.h"
 #include "md5.h"
 #include "pcre.h"
 

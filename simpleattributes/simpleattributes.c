@@ -1,12 +1,12 @@
 #include <tcrdb.h>
-#include "queue.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include "simplehttp.h"
-#include "json/json.h"
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
+#include <json/json.h>
 
 #define RECONNECT 5
 #define MAXRES 1000
@@ -37,7 +37,7 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
     char *json, *jsonp;
     
     jsonp = (char *)evhttp_find_header(args, "jsonp");
-    json = json_object_to_json_string(jsobj);
+    json = (char *)json_object_to_json_string(jsobj);
     if (jsonp) {
         evbuffer_add_printf(evb, "%s(%s)\n", jsonp, json);
     } else {
@@ -228,8 +228,8 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
     for (i=0; i < json_object_array_length(jsonPtr); i++) {
         jsonPtr2 = json_object_array_get_idx(jsonPtr, i);
-        key = json_object_get_string(json_object_array_get_idx(jsonPtr2, 0));
-        value = json_object_get_string(json_object_array_get_idx(jsonPtr2, 1));
+        key = (char *)json_object_get_string(json_object_array_get_idx(jsonPtr2, 0));
+        value = (char *)json_object_get_string(json_object_array_get_idx(jsonPtr2, 1));
         tcmapput2(cols, key, value);
     }
     
@@ -280,7 +280,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         
         if (key) {
-            value = tcmapget2(cols, key);
+            value = (char *)tcmapget2(cols, key);
 
             if (!value) {
                 value = "";
@@ -288,7 +288,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             
             json_object_object_add(jsobj2, key, json_object_new_string(value));
         } else {
-            while ((name = tcmapiternext2(cols)) != NULL) {
+            while ((name = (char *)tcmapiternext2(cols)) != NULL) {
                 json_object_object_add(jsobj2, name, json_object_new_string(tcmapget2(cols, name)));
             }
         }

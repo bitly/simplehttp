@@ -3,12 +3,12 @@
 
 #if _POSIX_TIMERS > 0
 
-void _gettime(struct timespec *ts)
+void simplehttp_ts_get(struct timespec *ts)
 {
     clock_gettime(CLOCK_REALTIME, ts);
 }
 
-unsigned int _ts_diff(struct timespec start, struct timespec end)
+unsigned int simplehttp_ts_diff(struct timespec start, struct timespec end)
 {
     struct timespec temp;
     
@@ -26,12 +26,12 @@ unsigned int _ts_diff(struct timespec start, struct timespec end)
 
 #else
 
-void _gettime(struct timeval *ts)
+void simplehttp_ts_get(struct timeval *ts)
 {
     gettimeofday(ts, NULL);
 }
 
-unsigned int _ts_diff(struct timeval start, struct timeval end)
+unsigned int simplehttp_ts_diff(struct timeval start, struct timeval end)
 {
     struct timeval temp;
     

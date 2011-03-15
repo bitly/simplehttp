@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "simplehttp/queue.h"
-#include "simplehttp/simplehttp.h"
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
 #include "http-internal.h"
 
 #define BOUNDARY "xXPubSubXx"

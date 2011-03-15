@@ -1,11 +1,12 @@
-#include "queue.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <simplehttp/queue.h>
+#include <simplehttp/simplehttp.h>
+#include <json/json.h>
 #include "png.h"
 #include "qrencode.h"
-#include "simplehttp.h"
 
 /*
  * libqrencode

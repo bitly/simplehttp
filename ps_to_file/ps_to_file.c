@@ -4,10 +4,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
-
-#include "simplehttp/pubsubclient.h"
-#include "event.h"
-#include "evhttp.h"
+#include <simplehttp/pubsubclient.h>
+#include <simplehttp/simplehttp.h>
 
 #define DEBUG 0
 

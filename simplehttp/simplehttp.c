@@ -1,10 +1,10 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>
-
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <pwd.h>
 #include <grp.h>
 #include <err.h>
@@ -12,9 +12,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <fnmatch.h>
-
 #include "queue.h"
 #include "simplehttp.h"
+#include "stat.h"
 
 typedef struct cb_entry {
     char *path;
@@ -24,25 +24,26 @@ typedef struct cb_entry {
 } cb_entry;
 TAILQ_HEAD(, cb_entry) callbacks;
 
-int debug = 0;
+static int debug = 0;
+static int verbose = 0;
 
-static void
-ignore_cb(int sig, short what, void *arg)
+int callback_count = 0;
+uint64_t request_count = 0;
+
+static void ignore_cb(int sig, short what, void *arg)
 {
 }
 
-void
-termination_handler (int signum)
+void termination_handler(int signum)
 {
     event_loopbreak();
 }
 
-int 
-get_uid(char *user)
+int get_uid(char *user)
 {
     int retcode;
     struct passwd *pw;
-
+    
     pw = getpwnam(user);
     if (pw == NULL) {
         retcode = -1;
@@ -52,12 +53,11 @@ get_uid(char *user)
     return retcode;
 }
 
-int 
-get_gid(char *group)
+int get_gid(char *group)
 {
     int retcode;
     struct group *grent;
-
+    
     grent = getgrnam(group);
     if (grent == NULL) {
         retcode = -1;
@@ -67,12 +67,11 @@ get_gid(char *group)
     return retcode;
 }
 
-int 
-get_user_gid(char *user)
+int get_user_gid(char *user)
 {
     int retcode;
     struct passwd *pw;
-
+    
     pw = getpwnam(user);
     if (pw == NULL) {
         retcode = -1;
@@ -82,40 +81,82 @@ get_user_gid(char *user)
     return retcode;
 }
 
-void
-generic_request_handler(struct evhttp_request *req, void *arg)
+char **simplehttp_callback_names()
 {
-    int found_cb = 0;
+    char **callback_names;
+    char *tmp;
+    struct cb_entry *entry;
+    int i = 0, len;
+    
+    callback_names = malloc(callback_count * sizeof(*callback_names));
+    TAILQ_FOREACH(entry, &callbacks, entries) {
+        len = strlen(entry->path);
+        callback_names[i] = malloc(len + 1);
+        tmp = entry->path;
+        if (tmp[0] == '/') {
+            tmp++;
+            len--;
+        }
+        if (tmp[len - 1] == '*') {
+            len--;
+        }
+        memcpy(callback_names[i], tmp, len);
+        callback_names[i][len] = '\0';
+        i++;
+    }
+    
+    return callback_names;
+}
+
+void generic_request_handler(struct evhttp_request *req, void *arg)
+{
+    int found_cb = 0, i = 0;
     struct cb_entry *entry;
     struct evbuffer *evb = evbuffer_new();
+    simplehttp_ts start_ts, end_ts;
+    uint64_t req_time;
+    char id_buf[64];
     
     if (debug) {
         fprintf(stderr, "request for %s from %s\n", req->uri, req->remote_host);
     }
-
+    
     TAILQ_FOREACH(entry, &callbacks, entries) {
         if (fnmatch(entry->path, req->uri, FNM_NOESCAPE) == 0) {
+            request_count++;
+            
+            simplehttp_ts_get(&start_ts);
+            
             (*entry->cb)(req, evb, entry->ctx);
+            
+            simplehttp_ts_get(&end_ts);
+            req_time = simplehttp_ts_diff(start_ts, end_ts);
+            simplehttp_stats_store(i, req_time);
+            if (verbose) {
+                sprintf(id_buf, "%"PRIu64, request_count);
+                simplehttp_log('I', "", req, req_time, id_buf);
+            }
+            
             found_cb = 1;
             break;
         }
+        i++;
     }
-
+    
     if (!found_cb) {
         evhttp_send_reply(req, HTTP_NOTFOUND, "", evb);
     }
+    
     evbuffer_free(evb);
 }
 
-void
-simplehttp_init()
+void simplehttp_init()
 {
     event_init();
     TAILQ_INIT(&callbacks);
 }
 
-void
-simplehttp_free()
+void simplehttp_free()
 {
     struct cb_entry *entry;
     
@@ -126,22 +167,22 @@ simplehttp_free()
     }
 }
 
-void
-simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
+void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
 {
     struct cb_entry *cbPtr;
-
+    
     cbPtr = (cb_entry *)malloc(sizeof(*cbPtr));
     cbPtr->path = strdup(path);
     cbPtr->cb = cb;
     cbPtr->ctx = ctx;
     TAILQ_INSERT_TAIL(&callbacks, cbPtr, entries);
-
+    
+    callback_count++;
+    
     printf("registering callback for path \"%s\"\n", path);
 }
 
-int
-simplehttp_main(int argc, char **argv)
+int simplehttp_main(int argc, char **argv)
 {
     uid_t uid = 0;
     gid_t gid = 0;
@@ -158,29 +199,32 @@ simplehttp_main(int argc, char **argv)
     address = "0.0.0.0";
     port = 8080;
     opterr = 0;
-    while ((ch = getopt(argc, argv, "a:p:d:D:r:u:g:")) != -1) {
+    while ((ch = getopt(argc, argv, "a:p:d:D:r:u:g:V")) != -1) {
         switch (ch) {
-        case 'a':
-            address = optarg;
-            break;
-        case 'p':
-            port = atoi(optarg);
-            break;
-        case 'd':
-            debug = 1;
-            break;
-        case 'r':
-            root = optarg;
-            break;
-        case 'D':
-            daemon = 1;
-            break;
-        case 'g':
-            garg = optarg;
-            break;
-        case 'u':
-            uarg = optarg;
-            break;
+            case 'a':
+                address = optarg;
+                break;
+            case 'p':
+                port = atoi(optarg);
+                break;
+            case 'd':
+                debug = 1;
+                break;
+            case 'r':
+                root = optarg;
+                break;
+            case 'D':
+                daemon = 1;
+                break;
+            case 'g':
+                garg = optarg;
+                break;
+            case 'u':
+                uarg = optarg;
+                break;
+            case 'V':
+                verbose = 1;
+                break;
         }
     }
     
@@ -191,14 +235,14 @@ simplehttp_main(int argc, char **argv)
         } else if (pid > 0) {
             exit(EXIT_SUCCESS);
         }
-
+        
         umask(0);
         sid = setsid();
         if (sid < 0) {
             exit(EXIT_FAILURE);
         }
     }
-   
+    
     if (uarg != NULL) {
         uid = get_uid(uarg);
         gid = get_user_gid(uarg);
@@ -219,7 +263,7 @@ simplehttp_main(int argc, char **argv)
             }
         }
     }
-   
+    
     if (root != NULL) {
         if (chroot(root) != 0) {
             err(1, strerror(errno));
@@ -250,25 +294,30 @@ simplehttp_main(int argc, char **argv)
     signal(SIGINT, termination_handler);
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
-
+    
     signal_set(&pipe_ev, SIGPIPE, ignore_cb, NULL);
     signal_add(&pipe_ev, NULL);
-
+    
+    simplehttp_stats_init();
+    
     httpd = evhttp_start(address, port);
     if (!httpd) {
         printf("could not bind to %s:%d\n", address, port);
         return 1;
     }
-
+    
     printf("listening on %s:%d\n", address, port);
-
+    
     evhttp_set_gencb(httpd, generic_request_handler, NULL);
     event_dispatch();
-
+    
     printf("exiting\n");
-    /* Not reached in this code as it is now. */
+    
     evhttp_free(httpd);
+    
+    simplehttp_stats_destruct();
+    
     simplehttp_free();
-
+    
     return 0;
 }

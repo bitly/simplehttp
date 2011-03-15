@@ -5,7 +5,7 @@ LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
 
 CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -g -O2
-LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -ljson -ldl -lm -lc
+LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -ljson -ldl -lm -lc -lpubsub_to_pubsub
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
@@ -16,7 +16,7 @@ libpubsub_to_pubsub.a: pubsub_to_pubsub.o
 	$(RANLIB) $@
 
 ps_to_ps: ps_to_ps.c
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS) -lpubsub_to_pubsub
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 
 all: libpubsub_to_pubsub.a ps_to_ps
 
