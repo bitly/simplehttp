@@ -546,7 +546,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct simplehttp_stats *st;
     
     st = simplehttp_stats_new();
-    simplehttp_stats(st);
+    simplehttp_stats_get(st);
     
     evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");

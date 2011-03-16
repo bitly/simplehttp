@@ -15,6 +15,7 @@
 #include "queue.h"
 #include "simplehttp.h"
 #include "stat.h"
+#include "request.h"
 
 typedef struct cb_entry {
     char *path;
@@ -25,8 +26,7 @@ typedef struct cb_entry {
 TAILQ_HEAD(, cb_entry) callbacks;
 
 static int debug = 0;
-static int verbose = 0;
-
+int verbose = 0;
 int callback_count = 0;
 uint64_t request_count = 0;
 
@@ -112,31 +112,21 @@ void generic_request_handler(struct evhttp_request *req, void *arg)
 {
     int found_cb = 0, i = 0;
     struct cb_entry *entry;
+    struct simplehttp_request *s_req;
     struct evbuffer *evb = evbuffer_new();
-    simplehttp_ts start_ts, end_ts;
-    uint64_t req_time;
-    char id_buf[64];
     
     if (debug) {
         fprintf(stderr, "request for %s from %s\n", req->uri, req->remote_host);
     }
     
+    request_count++;
+    
+    s_req = simplehttp_request_new(req, request_count);
+    
     TAILQ_FOREACH(entry, &callbacks, entries) {
         if (fnmatch(entry->path, req->uri, FNM_NOESCAPE) == 0) {
-            request_count++;
-            
-            simplehttp_ts_get(&start_ts);
-            
+            s_req->index = i;
             (*entry->cb)(req, evb, entry->ctx);
-            
-            simplehttp_ts_get(&end_ts);
-            req_time = simplehttp_ts_diff(start_ts, end_ts);
-            simplehttp_stats_store(i, req_time);
-            if (verbose) {
-                sprintf(id_buf, "%"PRIu64, request_count);
-                simplehttp_log('I', "", req, req_time, id_buf);
-            }
-            
             found_cb = 1;
             break;
         }
@@ -147,6 +137,10 @@ void generic_request_handler(struct evhttp_request *req, void *arg)
         evhttp_send_reply(req, HTTP_NOTFOUND, "", evb);
     }
     
+    if (simplehttp_async_check(req) == NULL) {
+        simplehttp_request_finish(req, s_req);
+    }
+    
     evbuffer_free(evb);
 }
 
@@ -154,6 +148,7 @@ void simplehttp_init()
 {
     event_init();
     TAILQ_INIT(&callbacks);
+    TAILQ_INIT(&simplehttp_reqs);
 }
 
 void simplehttp_free()

@@ -8,7 +8,7 @@ AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
 
-libsimplehttp.a: simplehttp.o timer.o log.o util.o stat.o
+libsimplehttp.a: simplehttp.o timer.o log.o util.o stat.o request.o
 	/bin/rm -f $@
 	$(AR) $(AR_FLAGS) $@ $^
 	$(RANLIB) $@

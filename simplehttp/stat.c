@@ -12,7 +12,7 @@ static uint64_t *stats_counts = NULL;
 extern int callback_count;
 extern uint64_t request_count;
 
-void simplehttp_stats_store(int index, unsigned int val)
+void simplehttp_stats_store(int index, uint64_t val)
 {
     stats[(index * STAT_WINDOW) + stats_idx[index]] = val;
     stats_idx[index]++;
@@ -78,7 +78,7 @@ void simplehttp_stats_free(struct simplehttp_stats *st)
     }
 }
 
-void simplehttp_stats(struct simplehttp_stats *st)
+void simplehttp_stats_get(struct simplehttp_stats *st)
 {
     uint64_t request_total;
     int i, j, c, request_array_end;
