@@ -101,7 +101,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
          * There's probably a better way to do this, however
          * this is easy and faults page in 4k chunks anyway.
          */
-        while ((prev = prev_line(line)) != line) {
+        while (line != (char *)map_base && (prev = prev_line(line-1)) != line) {
             if (strncmp(key, prev, keylen) != 0) break;
             line = prev;
         }
@@ -118,7 +118,8 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         }
 
         if (end != start) {
-            evbuffer_add(evb, start, (end - start));
+            evbuffer_add_reference(evb, (const void *)start,
+                                   (size_t)(end - start), NULL, NULL);
         } else {
             evbuffer_add_printf(evb, "%s\n", line);
         }   
