@@ -37,6 +37,8 @@ static int fd = 0;
 
 static uint64_t get_hits = 0;
 static uint64_t get_misses = 0;
+static uint64_t fwmatch_hits = 0;
+static uint64_t fwmatch_misses = 0;
 static uint64_t total_seeks = 0;
 
 char *prev_line(char *pos)
@@ -74,6 +76,62 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks)
     } else {
         return line;
     }
+}
+
+void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    struct evkeyvalq args;
+    char *key, *line, *prev, *start, *end, *newline, buf[32];
+    int keylen, seeks = 0;
+       
+    evhttp_parse_query(req->uri, &args);
+    key = (char *)evhttp_find_header(&args, "key");
+    keylen = key ? strlen(key) : 0;
+       
+    if(DEBUG) fprintf(stderr, "/fwmatch %s\n", key);
+       
+    if (!key) {
+        evbuffer_add_printf(evb, "missing argument: key\n");
+        evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
+    } else if ((line = map_search(key, keylen, (char *)map_base,
+               (char *)map_base+st.st_size, &seeks))) {
+
+        /*
+         * Walk backwards while key prefix matches.
+         * There's probably a better way to do this, however
+         * this is easy and faults page in 4k chunks anyway.
+         */
+        while ((prev = prev_line(line)) != line) {
+            if (strncmp(key, prev, keylen) != 0) break;
+            line = prev;
+        }
+
+        /*
+         * Walk forwards while key prefix matches to find all
+         * records.
+         */
+        start = end = line;
+        while ((newline = strchr(line, '\n')) != NULL
+               && newline != (char *)map_base+st.st_size) {
+            line = end = newline+1;
+            if (strncmp(key, line, keylen) != 0) break;
+        }
+
+        if (end != start) {
+            evbuffer_add(evb, start, (end - start));
+        } else {
+            evbuffer_add_printf(evb, "%s\n", line);
+        }   
+        fwmatch_hits++;
+        sprintf(buf, "%d", seeks);
+        evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
+        evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    } else {
+        fwmatch_misses++;
+        evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
+    }   
+       
+    evhttp_clear_headers(&args);
 }
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
@@ -126,8 +184,6 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         if (pair->key[0] != 'k') continue;
         key = (char *)pair->value;
         nkeys++;
-        
-        //key = (char *)evhttp_find_header(&args, "key");
         
         if(DEBUG) fprintf(stderr, "/mget %s\n", key);
         
@@ -183,6 +239,8 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
         evbuffer_add_printf(evb, "\"get_hits\": %"PRIu64",", get_hits);
         evbuffer_add_printf(evb, "\"get_misses\": %"PRIu64",", get_misses);
+        evbuffer_add_printf(evb, "\"fwmatch_hits\": %"PRIu64",", fwmatch_hits);
+        evbuffer_add_printf(evb, "\"fwmatch_misses\": %"PRIu64",", fwmatch_misses);
         evbuffer_add_printf(evb, "\"total_seeks\": %"PRIu64",", total_seeks);
         evbuffer_add_printf(evb, "\"total_requests\": %"PRIu64, st->requests);
         evbuffer_add_printf(evb, "}\n");
@@ -329,6 +387,7 @@ int main(int argc, char **argv)
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/get?*", get_cb, NULL);
     simplehttp_set_cb("/mget?*", mget_cb, NULL);
+    simplehttp_set_cb("/fwmatch?*", fwmatch_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/reload", reload_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
