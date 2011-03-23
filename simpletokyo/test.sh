@@ -94,7 +94,7 @@ curl --silent "http://localhost:8080/get?key=vanishtest" >> ${OUT}
 err=0;
 if ! "$CMP" -s "test.expected" "${testsubdir}/test.out" ; then
     echo "ERROR: test failed:" 1>&2
-    diff -C 3 "test.expected" "${testsubdir}/test.out" 1>&2
+    diff -U 3 "test.expected" "${testsubdir}/test.out" 1>&2
     err=1
 else
     echo "FUNCTIONAL TEST PASSED"

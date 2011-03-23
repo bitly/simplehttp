@@ -69,18 +69,6 @@ can_kick(struct cli *client) {
 }
 
 void
-argtoi(struct evkeyvalq *args, char *key, int *val, int def)
-{
-    char *tmp;
-
-    *val = def;
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
-    if (tmp) {
-        *val = atoi(tmp);
-    }
-}
-
-void
 clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct cli *client;
@@ -234,7 +222,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     totalConns++;
     evhttp_parse_query(req->uri, &args);
     client = calloc(1, sizeof(*client));
-    argtoi(&args, "multipart", &client->multipart, 1);
+    client->multipart = get_int_argument(&args, "multipart", 1);
     client->req = req;
     client->connection_id = totalConns;
     client->connect_time = time(NULL);

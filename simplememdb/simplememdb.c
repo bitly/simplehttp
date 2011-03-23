@@ -74,33 +74,29 @@ void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
 
 void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *key, *kbuf, *format;
+    char *key, *kbuf;
+    int format;
     int *value;
     int i, max, off, len, n;
     TCLIST *keylist = NULL;
     struct evkeyvalq args;
     struct json_object *jsobj = NULL, *jsobj2, *jsarr = NULL;
-    int txt_format = 0;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
     key = (char *)evhttp_find_header(&args, "key");
-    format = (char *)evhttp_find_header(&args, "format");
-    argtoi(&args, "max", &max, 1000);
-    argtoi(&args, "length", &len, 10);
-    argtoi(&args, "offset", &off, 0);
+    format = get_argument_format(&args);
+    max = get_int_argument(&args, "max", 1000);
+    len = get_int_argument(&args, "length", 10);
+    off = get_int_argument(&args, "offset", 0);
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
     
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
         jsarr = json_object_new_array();
     }
@@ -110,7 +106,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
       kbuf = (char *)tclistval2(keylist, i);
       value = (int *)tcadbget(adb, kbuf, strlen(kbuf), &n);
       if (value) {
-          if (!txt_format) {
+          if (format == json_format) {
               jsobj2 = json_object_new_object();
               json_object_object_add(jsobj2, kbuf, json_object_new_int((int)*value));
               json_object_array_add(jsarr, jsobj2);
@@ -121,52 +117,51 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
       }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         json_object_object_add(jsobj, "results", jsarr);
     }
     
     if (keylist != NULL) {
         tcfree(keylist);
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         }
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
-    
     evhttp_send_reply(req, status_code, status_txt, evb);
     evhttp_clear_headers(&args);
 }
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *key, *kbuf, *value, *format;
+    char *key, *kbuf, *value;
+    int format;
     int i, max, off, len, n;
     TCLIST *keylist = NULL;
     struct evkeyvalq args;
     struct json_object *jsobj = NULL, *jsobj2, *jsarr = NULL;
-    int txt_format = 0;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
-    format = (char *)evhttp_find_header(&args, "format");
     
-    argtoi(&args, "max", &max, 1000);
-    argtoi(&args, "length", &len, 10);
-    argtoi(&args, "offset", &off, 0);
+    format = get_argument_format(&args);
+    max = get_int_argument(&args, "max", 1000);
+    len = get_int_argument(&args, "length", 10);
+    off = get_int_argument(&args, "offset", 0);
     
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
@@ -174,11 +169,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
         jsarr = json_object_new_array();
     }
@@ -188,7 +179,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         kbuf = (char *)tclistval2(keylist, i);
         value = tcadbget(adb, kbuf, strlen(kbuf), &n);
         if (value) {
-            if (!txt_format) {
+            if (format == json_format) {
                 jsobj2 = json_object_new_object();
                 json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
                 json_object_array_add(jsarr, jsobj2);
@@ -199,26 +190,26 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         json_object_object_add(jsobj, "results", jsarr);
     }
     
     if (keylist != NULL) {
         tcfree(keylist);
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         }
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -228,34 +219,29 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *format;
+    char                *key;
+    int format;
     struct evkeyvalq    args;
     struct json_object  *jsobj = NULL;
-    int txt_format = 0;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
-    format = (char *)evhttp_find_header(&args, "format");
-    
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
+    format = get_argument_format(&args);
     
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
     if (tcadbout(adb, key, strlen(key))) {
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         } else {
             evbuffer_add_printf(evb, "OK\n");
@@ -263,14 +249,14 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -280,10 +266,10 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char                *key, *value, *format;
+    char                *key, *value;
+    int format;
     struct evkeyvalq    args;
     struct json_object  *jsobj = NULL;
-    int txt_format = 0;
     int status_code = 200;
     char *status_txt = "OK";
     
@@ -291,7 +277,6 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     key = (char *)evhttp_find_header(&args, "key");
     value = (char *)evhttp_find_header(&args, "value");
-    format = (char *)evhttp_find_header(&args, "format");
     
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
@@ -305,17 +290,15 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
+    format = get_argument_format(&args);
     
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
     jsobj = json_object_new_object();
     if (tcadbput(adb, key, strlen(key), value, strlen(value))) {
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         } else {
             evbuffer_add_printf(evb, "OK\n");
@@ -323,14 +306,14 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -340,35 +323,30 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *key, *value, *format;
+    char *key, *value;
     struct evkeyvalq args;
     struct json_object *jsobj = NULL;
     int n;
-    int txt_format = 0;
+    int format;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
-    format = (char *)evhttp_find_header(&args, "format");
-    
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
+    format = get_argument_format(&args);
     
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
     if ((value = tcadbget(adb, key, strlen(key), &n))) {
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
             json_object_object_add(jsobj, "value", json_object_new_string(value));
         } else {
@@ -378,14 +356,14 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -395,36 +373,31 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *key, *format;
+    char *key;
     int *value;
+    int format;
     struct evkeyvalq args;
     struct json_object *jsobj = NULL;
     int n;
-    int txt_format = 0;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
-    format = (char *)evhttp_find_header(&args, "format");
-    
     if (key == NULL) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
         return;
     }
+    format = get_argument_format(&args);
     
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
     if ((value = (int *)tcadbget(adb, key, strlen(key), &n))) {
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
             json_object_object_add(jsobj, "value", json_object_new_int((int)*value));
         } else {
@@ -434,14 +407,14 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -451,25 +424,19 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *key, *value, *format;
+    char *key, *value;
     struct evkeyvalq args;
     struct evkeyval *pair;
     struct json_object *jsobj = NULL;
     int nkeys = 0;
     int n;
-    int txt_format = 0;
+    int format;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
-    
-    format = (char *)evhttp_find_header(&args, "format");
-    
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    format = get_argument_format(&args);
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
@@ -480,7 +447,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         value = tcadbget(adb, key, strlen(key), &n);
         if (value) {
-            if (!txt_format) {
+            if (format == json_format) {
                 json_object_object_add(jsobj, key, json_object_new_string(value));
             } else {
                 evbuffer_add_printf(evb, "%s,%s\n", key, value);
@@ -495,7 +462,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -505,26 +472,21 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *key, *format;
+    char *key;
     int *value;
     struct evkeyvalq args;
     struct evkeyval *pair;
     struct json_object *jsobj = NULL;
     int nkeys = 0;
     int n;
-    int txt_format = 0;
+    int format;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
+    format = get_argument_format(&args);
     
-    format = (char *)evhttp_find_header(&args, "format");
-    
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
@@ -535,7 +497,7 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         value = (int *)tcadbget(adb, key, strlen(key), &n);
         if (value) {
-            if (!txt_format) {
+            if (format == json_format) {
                 json_object_object_add(jsobj, key, json_object_new_int((int)*value));
             } else {
                 evbuffer_add_printf(evb, "%s,%d\n", key, (int)*value);
@@ -550,7 +512,7 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -560,39 +522,30 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *incr_value, *format;
+    int format;
     struct json_object *jsobj = NULL;
     struct evkeyvalq args;
     int v;
-    int value = 1;
+    int incr_value;
     struct evkeyval *arg;
     bool has_key_arg = false;
     bool error = false;
-    int txt_format = 0;
     int status_code = 200;
     char *status_txt = "OK";
     
     evhttp_parse_query(req->uri, &args);
     
-    incr_value = (char *)evhttp_find_header(&args, "value");
-    format = (char *)evhttp_find_header(&args, "format");
-    
-    if (incr_value != NULL) {
-        value = atoi(incr_value);
-    }
-    
-    if (format && !strncmp(format, "txt", 3)) {
-        txt_format = 1;
-    }
-    
-    if (!txt_format) {
+    format = get_argument_format(&args);
+    incr_value = get_int_argument(&args, "value", 1);
+
+    if (format == json_format) {
         jsobj = json_object_new_object();
     }
     
     TAILQ_FOREACH(arg, &args, next) {
         if (strcasecmp(arg->key, "key") == 0) {
             has_key_arg = true;
-            if ((v = tcadbaddint(adb, arg->value, strlen(arg->value), value)) == INT_MIN) {
+            if ((v = tcadbaddint(adb, arg->value, strlen(arg->value), incr_value)) == INT_MIN) {
                 error = true;
                 break;
             }
@@ -602,12 +555,14 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (!has_key_arg) {
         evhttp_send_error(req, 400, "INVALID_ARG_KEY");
         evhttp_clear_headers(&args);
-        json_object_put(jsobj);
+        if (format == json_format) {
+            json_object_put(jsobj);
+        }
         return;
     }
     
     if (!error) {
-        if (!txt_format) {
+        if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         } else {
             evbuffer_add_printf(evb, "OK\n");
@@ -615,14 +570,14 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         status_code = 500;
         status_txt = "INTERNAL_ERROR";
-        if (!txt_format) {
+        if (format == json_format) {
             db_error_to_json("INTERNAL_ERROR", jsobj);
         } else {
             evbuffer_add_printf(evb, "INTERNAL_ERROR\n");
         }
     }
     
-    if (!txt_format) {
+    if (format == json_format) {
         finalize_json(req, evb, &args, jsobj);
     }
     
@@ -652,7 +607,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     int i;
     struct evkeyvalq args;
-    const char *format;
+    int format;
     
     struct simplehttp_stats *st;
     
@@ -660,9 +615,9 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     simplehttp_stats_get(st);
     
     evhttp_parse_query(req->uri, &args);
-    format = (char *)evhttp_find_header(&args, "format");
+    format = get_argument_format(&args);
     
-    if ((format != NULL) && (strcmp(format, "json") == 0)) {
+    if (format == json_format) {
         evbuffer_add_printf(evb, "{");
         for (i = 0; i < st->callback_count; i++) {
             evbuffer_add_printf(evb, "\"%s_95\": %"PRIu64",", st->stats_labels[i], st->ninety_five_percents[i]);

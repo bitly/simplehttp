@@ -58,5 +58,10 @@ void free_async_callback_group(struct AsyncCallbackGroup *callback_group);
 void init_async_connection_pool(int enable_request_logging);
 void free_async_connection_pool();
 
+enum response_formats {json_format, txt_format};
+int get_argument_format(struct evkeyvalq *args);
+int get_int_argument(struct evkeyvalq *args, char *key, int default_value);
+double get_double_argument(struct evkeyvalq *args, char *key, double default_value);
+
 
 #endif

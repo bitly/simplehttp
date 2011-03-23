@@ -15,7 +15,6 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
                     struct evkeyvalq *args, struct json_object *jsobj);
 int open_db(char *addr, int port, TCRDB **rdb);
 void db_reconnect(int fd, short what, void *ctx);
-void argtoi(struct evkeyvalq *args, char *key, int *val, int def);
 void db_error_to_json(int code, struct json_object *jsobj);
 void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -87,17 +86,6 @@ void db_reconnect(int fd, short what, void *ctx)
     evtimer_add(&ev, &tv);
 }
 
-void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
-{
-    char *tmp;
-
-    *val = def;
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
-    if (tmp) {
-        *val = atoi(tmp);
-    }
-}
-
 void db_error_to_json(int code, struct json_object *jsobj)
 {
     fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
@@ -122,9 +110,9 @@ void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(req->uri, &args);
 
     key = (char *)evhttp_find_header(&args, "key");
-    argtoi(&args, "max", &max, 1000);
-    argtoi(&args, "length", &len, 10);
-    argtoi(&args, "offset", &off, 0);
+    max = get_int_argument(&args, "max", 1000);
+    len = get_int_argument(&args, "length", 10);
+    off = get_int_argument(&args, "offset", 0);
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
@@ -217,8 +205,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     jsonPtr = json_tokener_parse(kvs);
-    
-    if (jsonPtr == 0xfffffffffffffffc) {
+    if (!jsonPtr) {
         evhttp_send_error(req, 400, "kvs json is invalid");
         evhttp_clear_headers(&args);
         return;

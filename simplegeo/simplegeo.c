@@ -18,8 +18,6 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb, struct evke
 int open_db(char *addr, int port, TCRDB **rdb);
 void db_reconnect(int fd, short what, void *ctx);
 void db_error_to_json(int code, struct json_object *jsobj);
-void argtoi(struct evkeyvalq *args, char *key, int *val, int def);
-void argtof(struct evkeyvalq *args, char *key, double *val, double def);
 void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -141,28 +139,6 @@ void db_reconnect(int fd, short what, void *ctx)
     evtimer_add(&ev, &tv);
 }
 
-void argtoi(struct evkeyvalq *args, char *key, int *val, int def)
-{
-    char *tmp;
-
-    *val = def;
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
-    if (tmp) {
-        *val = atoi(tmp);
-    }
-}
-
-void argtof(struct evkeyvalq *args, char *key, double *val, double def)
-{
-    char *tmp;
-
-    *val = def;
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
-    if (tmp) {
-        *val = atof(tmp);
-    }
-}
-
 void db_error_to_json(int code, struct json_object *jsobj)
 {
     fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
@@ -181,9 +157,9 @@ void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     evhttp_parse_query(req->uri, &args);
     
-    argtof(&args, "lat", &lat, 0);
-    argtof(&args, "lng", &lng, 0);
-    argtof(&args, "miles", &miles, 0);
+    lat = get_double_argument(&args, "lat", 0);
+    lng = get_double_argument(&args, "lng", 0);
+    miles = get_double_argument(&args, "miles", 0);
 
     geo_box(lat, lng, miles, &ulat, &ulng, &llat, &llng);
     
@@ -205,10 +181,10 @@ void distance_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     evhttp_parse_query(req->uri, &args);
     
-    argtof(&args, "lat1", &lat1, 0);
-    argtof(&args, "lng1", &lng1, 0);
-    argtof(&args, "lat2", &lat2, 0);
-    argtof(&args, "lng2", &lng2, 0);
+    lat1 = get_double_argument(&args, "lat1", 0);
+    lat1 = get_double_argument(&args, "lng1", 0);
+    lat2 = get_double_argument(&args, "lat2", 0);
+    lat2 = get_double_argument(&args, "lng2", 0);
 
     jsobj = json_object_new_object();
     json_object_object_add(jsobj, "distance", json_object_new_double(geo_distance(lat1, lng1, lat2, lng2)));
@@ -320,8 +296,8 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     evhttp_parse_query(req->uri, &args);
 
-    argtof(&args, "lat", &lat, 0);
-    argtof(&args, "lng", &lng, 0);
+    lat = get_double_argument(&args, "lat", 0);
+    lng = get_double_argument(&args, "lng", 0);
     id = (char *)evhttp_find_header(&args, "id");
     data = (char *)evhttp_find_header(&args, "data");
     
@@ -385,10 +361,10 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
     evhttp_parse_query(req->uri, &args);
 
-    argtof(&args, "lat", &lat, 0);
-    argtof(&args, "lng", &lng, 0);
-    argtof(&args, "miles", &miles, 0);
-    argtoi(&args, "max", &max, 1);
+    lat = get_int_argument(&args, "lat", 0);
+    lng = get_int_argument(&args, "lng", 0);
+    miles = get_int_argument(&args, "miles", 0);
+    max = get_int_argument(&args, "max", 1);
     
     geo_box(lat, lng, miles, &minlat, &minlng, &maxlat, &maxlng);
     

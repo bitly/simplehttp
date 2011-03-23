@@ -24,17 +24,19 @@ API endpoints:
  * /del   
   parameter: key
  
- * /fwmatch   
+ * /fwmatch    
   parameter:key   
   parameter:max (optional)   
   parameter:length (optional)   
   parameter:offset (optional)   
+  parameter:format=json|txt [default json]   
 
   * /fwmatch_int (returns values added with /incr)   
-   parameter:key   
-   parameter:max (optional)   
-   parameter:length (optional)   
-   parameter:offset (optional)   
+  parameter:key   
+  parameter:max (optional)   
+  parameter:length (optional)   
+  parameter:offset (optional)   
+  parameter:format=json|txt [default json]   
 
  * /incr   
   parameter:key   
