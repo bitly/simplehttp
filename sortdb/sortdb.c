@@ -118,8 +118,9 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         }
 
         if (end != start) {
-            evbuffer_add_reference(evb, (const void *)start,
-                                   (size_t)(end - start), NULL, NULL);
+            // this is only supported by libevent2+
+            //evbuffer_add_reference(evb, (const void *)start, (size_t)(end - start), NULL, NULL);
+            evbuffer_add(evb, start, (size_t)(end - start));
         } else {
             evbuffer_add_printf(evb, "%s\n", line);
         }   
@@ -192,10 +193,9 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
             (char *)map_base+st.st_size, &seeks))) {
             newline = strchr(line, '\n');
             if (newline) {
-                //evbuffer_add(evb, line, (newline-line)+1);
-                evbuffer_add_reference(evb, (const void *)line,
-                                       (size_t)(newline - line)+1,
-                                       NULL, NULL);
+                // this is only supported by libevent2+
+                //evbuffer_add_reference(evb, (const void *)line, (size_t)(newline - line) + 1, NULL, NULL);
+                evbuffer_add(evb, line, (size_t)(newline-line)+1);
             } else {
                 evbuffer_add_printf(evb, "%s\n", line);
             }
