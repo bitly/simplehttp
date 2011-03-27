@@ -18,6 +18,10 @@ already-asleep
 a	first record
 c	d
 o	p
+/fwmatch?key=prefix.
+prefix.1	how
+prefix.2	are
+prefix.3	you
 db reloaded
 /get?key=a (should be a new key 'new db')
 new db

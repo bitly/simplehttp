@@ -24,6 +24,8 @@ run_vg (){
 }
 err=$?
 
+LIBEVENT=/bitly/local make > $testsubdir/make.out 2>&1
+
 ln -s -f test.tab test.db
 run_vg sortdb "-f test.db -a 127.0.0.1 -p 8080"
 sleep 1
@@ -33,6 +35,8 @@ for key in a b c m o zzzzzzzzzzzzzzzzzzzzzzzz zzzzzzzzzzzzzzzzzzzzzzzzz zzzzzzzz
 done
 echo "/mget?k=a&k=c&k=o" >> $testsubdir/test.out
 curl --silent "localhost:8080/mget?k=a&k=c&k=o" >> $testsubdir/test.out
+echo "/fwmatch?key=prefix." >> $testsubdir/test.out
+curl --silent "localhost:8080/fwmatch?key=prefix." >> $testsubdir/test.out
 
 # now swap the db and check keys again
 ln -s -f test2.tab test.db

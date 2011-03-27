@@ -13,7 +13,7 @@
 #include <simplehttp/simplehttp.h>
 
 #define NAME        "sortdb"
-#define VERSION     "1.4"
+#define VERSION     "1.4.1"
 #define DEBUG       1
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -34,6 +34,8 @@ static char *db_filename;
 static struct stat st;
 static char deliminator = '\t';
 static int fd = 0;
+
+enum prefix_options { disable_prefix, enable_prefix };
 
 static uint64_t get_hits = 0;
 static uint64_t get_misses = 0;
@@ -100,7 +102,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base+st.st_size, &seeks, 1))) {
+    } else if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base+st.st_size, &seeks, enable_prefix))) {
         /*
          * Walk backwards while key prefix matches.
          * There's probably a better way to do this, however
@@ -155,7 +157,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, 0))) {
+    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, disable_prefix))) {
         sprintf(buf, "%d", seeks);
         evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
         delim = strchr(line, deliminator);
@@ -194,7 +196,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         
         if(DEBUG) fprintf(stderr, "/mget %s\n", key);
         
-        if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, 0))) {
+        if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, disable_prefix))) {
             newline = strchr(line, '\n');
             if (newline) {
                 // this is only supported by libevent2+
