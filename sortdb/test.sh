@@ -24,8 +24,6 @@ run_vg (){
 }
 err=$?
 
-LIBEVENT=/bitly/local make > $testsubdir/make.out 2>&1
-
 ln -s -f test.tab test.db
 run_vg sortdb "-f test.db -a 127.0.0.1 -p 8080"
 sleep 1
