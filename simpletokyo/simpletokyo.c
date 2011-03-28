@@ -144,7 +144,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char                *key, *kbuf;
     int                 *value;
-    int                 i, max, off, len;
+    int                 i, max, off, len, list_count;
     int                 format;
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
@@ -171,13 +171,23 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     len = get_int_argument(&args, "length", 10);
     off = get_int_argument(&args, "offset", 0);
     
-    if (format == json_format){
+    if (format == json_format) {
         jsobj = json_object_new_object();
         jsarr = json_object_new_array();
     }
     
-    keylist = tcrdbfwmkeys2(rdb, key, max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++) {
+    keylist = tcrdbfwmkeys(rdb, key, strlen(key), max);
+    if (keylist == NULL) {
+        db_status = tcrdbecode(rdb);
+        if (format == txt_format) {
+            db_error_to_txt(db_status, evb);
+        } else {
+            db_error_to_json(db_status, jsobj);
+        }
+    }
+    
+    list_count = tclistnum(keylist);
+    for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
         kbuf = (char *)tclistval2(keylist, i);
         value = (int *)tcrdbget2(rdb, kbuf);
         if (value) {
@@ -191,23 +201,13 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             tcfree(value);
         }
     }
-    if(keylist) tcfree(keylist);
-    if (format == json_format){
+    tclistdel(keylist);
+    
+    if (format == json_format) {
         json_object_object_add(jsobj, "results", jsarr);
+        json_object_object_add(jsobj, "status", json_object_new_string(list_count ? "ok" : "no results"));
     }
     
-    if (keylist != NULL) {
-        if (format == json_format){
-            json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-        }
-    } else {
-        db_status = tcrdbecode(rdb);
-        if (format == txt_format) {
-            db_error_to_txt(db_status, evb);
-        } else {
-            db_error_to_json(db_status, jsobj);
-        }
-    }
     finalize_request(req, evb, &args, jsobj);
 }
 
@@ -227,7 +227,7 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
 {
     char                *key, *kbuf;
     int                 *value;
-    int                 i, max, off, len;
+    int                 i, max, off, len, list_count;
     int                 started_output = 0;
     int                 format;
     TCLIST              *keylist = NULL;
@@ -260,13 +260,23 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
     len = get_int_argument(&args, "length", 10);
     off = get_int_argument(&args, "offset", 0);
     
-    if (format == json_format){
+    if (format == json_format) {
         jsobj = json_object_new_object();
         jsarr = json_object_new_array();
     }
     
-    keylist = tcrdbfwmkeys2(rdb, key, max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++) {
+    keylist = tcrdbfwmkeys(rdb, key, strlen(key), max);
+    if (keylist == NULL) {
+        db_status = tcrdbecode(rdb);
+        if (format == txt_format) {
+            db_error_to_txt(db_status, evb);
+        } else {
+            db_error_to_json(db_status, jsobj);
+        }
+    }
+    
+    list_count = tclistnum(keylist);
+    for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
         kbuf = (char *)tclistval2(keylist, i);
         value = (int *)tcrdbget2(rdb, kbuf);
         if (value) {
@@ -291,37 +301,30 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
             tcfree(value);
         }
     }
-    if (format == txt_format){
+    tclistdel(keylist);
+    
+    if (format == txt_format) {
         evbuffer_add(evb, "\n", 1);
     }
-    if(keylist) tcfree(keylist);
+    
     if (format == json_format) {
         json_object_object_add(jsobj, "results", jsarr);
+        json_object_object_add(jsobj, "status", json_object_new_string(list_count ? "ok" : "no results"));
     }
     
-    if (keylist != NULL) {
-        if (format == json_format) {
-            json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-        }
-    } else {
-        db_status = tcrdbecode(rdb);
-        if (format == txt_format) {
-            db_error_to_txt(db_status, evb);
-        } else {
-            db_error_to_json(db_status, jsobj);
-        }
-    }
-
     finalize_request(req, evb, &args, jsobj);
 }
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char                *key, *kbuf, *value;
-    int                 i, max, off, len;
+    int                 i, max, off, len, list_count;
+    int                 format;
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
     struct json_object  *jsobj, *jsobj2, *jsarr;
+    jsobj = NULL;
+    jsarr = NULL;
     
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
@@ -331,39 +334,52 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
-    
-    max = get_int_argument(&args, "max", 1000);
-    len = get_int_argument(&args, "length", 10);
-    off = get_int_argument(&args, "offset", 0);
-    
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
         evhttp_clear_headers(&args);
         return;
     }
     
-    jsobj = json_object_new_object();
-    jsarr = json_object_new_array();
+    format = get_argument_format(&args);
+    max = get_int_argument(&args, "max", 1000);
+    len = get_int_argument(&args, "length", 10);
+    off = get_int_argument(&args, "offset", 0);
     
-    keylist = tcrdbfwmkeys2(rdb, key, max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
+    if (format == json_format) {
+        jsobj = json_object_new_object();
+        jsarr = json_object_new_array();
+    }
+    
+    keylist = tcrdbfwmkeys(rdb, key, strlen(key), max);
+    if (keylist == NULL) {
+        db_status = tcrdbecode(rdb);
+        if (format == txt_format) {
+            db_error_to_txt(db_status, evb);
+        } else {
+            db_error_to_json(db_status, jsobj);
+        }
+    }
+    
+    list_count = tclistnum(keylist);
+    for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
         kbuf = (char *)tclistval2(keylist, i);
         value = tcrdbget2(rdb, kbuf);
         if (value) {
-            jsobj2 = json_object_new_object();
-            json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
-            json_object_array_add(jsarr, jsobj2);
+            if (format == txt_format){
+                evbuffer_add_printf(evb, "%s,%s\n", kbuf, value);
+            } else {
+                jsobj2 = json_object_new_object();
+                json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
+                json_object_array_add(jsarr, jsobj2);
+            }
             tcfree(value);
         }
     }
-    if(keylist) tcfree(keylist);
-    json_object_object_add(jsobj, "results", jsarr);
+    tclistdel(keylist);
     
-    if (keylist != NULL) {
-        json_object_object_add(jsobj, "status", json_object_new_string("ok"));
-    } else {
-        db_status = tcrdbecode(rdb);
-        db_error_to_json(db_status, jsobj);
+    if (format == json_format) {
+        json_object_object_add(jsobj, "results", jsarr);
+        json_object_object_add(jsobj, "status", json_object_new_string(list_count ? "ok" : "no results"));
     }
     
     finalize_request(req, evb, &args, jsobj);
@@ -708,10 +724,11 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
-void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx) {
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
     close_db(&rdb);
     fprintf(stdout, "/exit request recieved\n");
-    exit(0);
+    event_loopbreak();
 }
 
 void info()

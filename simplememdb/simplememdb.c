@@ -77,7 +77,7 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char *key, *kbuf;
     int format;
     int *value;
-    int i, max, off, len, n;
+    int i, max, off, len, n, list_count;
     TCLIST *keylist = NULL;
     struct evkeyvalq args;
     struct json_object *jsobj = NULL, *jsobj2, *jsarr = NULL;
@@ -102,7 +102,8 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     keylist = tcadbfwmkeys(adb, key, strlen(key), max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
+    list_count = tclistnum(keylist);
+    for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++){
       kbuf = (char *)tclistval2(keylist, i);
       value = (int *)tcadbget(adb, kbuf, strlen(kbuf), &n);
       if (value) {
@@ -116,13 +117,13 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
           tcfree(value);
       }
     }
+    tclistdel(keylist);
     
     if (format == json_format) {
         json_object_object_add(jsobj, "results", jsarr);
     }
     
-    if (keylist != NULL) {
-        tcfree(keylist);
+    if (list_count) {
         if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         }
@@ -147,7 +148,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char *key, *kbuf, *value;
     int format;
-    int i, max, off, len, n;
+    int i, max, off, len, n, list_count;
     TCLIST *keylist = NULL;
     struct evkeyvalq args;
     struct json_object *jsobj = NULL, *jsobj2, *jsarr = NULL;
@@ -175,7 +176,8 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     keylist = tcadbfwmkeys(adb, key, strlen(key), max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++) {
+    list_count = tclistnum(keylist);
+    for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
         kbuf = (char *)tclistval2(keylist, i);
         value = tcadbget(adb, kbuf, strlen(kbuf), &n);
         if (value) {
@@ -189,13 +191,13 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             tcfree(value);
         }
     }
+    tclistdel(keylist);
     
     if (format == json_format) {
         json_object_object_add(jsobj, "results", jsarr);
     }
     
-    if (keylist != NULL) {
-        tcfree(keylist);
+    if (list_count) {
         if (format == json_format) {
             json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         }
