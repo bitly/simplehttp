@@ -24,6 +24,7 @@ run_vg (){
     eval valgrind --tool=memcheck \
         --trace-children=yes \
         --demangle=yes \
+        --track-origins=yes \
         --log-file="${testsubdir}/vg.out" \
         --leak-check=full \
         --show-reachable=yes \
@@ -37,7 +38,7 @@ OUT=$testsubdir/test.out
 ttserver -host 127.0.0.1 -port 8079 -thnum 1 /tmp/simpletokyo_test.tcb 2>/dev/null 1>/dev/null &
 run_vg simpletokyo "-A 127.0.0.1 -P 8079 -a 127.0.0.1 -p 8080"
 
-sleep 1;
+sleep 2;
 
 for k in a b c
 do
@@ -91,7 +92,12 @@ curl --silent "http://localhost:8080/vanish" >> ${OUT}
 echo "now no key" >> ${OUT}
 curl --silent "http://localhost:8080/get?key=vanishtest" >> ${OUT}
 
+
+kill %1 # ttserver
+curl --silent "http://localhost:8080/exit" >> ${OUT}
+
 err=0;
+vg=0
 if ! "$CMP" -s "test.expected" "${testsubdir}/test.out" ; then
     echo "ERROR: test failed:" 1>&2
     diff -U 3 "test.expected" "${testsubdir}/test.out" 1>&2
@@ -100,23 +106,22 @@ else
     echo "FUNCTIONAL TEST PASSED"
 fi
 
-kill %1 # ttserver
-curl --silent "http://localhost:8080/exit" >> ${OUT}
-
 if ! grep -q "ERROR SUMMARY: 0 errors" "${testsubdir}/vg.out" ; then
-    echo "ERROR: valgrind found errors during execution:" 1>&2
-    cat "${testsubdir}/vg.out"
-    err=1
+    echo "ERROR: valgrind found errors during execution" 1>&2
+    vg=1
 fi
 if ! grep -q "definitely lost: 0 bytes in 0 blocks" "${testsubdir}/vg.out" ; then
-    echo "ERROR: valgrind found leaks during execution:" 1>&2
-    cat "${testsubdir}/vg.out"
-    err=1
+    echo "ERROR: valgrind found leaks during execution" 1>&2
+    vg=1
 fi
 if ! grep -q "possibly lost: 0 bytes in 0 blocks" "${testsubdir}/vg.out" ; then
-    echo "ERROR: valgrind found leaks during execution:" 1>&2
-    cat "${testsubdir}/vg.out"
-    err=1
+    echo "ERROR: valgrind found leaks during execution" 1>&2
+    vg=1
+fi
+
+if [ $vg == "1" ]; then
+    echo "see ${testsubdir}/vg.out for more details"
+    err=1;
 fi
 
 exit $err;

@@ -16,6 +16,7 @@ run_vg (){
     eval valgrind --tool=memcheck \
         --trace-children=yes \
         --demangle=yes \
+        --track-origins=yes \
         --log-file="${testsubdir}/vg.out" \
         --leak-check=full \
         --show-reachable=yes \
@@ -45,31 +46,35 @@ curl --silent "localhost:8080/get/?key=a" >> $testsubdir/test.out
 echo "/get?key=b not found" >> $testsubdir/test.out
 curl --silent "localhost:8080/get/?key=b" >> $testsubdir/test.out
 
+curl --silent "localhost:8080/exit"
+sleep .25;
+
 err=0;
+vg=0
 if ! "$CMP" -s "test.expected" "${testsubdir}/test.out" ; then
     echo "ERROR: test failed:" 1>&2
-    diff "test.expected" "${testsubdir}/test.out" 1>&2
+    diff -U 3 "test.expected" "${testsubdir}/test.out" 1>&2
     err=1
 else
     echo "FUNCTIONAL TEST PASSED"
 fi
 
-curl --silent "localhost:8080/exit"
-sleep .5;
 if ! grep -q "ERROR SUMMARY: 0 errors" "${testsubdir}/vg.out" ; then
-    echo "ERROR: valgrind found errors during execution:" 1>&2
-    cat "${testsubdir}/vg.out"
-    err=1
+    echo "ERROR: valgrind found errors during execution" 1>&2
+    vg=1
 fi
 if ! grep -q "definitely lost: 0 bytes in 0 blocks" "${testsubdir}/vg.out" ; then
-    echo "ERROR: valgrind found leaks during execution:" 1>&2
-    cat "${testsubdir}/vg.out"
-    err=1
+    echo "ERROR: valgrind found leaks during execution" 1>&2
+    vg=1
 fi
 if ! grep -q "possibly lost: 0 bytes in 0 blocks" "${testsubdir}/vg.out" ; then
-    echo "ERROR: valgrind found leaks during execution:" 1>&2
-    cat "${testsubdir}/vg.out"
-    err=1
+    echo "ERROR: valgrind found leaks during execution" 1>&2
+    vg=1
+fi
+
+if [ $vg == "1" ]; then
+    echo "see ${testsubdir}/vg.out for more details"
+    err=1;
 fi
 
 exit $err;
