@@ -119,7 +119,10 @@ void db_reconnect(int fd, short what, void *ctx)
 
 void db_error_to_json(int code, struct json_object *jsobj)
 {
-    fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
+    // 7 is the error code for not found - we dont need to log this
+    if (code != 7) {
+        fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
+    }
     json_object_object_add(jsobj, "status", json_object_new_string("error"));
     json_object_object_add(jsobj, "code", json_object_new_int(code));
     json_object_object_add(jsobj, "message", json_object_new_string((char *)tcrdberrmsg(code)));
@@ -127,7 +130,10 @@ void db_error_to_json(int code, struct json_object *jsobj)
 
 void db_error_to_txt(int code, struct evbuffer *evb)
 {
-    fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
+    // 7 is the error code for not found - we dont need to log this
+    if (code != 7) {
+        fprintf(stderr, "error(%d): %s\n", code, tcrdberrmsg(code));
+    }
     if (EVBUFFER_LENGTH(evb)){
         fprintf(stderr, "draining existing response\n");
         evbuffer_drain(evb, EVBUFFER_LENGTH(evb));
