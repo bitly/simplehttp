@@ -92,54 +92,56 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     struct evkeyvalq args;
     char *key, *line, *prev, *start, *end, *newline, buf[32];
     int keylen, seeks = 0;
-       
+    
     evhttp_parse_query(req->uri, &args);
     key = (char *)evhttp_find_header(&args, "key");
     keylen = key ? strlen(key) : 0;
-       
+    
     if(DEBUG) fprintf(stderr, "/fwmatch %s\n", key);
-       
-    if (!key) {
-        evbuffer_add_printf(evb, "missing argument: key\n");
-        evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base+st.st_size, &seeks, enable_prefix))) {
-        /*
-         * Walk backwards while key prefix matches.
-         * There's probably a better way to do this, however
-         * this is easy and faults page in 4k chunks anyway.
-         */
-        while (line != (char *)map_base && (prev = prev_line(line-1)) != line) {
-            if (strncmp(key, prev, keylen) != 0) break;
-            line = prev;
-        }
-
-        /*
-         * Walk forwards while key prefix matches to find all
-         * records.
-         */
-        start = end = line;
-        while ((newline = strchr(line, '\n')) != NULL
-               && newline != (char *)map_base+st.st_size) {
-            line = end = newline+1;
-            if (strncmp(key, line, keylen) != 0) break;
-        }
-
-        if (end != start) {
-            // this is only supported by libevent2+
-            //evbuffer_add_reference(evb, (const void *)start, (size_t)(end - start), NULL, NULL);
-            evbuffer_add(evb, start, (size_t)(end - start));
+    
+    if (key) {
+        if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base+st.st_size, &seeks, enable_prefix))) {
+            /*
+             * Walk backwards while key prefix matches.
+             * There's probably a better way to do this, however
+             * this is easy and faults page in 4k chunks anyway.
+             */
+            while (line != (char *)map_base && (prev = prev_line(line-1)) != line) {
+                if (strncmp(key, prev, keylen) != 0) break;
+                line = prev;
+            }
+            
+            /*
+             * Walk forwards while key prefix matches to find all
+             * records.
+             */
+            start = end = line;
+            while ((newline = strchr(line, '\n')) != NULL
+                   && newline != (char *)map_base+st.st_size) {
+                line = end = newline+1;
+                if (strncmp(key, line, keylen) != 0) break;
+            }
+            
+            if (end != start) {
+                // this is only supported by libevent2+
+                //evbuffer_add_reference(evb, (const void *)start, (size_t)(end - start), NULL, NULL);
+                evbuffer_add(evb, start, (size_t)(end - start));
+            } else {
+                evbuffer_add_printf(evb, "%s\n", line);
+            }   
+            fwmatch_hits++;
+            sprintf(buf, "%d", seeks);
+            evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
         } else {
-            evbuffer_add_printf(evb, "%s\n", line);
-        }   
-        fwmatch_hits++;
-        sprintf(buf, "%d", seeks);
-        evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
+            fwmatch_misses++;
+        }
+        
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
     } else {
-        fwmatch_misses++;
-        evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
-    }   
-       
+        evbuffer_add_printf(evb, "missing argument: key\n");
+        evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
+    }
+    
     evhttp_clear_headers(&args);
 }
 
@@ -185,12 +187,14 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     struct evkeyvalq args;
     struct evkeyval *pair;
     char *key, *line, *newline, buf[32];
-    int seeks = 0, nkeys = 0, nfound = 1;
+    int seeks = 0, nkeys = 0;
     
     evhttp_parse_query(req->uri, &args);
     
     TAILQ_FOREACH(pair, &args, next) {
-        if (pair->key[0] != 'k') continue;
+        if (pair->key[0] != 'k') {
+            continue;
+        }
         key = (char *)pair->value;
         nkeys++;
         
@@ -205,22 +209,19 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
             } else {
                 evbuffer_add_printf(evb, "%s\n", line);
             }
-            nfound=0;
             get_hits++;
         } else {
             get_misses++;
         }
     }
     
-    sprintf(buf, "%d", seeks);
-    evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
-    if (!nkeys) {
+    if (nkeys) {
+        sprintf(buf, "%d", seeks);
+        evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
+        evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    } else {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if (nfound) {
-        evhttp_send_reply(req, HTTP_NOTFOUND, "OK", evb);
-    } else {
-        evhttp_send_reply(req, HTTP_OK, "OK", evb);
     }
     
     evhttp_clear_headers(&args);
