@@ -194,7 +194,7 @@ int parse_fields(char *str, char **field_array)
 /* md5 encrypt a string */
 char *
 md5_hash(const char *string){
-    char *output = calloc(32, sizeof(char));
+    char *output = calloc(33, sizeof(char));
     struct cvs_MD5Context context;
     unsigned char checksum[16];
     int i;
@@ -206,7 +206,7 @@ md5_hash(const char *string){
     {
         sprintf(&output[i*2], "%02x", (unsigned int) checksum[i]);
     }
-    output[31] = '\0';
+    output[32] = '\0';
     return output;
 }
 
