@@ -11,7 +11,7 @@
 #include <json/json.h>
 
 #define NAME                    "simpletokyo"
-#define VERSION                 "1.7"
+#define VERSION                 "1.8"
 #define RECONNECT               5
 
 void finalize_request(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
@@ -536,9 +536,10 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char                *key, *value;
+    int                 format;
     struct evkeyvalq    args;
-    struct evkeyval *pair;
-    struct json_object  *jsobj, *jserr;
+    struct evkeyval     *pair;
+    struct json_object  *jsobj = NULL;
     int nkeys = 0;
     
     if (rdb == NULL) {
@@ -547,8 +548,11 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     evhttp_parse_query(req->uri, &args);
+    format = get_argument_format(&args);
     
-    jsobj = json_object_new_object();
+    if (format == json_format) {
+        jsobj = json_object_new_object();
+    }
     
     TAILQ_FOREACH(pair, &args, next) {
         if (pair->key[0] != 'k') continue;
@@ -557,13 +561,22 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         value = tcrdbget2(rdb, key);
         if (value) {
-            json_object_object_add(jsobj, key, json_object_new_string(value));
+            if (format == json_format) {
+                json_object_object_add(jsobj, key, json_object_new_string(value));
+            } else {
+                evbuffer_add_printf(evb, "%s,%s\n", key, value);
+            }
             free(value);
         } else {
             db_status = tcrdbecode(rdb);
-            jserr = json_object_new_object();
-            db_error_to_json(db_status, jserr);
-            json_object_object_add(jsobj, key, jserr);
+            if (format == txt_format) {
+                if (db_status != 7) {
+                    // skip 404 errors on txt format; they just get no key,value line
+                    db_error_to_txt(db_status, evb);
+                }
+            } else {
+                db_error_to_json(db_status, jsobj);
+            }
         }
     }
     

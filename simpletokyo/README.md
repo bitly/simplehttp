@@ -31,7 +31,7 @@ API endpoints:
   parameter:offset (optional)   
   parameter:format=json|txt [default json]   
 
-  * /fwmatch_int (returns values added with /incr)   
+ * /fwmatch_int (returns values added with /incr)   
   parameter:key   
   parameter:max (optional)   
   parameter:length (optional)   
@@ -44,7 +44,14 @@ API endpoints:
 
  * /get_int (to return values added with /incr)   
   parameter:key (accepts multiple &key= parameters)
- 
+
+ * /mget_int (to return values added with /incr)   
+  parameter:key (accepts multiple &key= parameters)
+
+ * /mget
+  parameter:key (accepts multiple &key= parameters)
+  parameter:format=json|txt
+
  * /vanish (empty the database)
 
  * /stats (example output)   

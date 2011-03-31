@@ -9,6 +9,20 @@ set of odd data
 should == '<>&this=that{} +*'
 { "status": "ok", "value": "<>&this=that{} +*" }
 { "status": "ok" }
+test mget
+{ "status": "ok", "value": "mget_value_A" }
+{ "status": "ok", "value": "mget_value_B" }
+test mget format=json
+{ "mget_key_A": "mget_value_A" }
+test mget format=txt
+mget_key_A,mget_value_A
+
+test mget two keys
+mget_key_A,mget_value_A
+mget_key_B,mget_value_B
+test mget two keys (one does not exist)
+mget_key_A,mget_value_A
+
 should == '     ' not '+++++'
 { "status": "ok", "value": "      " }
 { "status": "ok", "value": "      " }

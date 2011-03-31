@@ -1,8 +1,7 @@
 #!/bin/sh
 
-if [ ! -f simpletokyo ]; then
-    make
-fi
+make clean
+make
 
 if [ -f /tmp/simpletokyo_test.tcb ]; then
     rm -rf /tmp/simpletokyo_test.tcb ;
@@ -19,7 +18,7 @@ CMP="${CMP-cmp}"
 run_vg (){
     TEST_COMMAND="$1"
     TEST_OPTIONS="$2"
-    REDIR_OUTPUT="2>/dev/null 1>/dev/null"
+    REDIR_OUTPUT="2>/dev/null 1>${testsubdir}/run.out"
     # REDIR_OUTPUT=""
     eval valgrind --tool=memcheck \
         --trace-children=yes \
@@ -36,7 +35,7 @@ run_vg (){
 OUT=$testsubdir/test.out
 
 ttserver -host 127.0.0.1 -port 8079 -thnum 1 /tmp/simpletokyo_test.tcb 2>/dev/null 1>/dev/null &
-run_vg simpletokyo "-A 127.0.0.1 -P 8079 -a 127.0.0.1 -p 8080"
+run_vg simpletokyo "-A 127.0.0.1 -P 8079 -a 127.0.0.1 -p 8080 -V"
 
 sleep 2;
 
@@ -68,6 +67,20 @@ echo "should == '<>&this=that{} +*'"  >> ${OUT}
 curl --silent "http://localhost:8080/get?key=odd"  >> ${OUT}
 curl --silent "http://localhost:8080/del?key=odd"  >> ${OUT}
 
+echo "test mget" >> ${OUT}
+curl --silent "http://localhost:8080/put?key=mget_key_A&value=mget_value_A" >> ${OUT}
+curl --silent "http://localhost:8080/put?key=mget_key_B&value=mget_value_B" >> ${OUT}
+echo "test mget format=json" >> ${OUT}
+curl --silent "http://localhost:8080/mget?key=mget_key_A"  >> ${OUT}
+echo "test mget format=txt" >> ${OUT}
+curl --silent "http://localhost:8080/mget?key=mget_key_A&format=txt"  >> ${OUT}
+echo "" >> ${OUT}
+echo "test mget two keys" >> ${OUT}
+curl --silent "http://localhost:8080/mget?key=mget_key_A&key=mget_key_B&format=txt"  >> ${OUT}
+echo "test mget two keys (one does not exist)" >> ${OUT}
+curl --silent "http://localhost:8080/mget?key=mget_key_A&key=mget_key_C&format=txt"  >> ${OUT}
+
+echo "" >> ${OUT}
 echo "should == '     ' not '+++++'" >> ${OUT}
 curl --silent "http://localhost:8080/put?key=plus&value=++++++" >> ${OUT}
 curl --silent "http://localhost:8080/get?key=plus" >> ${OUT}
