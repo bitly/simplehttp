@@ -713,9 +713,10 @@ void do_dump(int fd, short what, void *ctx)
                 }
                 free(value);
             }
-            free(key);
             send_reply = 1;
         }
+        
+        free(key);
         
         c++;
         if (c == limit) {
