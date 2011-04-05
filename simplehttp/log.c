@@ -33,23 +33,39 @@ void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_t
     time_t now;
     struct tm *tm_now;
     char datetime_buf[64];
-    char type;
+    char code;
+    const char *method;
+    char *uri;
+    int response_code;
+    int type;
     
     time(&now);
     tm_now = localtime(&now);
     strftime(datetime_buf, 64, "%y%m%d %H:%M:%S", tm_now);
     
-    if (req->response_code >= 500 && req->response_code < 600) {
-        type = 'E';
-    } else if (req->response_code >= 400 && req->response_code < 500) {
-        type = 'W';
+    if (req) {
+        if (req->response_code >= 500 && req->response_code < 600) {
+            code = 'E';
+        } else if (req->response_code >= 400 && req->response_code < 500) {
+            code = 'W';
+        } else {
+            code = 'I';
+        }
+        response_code = req->response_code;
+        method = simplehttp_method(req);
+        uri = req->uri;
+        type = req->type;
     } else {
-        type = 'I';
+        code = 'E';
+        response_code = 0;
+        method = "NA";
+        uri = "";
+        type = -1;
     }
     
-    fprintf(stdout, "[%c %s %s] %d %s %s%s", type, datetime_buf, id, req->response_code, simplehttp_method(req), host, req->uri);
+    fprintf(stdout, "[%c %s %s] %d %s %s%s", code, datetime_buf, id, response_code, method, host, uri);
     
-    if (req->type == EVHTTP_REQ_POST) {
+    if (type == EVHTTP_REQ_POST) {
         fprintf(stdout, "?");
         fwrite(EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer), 1, stdout);
     }

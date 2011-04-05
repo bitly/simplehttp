@@ -160,15 +160,19 @@ void finish_async_request(struct evhttp_request *req, void *cb_arg)
     struct AsyncCallback *callback = (struct AsyncCallback *)cb_arg;
     struct AsyncCallbackGroup *callback_group = callback->callback_group;
     
+    // NOTE: there's an edge case where req is NULL when libevent receives an invalid response
+    // async_simplehttp_log handles this for us
     async_simplehttp_log(req, callback);
     
 #ifdef ASYNC_DEBUG
-    char *temp_body = malloc(EVBUFFER_LENGTH(req->input_buffer)+1);
-    memcpy(temp_body, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
-    temp_body[EVBUFFER_LENGTH(req->input_buffer)] = '\0';
-    AS_DEBUG("HTTP %d %s\n", req->response_code, req->uri);
-    AS_DEBUG("RESPONSE BODY %s\n", temp_body);
-    free(temp_body);
+    if (req) {
+        char *temp_body = malloc(EVBUFFER_LENGTH(req->input_buffer)+1);
+        memcpy(temp_body, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
+        temp_body[EVBUFFER_LENGTH(req->input_buffer)] = '\0';
+        AS_DEBUG("HTTP %d %s\n", req->response_code, req->uri);
+        AS_DEBUG("RESPONSE BODY %s\n", temp_body);
+        free(temp_body);
+    }
 #endif
     
     // run this callback
