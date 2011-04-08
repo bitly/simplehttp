@@ -5,6 +5,7 @@
 #include <time.h>
 #include "async_simplehttp.h"
 
+// this is set as a parameter to init_async_connection_pool()
 static int request_logging = 0;
 
 TAILQ_HEAD(, Connection) connection_pool;
@@ -27,6 +28,24 @@ void free_async_connection_pool()
         }
         free(conn->address);
         free(conn);
+    }
+}
+
+static void async_simplehttp_log(struct evhttp_request *req, struct AsyncCallback *callback)
+{
+    struct AsyncCallbackGroup *callback_group = callback->callback_group;
+    simplehttp_ts end_ts;
+    uint64_t req_time;
+    char host_buf[256];
+    char id_buf[256];
+    
+    simplehttp_ts_get(&end_ts);
+    req_time = simplehttp_ts_diff(callback->start_ts, end_ts);
+    
+    if (request_logging) {
+        sprintf(host_buf, "%s:%d", callback->conn->address, callback->conn->port);
+        sprintf(id_buf, "%"PRIu64":%"PRIu64, callback_group->id, callback->id);
+        simplehttp_log(host_buf, req, req_time, id_buf);
     }
 }
 
@@ -83,7 +102,7 @@ void free_async_callback_group(struct AsyncCallbackGroup *callback_group)
     }
 }
 
-void new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, 
+int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, 
                                 void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
     /* create new connection to endpoint */
@@ -99,56 +118,49 @@ void new_async_callback(struct AsyncCallbackGroup *callback_group, char *address
     callback->cb = cb;
     callback->cb_arg = cb_arg;
     
-    AS_DEBUG("getting connection to %s:%d\n", address, port);
+    AS_DEBUG("new_async_callback to %s:%d (%p)\n", address, port, callback);
     
     callback->evcon = get_connection(address, port, &callback->conn);
     
     callback->request = evhttp_request_new(finish_async_request, callback);
     evhttp_add_header(callback->request->output_headers, "Host", address);
     
-    AS_DEBUG("calling evhttp_make_request to %s\n", path);
+    AS_DEBUG("calling evhttp_make_request to %s (%p)\n", path, callback->request);
     
     if (evhttp_make_request(callback->evcon, callback->request, EVHTTP_REQ_GET, path) == -1) {
-        AS_DEBUG("REQUEST FAILED for source %s:%d%s\n", address, port, path);
+        AS_DEBUG("*** request failed for source %s:%d%s ***\n", address, port, path);
         
-        if (request_logging) {
-            char host_buf[256];
-            char id_buf[256];
-            sprintf(host_buf, "%s:%d", address, port);
-            sprintf(id_buf, "%"PRIu64":%"PRIu64, callback_group->id, callback->id);
-            simplehttp_log(host_buf, callback->request, 0, id_buf);
-        }
+        async_simplehttp_log(callback->request, callback);
         
         // run this callback
         if (callback->cb) {
-            // TODO: SHOULD THIS BE PASSED NULL since this didn't actually execute?
+            // TODO: should this be passed NULL since this didn't actually execute?
             callback->cb(callback->request, callback->cb_arg);
         }
         
-        // dealloc the callback?
-        free(callback);
+        // free the callback object
+        free_async_callback(callback);
+        
+        return 0;
     } else {
         TAILQ_INSERT_TAIL(&callback_group->callback_list, callback, entries);
+        
+        return 1;
     }
+}
+
+void free_async_callback(struct AsyncCallback *callback)
+{
+    AS_DEBUG("free_async_callback (%p)\n", callback);
+    free(callback);
 }
 
 void finish_async_request(struct evhttp_request *req, void *cb_arg)
 {
     struct AsyncCallback *callback = (struct AsyncCallback *)cb_arg;
     struct AsyncCallbackGroup *callback_group = callback->callback_group;
-    simplehttp_ts end_ts;
-    uint64_t req_time;
     
-    simplehttp_ts_get(&end_ts);
-    req_time = simplehttp_ts_diff(callback->start_ts, end_ts);
-    
-    if (request_logging) {
-        char host_buf[256];
-        char id_buf[256];
-        sprintf(host_buf, "%s:%d", callback->conn->address, callback->conn->port);
-        sprintf(id_buf, "%"PRIu64":%"PRIu64, callback_group->id, callback->id);
-        simplehttp_log(host_buf, req, req_time, id_buf);
-    }
+    async_simplehttp_log(req, callback);
     
 #ifdef ASYNC_DEBUG
     char *temp_body = malloc(EVBUFFER_LENGTH(req->input_buffer)+1);
@@ -167,7 +179,7 @@ void finish_async_request(struct evhttp_request *req, void *cb_arg)
     // remove from the list of callbacks
     TAILQ_REMOVE(&callback_group->callback_list, callback, entries);
     // free this object
-    free(callback);
+    free_async_callback(callback);
     
     // re-check if this callback_group needs to be freed
     free_async_callback_group(callback_group);

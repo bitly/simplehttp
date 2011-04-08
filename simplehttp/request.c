@@ -4,6 +4,7 @@
 #include <string.h>
 #include "queue.h"
 #include "simplehttp.h"
+#include "async_simplehttp.h"
 #include "request.h"
 #include "stat.h"
 
@@ -22,6 +23,8 @@ struct simplehttp_request *simplehttp_request_new(struct evhttp_request *req, ui
     s_req->async = 0;
     s_req->index = -1;
     TAILQ_INSERT_TAIL(&simplehttp_reqs, s_req, entries);
+    
+    AS_DEBUG("simplehttp_request_new (%p)\n", s_req);
     
     return s_req;
 }
@@ -65,6 +68,7 @@ void simplehttp_async_enable(struct evhttp_request *req)
     struct simplehttp_request *entry;
     
     if ((entry = simplehttp_request_get(req)) != NULL) {
+        AS_DEBUG("simplehttp_async_enable (%p)\n", req);
         entry->async = 1;
     }
 }
@@ -74,6 +78,8 @@ void simplehttp_request_finish(struct evhttp_request *req, struct simplehttp_req
     simplehttp_ts end_ts;
     uint64_t req_time;
     char id_buf[64];
+    
+    AS_DEBUG("simplehttp_request_finish (%p, %p)\n", req, s_req);
     
     simplehttp_ts_get(&end_ts);
     req_time = simplehttp_ts_diff(s_req->start_ts, end_ts);
@@ -87,6 +93,8 @@ void simplehttp_request_finish(struct evhttp_request *req, struct simplehttp_req
         simplehttp_log("", req, req_time, id_buf);
     }
     
+    AS_DEBUG("\n");
+    
     TAILQ_REMOVE(&simplehttp_reqs, s_req, entries);
     free(s_req);
 }
@@ -95,7 +103,9 @@ void simplehttp_async_finish(struct evhttp_request *req)
 {
     struct simplehttp_request *entry;
     
+    AS_DEBUG("simplehttp_async_finish (%p)\n", req);
     if ((entry = simplehttp_async_check(req))) {
+        AS_DEBUG("simplehttp_async_check found (%p)\n", entry);
         simplehttp_request_finish(req, entry);
     }
 }

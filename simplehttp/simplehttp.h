@@ -53,7 +53,7 @@ struct AsyncCallbackGroup;
 struct AsyncCallbackGroup *new_async_callback_group(struct evhttp_request *req, void (*finished_cb)(struct evhttp_request *, void *), void *finished_cb_arg);
 /* create a new AsyncCallback. delegation of memory for this callback 
     will be passed to callback_group */
-void new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg);
+int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg);
 void free_async_callback_group(struct AsyncCallbackGroup *callback_group);
 void init_async_connection_pool(int enable_request_logging);
 void free_async_connection_pool();
