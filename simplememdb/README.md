@@ -21,7 +21,7 @@ API endpoints:
  * /del   
   parameter: key
 
- * /dump   
+ * /dump (non-blocking asynchronous dump of key,value pairs)
   parameter:regex (optional regex to dump specific keys)
 
  * /fwmatch   
@@ -30,11 +30,18 @@ API endpoints:
   parameter:length (optional)   
   parameter:offset (optional)   
 
-  * /fwmatch_int (returns values added with /incr)   
-   parameter:key   
-   parameter:max (optional)   
-   parameter:length (optional)   
-   parameter:offset (optional)   
+ * /fwmatch_int (returns values added with /incr)   
+  parameter:key   
+  parameter:max (optional)   
+  parameter:length (optional)   
+  parameter:offset (optional)   
+
+ * /fwmatch_int_merged (returns values added with /incr via prefix merge to single lines)
+  parameter:key
+  parameter:max (optional)
+  parameter:length (optional)   
+  parameter:offset (optional)   
+  parameter:format=json|txt [default json]  
 
  * /incr   
   parameter:key   
