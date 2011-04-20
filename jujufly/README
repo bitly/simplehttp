@@ -1,0 +1,30 @@
+Jujufly is a searchable moving window for streams
+oriented data.
+
+api
+---
+
+Search requires at least one "equals" against an indexed
+field.
+
+/search?<field name>=<comparator><value>
+
+supported comparators are:
+  equal: '', this is default
+  not equal: '!', this is default
+  less than: '<', url encoded
+  less than or equal: ','
+  great than: '>', url encoded
+  greater than or equal: '.'
+
+
+Printindex prints the values for a given field name and
+their counts.
+
+/printindex?field=<field name>
+
+
+Dbstats prints size and record statistics for each
+db file.
+
+/dbstats

@@ -1,0 +1,765 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <unistd.h>
+#include <glob.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <time.h>
+#include <Judy.h>
+#include "simplehttp/queue.h"
+#include "simplehttp/simplehttp.h"
+#include "j_arg_d.h"
+
+#define NAME "jujufly"
+#define VERSION "0.1"
+
+#define MAXVAL 1024*16
+#define DB_SIZE 1024*1024*100
+#define WRITEHEAD(x) (x->data+x->header->end)
+#define WRITE(j,d,l) { memcpy(WRITEHEAD(j), d, l); \
+                       j->header->end += l; }
+
+#if defined __APPLE__ && defined __MACH__
+#define GLOBC(g) g.gl_matchc
+#else
+#define GLOBC(g) g.gl_pathc
+#endif
+
+enum comparator {
+    EQ = 0,
+    NEQ,
+    LT,
+    GT,
+    LTEQ,
+    GTEQ
+};
+
+typedef struct predicate {
+    char *field;
+    char *value;
+    enum comparator comp;
+    Word_t count;
+} predicate;
+
+typedef struct juju_record {
+    uint32_t len;
+    uint32_t when;
+    char data[1];
+} juju_record;
+
+typedef struct juju_header {
+    uint64_t nrecords;
+    time_t youngest;
+    time_t oldest;
+    off_t end;            /* offset of next free block */
+} juju_header;
+
+typedef struct juju_db {
+    int fd;
+    char *filename;
+    char *data;
+    void *map_base;
+    size_t map_size;
+    size_t remaining_space;
+    size_t index_size;
+    Pvoid_t indices;
+    juju_header *header;
+    TAILQ_ENTRY(juju_db) entries;
+} juju_db;
+
+static size_t db_size = DB_SIZE;
+static char *db_name = "db";
+static int ndatabases = 100;
+
+static int fieldc;
+static char **fieldv;
+static int *field_indexed;
+Pvoid_t field_array = (PWord_t)NULL;
+
+TAILQ_HEAD(db_list, juju_db) dbs;
+
+/*
+ * utils
+ */
+
+char **split_keys(char *keys, int *nkeys, int sep)
+{
+    char *c, **elems;
+    int n, i = 0; 
+    
+    *nkeys = 0; 
+    if (keys == NULL) return NULL;
+    for (n=1, c = keys; *c != '\0'; c++) {
+        if (*c == sep) n++; 
+    }    
+    elems = malloc(sizeof(char *)*n+1 + strlen(keys)+1);
+    c = (char *) elems + sizeof(char *)*n+1;
+    strcpy(c, keys);
+    elems[i++] = c; 
+    while (*c != '\0') {
+        if (*c == sep) {
+            *c = '\0';
+            elems[i++] = c+1; 
+        }    
+        c++; 
+    }    
+    *nkeys = n; 
+    return elems;
+}
+
+void rec_to_argv(juju_record *rec, j_arg_d *jargv)
+{
+    char *field;
+
+    field = rec->data;
+    while (field - (char *)rec < rec->len) {
+        j_arg_d_append(jargv, field);
+        field += strlen(field)+1;
+    }
+}
+
+Pvoid_t get_pjlarray(juju_db *jjdb, char *field, char *value)
+{
+    Word_t *arr;
+
+    JSLG(arr, jjdb->indices, (unsigned char *)field);
+    if (!arr) return NULL;
+    JSLG(arr, *(PPvoid_t)arr, (unsigned char *)value);
+    if (!arr) return NULL;
+    return arr;
+}
+
+void add_to_index(juju_db *jjdb, char *index, char *key, off_t pos, time_t when)
+{
+    Word_t *idx, *arr, *val;
+
+    JSLI(idx, jjdb->indices, (unsigned char *)index);
+    JSLI(arr, *(PPvoid_t)idx, (unsigned char *)key);
+    if (!arr) {
+        // new key
+        jjdb->index_size += strlen(key);
+    }
+    JLI(val, *(PPvoid_t)arr, (Word_t)pos);
+    jjdb->index_size += sizeof(Word_t)*2;
+    *val = when;
+}
+
+bool append_record(juju_db *jjdb, char *line)
+{
+    char *field, *p;
+    off_t *where;
+    uint32_t len, recsz, when, fieldnum = 0;
+
+    if (!jjdb) return false;
+    when = atoi(line);  // first field in a record is time_t
+    len = strlen(line);
+    recsz = sizeof(uint32_t)*2+len+1;
+
+    if (recsz > jjdb->remaining_space) {
+        return false;
+    }
+    jjdb->remaining_space -= recsz;
+    
+    for (p = line; *p != '\0'; p++) {
+        if (*p == '\t') *p = '\0';
+    }
+
+    fprintf(stderr, "append_record #%llu btyes %d remaining %lu\n",
+            jjdb->header->nrecords, len, jjdb->remaining_space);
+    where = (off_t *)jjdb->header->end;
+    WRITE(jjdb, &recsz, sizeof(uint32_t));
+    WRITE(jjdb, &when, sizeof(uint32_t));
+    WRITE(jjdb, line, len+1);
+    jjdb->header->nrecords += 1;
+
+    if (!jjdb->header->youngest || when < jjdb->header->youngest) {
+        jjdb->header->youngest = when;
+    }
+    if (!jjdb->header->oldest || when > jjdb->header->oldest) {
+        jjdb->header->oldest = when;
+    }
+
+    field = line;
+    while (field - line < len) {
+        if (fieldnum < fieldc && field_indexed[fieldnum]) {
+            //fprintf(stderr, "add to index: %d\n", fieldnum);
+            add_to_index(jjdb, fieldv[fieldnum], field, (off_t)where, when);
+        }
+        field += strlen(field)+1;
+        fieldnum++;
+    }
+    return true;
+}
+
+void print_indices(juju_db *jjdb)
+{
+    Word_t *val;
+    uint8_t Index[1024];
+
+    Index[0] = '\0';
+    JSLF(val, jjdb->indices, Index);
+    while (val)  {
+        fprintf(stderr, "index %s\n", (char *)Index);
+        JSLN(val, jjdb->indices, Index);
+    }
+}
+
+void open_db(juju_db *jjdb)
+{
+    struct stat st;
+    juju_record *rec;
+    j_arg_d jargv;
+    juju_header hdr;
+    int i, j, processed=0;
+
+    jjdb->fd = open(jjdb->filename, O_RDWR|O_CREAT, 0655);
+    if (jjdb->fd < 0) {
+        fprintf(stderr, "open(%s) failed: %s\n", jjdb->filename,
+                strerror(errno));
+        exit(1);
+    }
+    fstat(jjdb->fd, &st);
+    if (st.st_size < sizeof(juju_header)) {
+        memset(&hdr, 0, sizeof(juju_header));
+        lseek(jjdb->fd, (off_t)0, SEEK_SET);
+        write(jjdb->fd, &hdr, sizeof(hdr));
+        lseek(jjdb->fd, (off_t)db_size, SEEK_SET);
+        write(jjdb->fd, "", 1);
+        fstat(jjdb->fd, &st);
+    }
+    jjdb->map_size = st.st_size;
+    jjdb->map_base = mmap(NULL, (off_t)st.st_size, PROT_READ|PROT_WRITE,
+                          MAP_SHARED, jjdb->fd, 0); 
+    jjdb->header = (juju_header *)jjdb->map_base;
+    jjdb->data = (char *)jjdb->map_base + sizeof(juju_header);
+    jjdb->remaining_space = jjdb->map_size - sizeof(juju_header) - 
+                            jjdb->header->end;
+    if (jjdb->map_base == MAP_FAILED) {
+        fprintf(stderr, "mmap() failed: %s\n", strerror(errno));
+        exit(1);
+    }   
+    fprintf(stderr, "***********\n");
+    fprintf(stderr, "%s\n\tnrecords: %llu\n\tdata size: %llu\n\t",
+            jjdb->filename,
+            jjdb->header->nrecords,
+            jjdb->header->end);
+    fprintf(stderr, "avg record: %G\n\tyoungest: %lu\n\toldest: %lu\n",
+            (jjdb->header->end * 1.0 / jjdb->header->nrecords),
+            jjdb->header->youngest,
+            jjdb->header->oldest);
+
+    j_arg_d_init(&jargv);
+    rec = (juju_record *)jjdb->data;
+    for (i=0; i < jjdb->header->nrecords; i++) {
+        rec_to_argv(rec, &jargv);
+        if (jargv.argc != fieldc && fieldc) {
+            fprintf(stderr, "***fucked up record\n");
+            j_arg_d_print(stderr, &jargv);
+        }
+        for (j=0; j < jargv.argc && j <  fieldc; j++) {
+            if  (field_indexed[j]) {
+                add_to_index(jjdb, fieldv[j], jargv.argv[j],
+                             (char *)rec-jjdb->data, rec->when);
+            }
+        }
+        j_arg_d_reset(&jargv);
+        if (++processed % 100000 == 0) {
+            fprintf(stderr, "%.2f%% complete\n",
+                    (jjdb->header->nrecords/i)/100.0);
+        }
+        rec = (juju_record *)((char *)rec+rec->len);
+    }
+    fprintf(stderr, "%s: processed %d records\n", jjdb->filename, processed);
+    print_indices(jjdb);
+    j_arg_d_free(&jargv);
+}
+
+void close_db(juju_db *jjdb)
+{
+    Word_t *val, rc;
+    uint8_t Index[1024];
+    
+    TAILQ_REMOVE(&dbs, jjdb, entries);
+    munmap(jjdb->map_base, jjdb->map_size);
+    close(jjdb->fd);
+    
+    Index[0] = '\0';
+    JSLF(val, jjdb->indices, Index);
+    while (val) {
+        JLFA(rc, *(PPvoid_t)val);
+        fprintf(stderr, "freed %d %s\n", (int)rc, Index);
+        JSLN(val, jjdb->indices, Index);
+    }
+    JSLFA(rc, jjdb->indices);
+    fprintf(stderr, "end idx free %d\n", (int)rc);
+    free(jjdb->filename);
+    free(jjdb);
+}
+
+void roll_dbs()
+{
+    juju_db *jjdb, *deljjdb;
+    char *ext, buf[1024];
+    int i, numdbs;
+
+    numdbs = 0;
+    TAILQ_FOREACH(jjdb, &dbs, entries) {
+        numdbs++;
+    }
+    jjdb = TAILQ_LAST(&dbs, db_list);
+    while (jjdb) {
+        if (numdbs-- >= ndatabases) {
+            // delete and free
+            deljjdb = jjdb;
+            jjdb = TAILQ_PREV(jjdb, db_list, entries);
+            TAILQ_REMOVE(&dbs, deljjdb, entries);
+            close_db(deljjdb);
+        } else {
+            ext = strrchr(jjdb->filename, '.');
+            if (ext && ++ext) {
+                // i have no idea what to do if this doesnt work, let's exit
+                errno = 0;
+                i = (int)strtol(ext, NULL, 10);
+                if (i == 0 && errno != 0) {
+                    fprintf(stderr, "whoa nelly, bogus extension: %s: %s\n",
+                            jjdb->filename, strerror(errno));
+                    exit(1);                    
+                } else {
+                    sprintf(buf, "%s.%03d", db_name, i+1);
+                    rename(jjdb->filename, buf);
+                    free(jjdb->filename);
+                    jjdb->filename = strdup(buf);
+                }
+            }
+            jjdb = TAILQ_PREV(jjdb, db_list, entries);
+        }
+    }
+}
+
+void open_all_dbs()
+{
+    juju_db *jjdb;
+    glob_t g;
+    char buf[1024];
+    int i;
+    
+    sprintf(buf, "%s.[0-9][0-9][0-9]", db_name);
+    fprintf(stderr, "looking for: %s\n", buf);
+    glob(buf, 0, NULL, &g);
+    for (i=0; i < GLOBC(g) && i < ndatabases; i++) {
+        fprintf(stderr, "path: %s\n", g.gl_pathv[i]);
+        jjdb = calloc(1, sizeof(*jjdb));
+        jjdb->filename = strdup(g.gl_pathv[i]);
+        open_db(jjdb);
+        TAILQ_INSERT_TAIL(&dbs, jjdb, entries);
+    }
+    globfree(&g);
+}
+
+void put_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    size_t pos = 0;
+    char *s;
+    juju_db *jjdb;
+    size_t len = EVBUFFER_LENGTH(req->input_buffer);
+    char *data = (char *)EVBUFFER_DATA(req->input_buffer);
+
+    jjdb = TAILQ_FIRST(&dbs);
+    /*
+     * Whacking a buffer we don't own. Living on the edge.
+     */
+    s = data;
+    while (pos <= len) {
+        if (data[pos] == '\n') {
+            data[pos++] = '\0';
+            while (append_record(jjdb, s) == false) {
+                roll_dbs();
+                jjdb = calloc(1, sizeof(*jjdb));
+                asprintf(&jjdb->filename, "%s.000", db_name);
+                open_db(jjdb);
+                TAILQ_INSERT_HEAD(&dbs, jjdb, entries);
+            }
+            s = data+pos;
+        }
+        pos++;
+    }
+    evbuffer_add_printf(evb, "Hello bitches\n%s\n", req->uri);
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+int predicate_count_cmp(const void *va, const void *vb)
+{
+    const predicate *a = (predicate *) va;
+    const predicate *b = (predicate *) vb;
+
+    if (a->count > b->count) {
+        return 1;
+    } else if (a->count < b->count) {
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+Word_t count_by_predicate(predicate *pred)
+{
+    juju_db *jjdb;
+    Word_t *arr1, *arr2, *val, count, tmpcount;
+    unsigned char buf[MAXVAL];
+    
+    TAILQ_FOREACH(jjdb, &dbs, entries) {
+        count = 0;
+        buf[0] = '\0';
+        switch (pred->comp) {
+            case EQ:
+                arr1 = get_pjlarray(jjdb, pred->field, pred->value);
+                if (arr1) JLC(count, *(PPvoid_t)arr1, 0, -1);
+                break;
+            case NEQ:
+                arr1 = get_pjlarray(jjdb, pred->field, pred->value);
+                if (arr1) JLC(count, *(PPvoid_t)arr1, 0, -1);
+                count = jjdb->header->nrecords - count;
+                break;
+            case LT:
+            case LTEQ:
+                JSLG(arr1, jjdb->indices, (unsigned char *)pred->field);
+                if (!arr1) break;
+                strncat((char *)buf, pred->value, MAXVAL-1);
+                if (pred->comp == LT) {
+                    JSLP(val, *(PPvoid_t)arr1, buf);                    
+                } else {
+                    JSLL(val, *(PPvoid_t)arr1, buf);                    
+                }
+                while (val) {
+                    JSLG(arr2, *(PPvoid_t)arr1, buf);
+                    JLC(tmpcount, *(PPvoid_t)arr2, 0, -1);
+                    count += tmpcount;
+                    JSLP(val, *(PPvoid_t)arr1, buf);
+                }
+                break;
+            case GT:
+            case GTEQ:
+                JSLG(arr1, jjdb->indices, (unsigned char *)pred->field);
+                if (!arr1) break;
+                strncat((char *)buf, pred->value, MAXVAL-1);
+                if (pred->comp == GT) {
+                    JSLN(val, *(PPvoid_t)arr1, buf);                    
+                } else {
+                    JSLF(val, *(PPvoid_t)arr1, buf);                    
+                }
+                while (val) {
+                    JSLG(arr2, *(PPvoid_t)arr1, buf);
+                    JLC(tmpcount, *(PPvoid_t)arr2, 0, -1);
+                    count += tmpcount;
+                    JSLN(val, *(PPvoid_t)arr1, buf);
+                }
+                break;
+            default:
+                fprintf(stderr, "poo monkey\n");
+        }
+        pred->count += count;
+    }
+    return pred->count;
+}
+
+predicate *build_predicates(struct evkeyvalq *pargs, int *npredicates)
+{
+    struct evkeyval *pair;
+    predicate *pred, *predlist;
+    int i=0;
+
+    *npredicates = 0;
+    // find the number of clauses ...
+    TAILQ_FOREACH(pair, pargs, next) {
+        if (pair->key[0] != '_') (*npredicates)++;
+    }
+    if (*npredicates == 0) return (predicate *)NULL;
+
+    // and their record sizes ...
+    predlist = calloc(*npredicates, sizeof(*predlist));
+    TAILQ_FOREACH(pair, pargs, next) {
+        if (pair->key[0] == '_') continue;
+        pred = &predlist[i];
+        switch (pair->value[0]) {
+            case '<':
+                pred->comp = LT;
+                pred->value = ++pair->value;
+                break;
+            case ',':
+                pred->comp = LTEQ;
+                pred->value = ++pair->value;
+                break;
+            case '>':
+                pred->comp = GT;
+                pred->value = ++pair->value;
+                break;
+            case '.':
+                pred->comp = GTEQ;
+                pred->value = ++pair->value;
+                break;
+            case '!':
+                pred->comp = NEQ;
+                pred->value = ++pair->value;
+                break;
+            default:
+                pred->comp = EQ;
+                pred->value = pair->value;
+        }
+        pred->field = pair->key;
+        count_by_predicate(pred);
+        fprintf(stderr, "%s -> %s count %lu\n", pred->field, pred->value, pred->count);
+        i++;
+    }
+    return predlist;
+}
+
+int field_index(char *fieldname)
+{
+    Word_t *val;
+    
+    JSLG(val, field_array, (unsigned char *)fieldname);
+    if (val) {
+        return (int)*val;
+    } else {
+        return -1;
+    }
+}
+void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    juju_db *jjdb;
+    j_arg_d jargv;
+    struct evkeyvalq args;
+    juju_record *rec;
+    int i, fpos, cmp, matches, npredicates, limit=1000, result_count=0;
+    predicate *pred1=NULL, *pred2, *predlist;
+    Word_t *arr1, *arr2, *val1, *val2, pos;
+    char *slimit, *sbefore;
+    time_t before = time(NULL);
+    
+    j_arg_d_init(&jargv);    
+    evhttp_parse_query(req->uri, &args);
+    predlist = build_predicates(&args, &npredicates);
+    printf("npredicates %d\n", npredicates);
+    if (npredicates == 0) goto done;
+    qsort(predlist, npredicates, sizeof(*predlist), predicate_count_cmp);    
+
+    slimit = (char *)evhttp_find_header(&args, "_limit");
+    sbefore = (char *)evhttp_find_header(&args, "_before");
+    if (slimit) limit = strtol(slimit, NULL, 10);
+    if (sbefore) before = strtol(sbefore, NULL, 10);
+
+    for (i=0; i < npredicates; i++) {
+        if (predlist[i].count == 0) goto done;  // and requires > 0 elems
+        if (predlist[i].comp == EQ) pred1 = &predlist[i];
+    }
+    if (!pred1) goto done;  // must have at least one EQ
+
+    TAILQ_FOREACH(jjdb, &dbs, entries) {
+        arr1 = get_pjlarray(jjdb, pred1->field, pred1->value);
+        if (!arr1) {
+            printf("cant find %s == %s\n", pred1->field, pred1->value);
+            continue;
+        }
+        pos = -1;
+        JLL(val1, *(PPvoid_t)arr1, pos);
+        while (val1 && result_count < limit) {
+            if (*val1 >= before) {
+                JLP(val1, *(PPvoid_t)arr1, pos);
+                continue;
+            }
+            for (i=0, matches=1; i < npredicates && matches >= i; i++) {
+                pred2 = &predlist[i];
+                if (pred1 == pred2) continue;
+                
+                switch (pred2->comp) {
+                    case EQ:
+                        arr2 = get_pjlarray(jjdb, pred2->field, pred2->value);
+                        if (arr2) {
+                            JLG(val2, *(PPvoid_t)arr2, pos);
+                            if (val2) matches++;
+                        }
+                        break;
+                    case NEQ:
+                        arr2 = get_pjlarray(jjdb, pred2->field, pred2->value);
+                        if (arr2) {
+                            JLG(val2, *(PPvoid_t)arr2, pos);
+                            if (!val2) matches++;
+                        } else {
+                            matches++;
+                        }
+                        break;
+                    case LT:
+                    case LTEQ:
+                    case GT:
+                    case GTEQ:
+                        fpos = field_index(pred2->field);
+                        if (fpos != -1) {
+                            rec = (juju_record *)(jjdb->data + pos);
+                            rec_to_argv(rec, &jargv);
+                            if (jargv.argc > fpos) {
+                                cmp = strcmp(jargv.argv[fpos], pred2->value);
+                                if ((pred2->comp == LT && cmp < 0)
+                                    || (pred2->comp == LTEQ && cmp <= 0)
+                                    || (pred2->comp == GT && cmp > 0)
+                                    || (pred2->comp == GTEQ && cmp >= 0)) {
+                                        matches++;
+                                }
+                            }
+                            j_arg_d_reset(&jargv);
+                        }
+                }
+            }
+            
+            //fprintf(stderr, "matches %d pred %d\n", matches, npredicates-1);
+            if (matches == npredicates) {
+                //fprintf(stderr, "pos %d when %d\n", pos, *val);
+                result_count++;
+                rec = (juju_record *)(jjdb->data + pos);
+                rec_to_argv(rec, &jargv);
+                for (i=0; i < jargv.argc; i++) {
+                    evbuffer_add(evb, jargv.argv[i], strlen(jargv.argv[i]));
+                    if (i != jargv.argc) {
+                        evbuffer_add(evb, "\t", 1);
+                    }
+                }
+                evbuffer_add(evb, "\n", 1);
+                j_arg_d_reset(&jargv);
+            }
+            JLP(val1, *(PPvoid_t)arr1, pos);
+        }
+    }
+
+done:
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
+    if (predlist) free(predlist);
+    j_arg_d_free(&jargv);
+}
+
+void printidx_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    juju_db *jjdb;
+    struct evkeyvalq args;
+    char *field;
+    unsigned char buf[1024*16];
+    Word_t *arr, *val, *varr, count;
+
+    evhttp_parse_query(req->uri, &args);
+    field = (char *)evhttp_find_header(&args, "field");
+    if (field) {
+        TAILQ_FOREACH(jjdb, &dbs, entries) {
+            evbuffer_add_printf(evb, "# %s\n", jjdb->filename);
+            JSLG(arr, jjdb->indices, (unsigned char *)field);
+            if (arr) {
+                buf[0] = '\0';
+                JSLF(val, *(PPvoid_t)arr, buf);
+                while (val)  {
+                    count = 0;
+                    JSLG(varr, *(PPvoid_t)arr, buf);
+                    if (varr) {
+                        JLC(count, *(PPvoid_t)varr, 0, -1);
+                    }
+                    evbuffer_add_printf(evb, "%s\t%lu\n", buf, count);
+                    JSLN(val, *(PPvoid_t)arr, buf);
+                }
+            }
+        }
+    }
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
+}
+
+void dbstats_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    juju_db *jjdb;
+
+    evbuffer_add_printf(evb, "file\tnrecords\tused\tremaining\tavgrecsz\t"
+                        "idxsz\tidxpct\n");
+    TAILQ_FOREACH(jjdb, &dbs, entries) {
+        evbuffer_add_printf(evb, "%s\t%llu\t%llu\t%lu\t%G\t%lu\t%.2f\n",
+                            jjdb->filename,
+                            jjdb->header->nrecords,
+                            jjdb->header->end,
+                            jjdb->remaining_space,
+                            (jjdb->header->end * 1.0 / jjdb->header->nrecords),
+                            jjdb->index_size,
+                            (jjdb->index_size * 100.0 / jjdb->header->end));
+    }
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void info()
+{
+    fprintf(stdout, "%s: time series server with indices.\n", NAME);
+    fprintf(stdout, "Version %s, "
+            "https://github.com/bitly/simplehttp/tree/master/jujufly\n",
+            VERSION);
+}
+
+void usage()
+{
+    fprintf(stderr, "Provides search access to time based streams\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage: jujufly\n");
+    fprintf(stderr, "\t-f /path/to/dbfile\n");
+    fprintf(stderr, "\t-n field1,field2,field3 (field names)\n");
+    fprintf(stderr, "\t-i field2,field3 (index by field name)\n");
+    fprintf(stderr, "\t-a 127.0.0.1 (address to listen on)\n");
+    fprintf(stderr, "\t-p 8080 (port to listen on)\n");
+    fprintf(stderr, "\t-D (daemonize)\n");
+    fprintf(stderr, "\n");
+    exit(1);
+}
+
+int main(int argc, char **argv)
+{
+    int i, j, ch, indexc=0;
+    Word_t *val;
+    char **indexv;
+    
+    opterr = 0;
+    while ((ch = getopt(argc, argv, "f:i:n:h")) != -1) {
+        if (ch == '?') {
+            optind--;
+            break;
+        }
+        switch (ch) {
+        case 'f':
+            db_name = strdup(optarg);
+            break;
+        case 'n':
+            fieldv = split_keys(optarg, &fieldc, ',');
+            break;
+        case 'i':
+            indexv = split_keys(optarg, &indexc, ',');
+            break;
+        case 'h':
+            usage();
+            exit(1);
+        }
+    }
+
+    field_indexed = calloc(fieldc+1, sizeof(int));
+    for (i=0; i < indexc; i++) {
+        for (j=0; j < fieldc; j++) {
+            if (strcmp(indexv[i], fieldv[j]) == 0) {
+                field_indexed[j] = 1;
+            }
+            JSLI(val, field_array, (unsigned char *)fieldv[j]);
+            *val = j;
+        }
+    }
+    
+    TAILQ_INIT(&dbs);
+    open_all_dbs();
+    simplehttp_init();
+    simplehttp_set_cb("/put*", put_cb, NULL);
+    simplehttp_set_cb("/search*", search_cb, NULL);
+    simplehttp_set_cb("/printidx*", printidx_cb, NULL);
+    simplehttp_set_cb("/dbstats*", dbstats_cb, NULL);
+    simplehttp_main(argc, argv);
+    return 0;
+}
