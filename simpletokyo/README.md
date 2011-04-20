@@ -29,11 +29,18 @@ API endpoints:
   parameter:max (optional)   
   parameter:length (optional)   
   parameter:offset (optional)   
+  parameter:format=json|txt [default json]
+
+ * /fwmatch_int (returns values added with /incr)
+  parameter:key
+  parameter:max (optional)
+  parameter:length (optional)   
+  parameter:offset (optional)   
   parameter:format=json|txt [default json]   
 
- * /fwmatch_int (returns values added with /incr)   
-  parameter:key   
-  parameter:max (optional)   
+ * /fwmatch_int_merged (returns values added with /incr via prefix merge to single lines)
+  parameter:key
+  parameter:max (optional)
   parameter:length (optional)   
   parameter:offset (optional)   
   parameter:format=json|txt [default json]   
