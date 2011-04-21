@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
+#include "pcre.h"
 #include <Judy.h>
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
@@ -16,6 +17,7 @@
 #define NAME "jujufly"
 #define VERSION "0.1"
 
+#define OVECCOUNT 30    /* should be a multiple of 3 */
 #define MAXVAL 1024*16
 #define DB_SIZE 1024*1024*100
 #define WRITEHEAD(x) (x->data+x->header->end)
@@ -34,12 +36,18 @@ enum comparator {
     LT,
     GT,
     LTEQ,
-    GTEQ
+    GTEQ,
+    RE
 };
 
 typedef struct predicate {
     char *field;
     char *value;
+    pcre *re;
+    const char *error;
+    int erroroffset;
+    int fpos;
+    int indexed;
     enum comparator comp;
     Word_t count;
 } predicate;
@@ -268,12 +276,12 @@ void open_db(juju_db *jjdb)
         j_arg_d_reset(&jargv);
         if (++processed % 100000 == 0) {
             fprintf(stderr, "%.2f%% complete\n",
-                    (jjdb->header->nrecords/i)/100.0);
+                    i*100.0/jjdb->header->nrecords);
         }
         rec = (juju_record *)((char *)rec+rec->len);
     }
-    fprintf(stderr, "%s: processed %d records\n", jjdb->filename, processed);
-    print_indices(jjdb);
+    fprintf(stderr, "100%% complete\n%s: processed %d records\n", jjdb->filename, processed);
+    //print_indices(jjdb);
     j_arg_d_free(&jargv);
 }
 
@@ -407,68 +415,38 @@ int predicate_count_cmp(const void *va, const void *vb)
 Word_t count_by_predicate(predicate *pred)
 {
     juju_db *jjdb;
-    Word_t *arr1, *arr2, *val, count, tmpcount;
+    Word_t *arr, count;
     unsigned char buf[MAXVAL];
     
     TAILQ_FOREACH(jjdb, &dbs, entries) {
         count = 0;
         buf[0] = '\0';
-        switch (pred->comp) {
-            case EQ:
-                arr1 = get_pjlarray(jjdb, pred->field, pred->value);
-                if (arr1) JLC(count, *(PPvoid_t)arr1, 0, -1);
-                break;
-            case NEQ:
-                arr1 = get_pjlarray(jjdb, pred->field, pred->value);
-                if (arr1) JLC(count, *(PPvoid_t)arr1, 0, -1);
-                count = jjdb->header->nrecords - count;
-                break;
-            case LT:
-            case LTEQ:
-                JSLG(arr1, jjdb->indices, (unsigned char *)pred->field);
-                if (!arr1) break;
-                strncat((char *)buf, pred->value, MAXVAL-1);
-                if (pred->comp == LT) {
-                    JSLP(val, *(PPvoid_t)arr1, buf);                    
-                } else {
-                    JSLL(val, *(PPvoid_t)arr1, buf);                    
-                }
-                while (val) {
-                    JSLG(arr2, *(PPvoid_t)arr1, buf);
-                    JLC(tmpcount, *(PPvoid_t)arr2, 0, -1);
-                    count += tmpcount;
-                    JSLP(val, *(PPvoid_t)arr1, buf);
-                }
-                break;
-            case GT:
-            case GTEQ:
-                JSLG(arr1, jjdb->indices, (unsigned char *)pred->field);
-                if (!arr1) break;
-                strncat((char *)buf, pred->value, MAXVAL-1);
-                if (pred->comp == GT) {
-                    JSLN(val, *(PPvoid_t)arr1, buf);                    
-                } else {
-                    JSLF(val, *(PPvoid_t)arr1, buf);                    
-                }
-                while (val) {
-                    JSLG(arr2, *(PPvoid_t)arr1, buf);
-                    JLC(tmpcount, *(PPvoid_t)arr2, 0, -1);
-                    count += tmpcount;
-                    JSLN(val, *(PPvoid_t)arr1, buf);
-                }
-                break;
-            default:
-                fprintf(stderr, "poo monkey\n");
+        if (pred->comp == EQ) {
+            arr = get_pjlarray(jjdb, pred->field, pred->value);
+            if (arr) JLC(count, *(PPvoid_t)arr, 0, -1);
         }
         pred->count += count;
     }
     return pred->count;
 }
 
+int field_index(char *fieldname)
+{
+    Word_t *val;
+       
+    JSLG(val, field_array, (unsigned char *)fieldname);
+    if (val) {
+        return (int)*val;
+    } else {
+        return -1;
+    }
+}
+
 predicate *build_predicates(struct evkeyvalq *pargs, int *npredicates)
 {
     struct evkeyval *pair;
     predicate *pred, *predlist;
+    char *re_tail;
     int i=0;
 
     *npredicates = 0;
@@ -504,11 +482,27 @@ predicate *build_predicates(struct evkeyvalq *pargs, int *npredicates)
                 pred->comp = NEQ;
                 pred->value = ++pair->value;
                 break;
+            case '/':
+                pred->comp = RE;
+                re_tail = strrchr(pair->value+1, '/');
+                if (re_tail) {
+                    *re_tail = '\0';
+                    pred->value = ++pair->value;
+                    pred->re = pcre_compile(
+                        pred->value,
+                        0,
+                        &pred->error,
+                        &pred->erroroffset,
+                        NULL);
+                    break;
+                }
             default:
                 pred->comp = EQ;
                 pred->value = pair->value;
         }
         pred->field = pair->key;
+        pred->fpos = field_index(pred->field);
+        pred->indexed = pred->fpos < 0 ? 0 : field_indexed[pred->fpos];
         count_by_predicate(pred);
         fprintf(stderr, "%s -> %s count %lu\n", pred->field, pred->value, pred->count);
         i++;
@@ -516,27 +510,17 @@ predicate *build_predicates(struct evkeyvalq *pargs, int *npredicates)
     return predlist;
 }
 
-int field_index(char *fieldname)
-{
-    Word_t *val;
-    
-    JSLG(val, field_array, (unsigned char *)fieldname);
-    if (val) {
-        return (int)*val;
-    } else {
-        return -1;
-    }
-}
 void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 {
     juju_db *jjdb;
     j_arg_d jargv;
     struct evkeyvalq args;
     juju_record *rec;
-    int i, fpos, cmp, matches, npredicates, limit=1000, result_count=0;
-    predicate *pred1=NULL, *pred2, *predlist;
+    int i, cmp, matches, npredicates, limit=1000, result_count=0;
+    predicate *pred1, *pred2, *predlist;
     Word_t *arr1, *arr2, *val1, *val2, pos;
     char *slimit, *sbefore;
+    int ovector[OVECCOUNT];
     time_t before = time(NULL);
     
     j_arg_d_init(&jargv);    
@@ -551,9 +535,13 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     if (slimit) limit = strtol(slimit, NULL, 10);
     if (sbefore) before = strtol(sbefore, NULL, 10);
 
-    for (i=0; i < npredicates; i++) {
-        if (predlist[i].count == 0) goto done;  // and requires > 0 elems
-        if (predlist[i].comp == EQ) pred1 = &predlist[i];
+    for (i=0, pred1=NULL; i < npredicates; i++) {
+        if (predlist[i].comp == EQ
+            && predlist[i].indexed
+            && predlist[i].count > 0) {
+            pred1 = &predlist[i];
+            break;
+        }
     }
     if (!pred1) goto done;  // must have at least one EQ
 
@@ -574,42 +562,49 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
                 pred2 = &predlist[i];
                 if (pred1 == pred2) continue;
                 
-                switch (pred2->comp) {
-                    case EQ:
-                        arr2 = get_pjlarray(jjdb, pred2->field, pred2->value);
+                if (pred2->indexed && (pred2->comp == EQ || pred2->comp == NEQ)) {
+                    arr2 = get_pjlarray(jjdb, pred2->field, pred2->value);
+                    if (pred2->comp == EQ) {
                         if (arr2) {
                             JLG(val2, *(PPvoid_t)arr2, pos);
                             if (val2) matches++;
                         }
-                        break;
-                    case NEQ:
-                        arr2 = get_pjlarray(jjdb, pred2->field, pred2->value);
+                    } else {
                         if (arr2) {
                             JLG(val2, *(PPvoid_t)arr2, pos);
                             if (!val2) matches++;
                         } else {
                             matches++;
                         }
-                        break;
-                    case LT:
-                    case LTEQ:
-                    case GT:
-                    case GTEQ:
-                        fpos = field_index(pred2->field);
-                        if (fpos != -1) {
-                            rec = (juju_record *)(jjdb->data + pos);
-                            rec_to_argv(rec, &jargv);
-                            if (jargv.argc > fpos) {
-                                cmp = strcmp(jargv.argv[fpos], pred2->value);
-                                if ((pred2->comp == LT && cmp < 0)
-                                    || (pred2->comp == LTEQ && cmp <= 0)
-                                    || (pred2->comp == GT && cmp > 0)
-                                    || (pred2->comp == GTEQ && cmp >= 0)) {
-                                        matches++;
-                                }
+                    }
+                } else if (pred2->fpos >= 0) {
+                    rec = (juju_record *)(jjdb->data + pos);
+                    rec_to_argv(rec, &jargv);
+                    if (jargv.argc > pred2->fpos) {
+                        if (pred2->comp == RE && pred2->re) {
+                            cmp = pcre_exec(
+                                pred2->re,
+                                NULL,
+                                jargv.argv[pred2->fpos],
+                                strlen(jargv.argv[pred2->fpos]),
+                                0,
+                                0,
+                                ovector,
+                                OVECCOUNT);
+                            if (cmp > 0) matches++;
+                        } else {
+                            cmp = strcmp(jargv.argv[pred2->fpos], pred2->value);
+                            if ((pred2->comp == EQ && cmp == 0)
+                                || (pred2->comp == NEQ && cmp != 0)
+                                || (pred2->comp == LT && cmp < 0)
+                                || (pred2->comp == LTEQ && cmp <= 0)
+                                || (pred2->comp == GT && cmp > 0)
+                                || (pred2->comp == GTEQ && cmp >= 0)) {
+                                    matches++;
                             }
-                            j_arg_d_reset(&jargv);
                         }
+                    }
+                    j_arg_d_reset(&jargv);
                 }
             }
             
