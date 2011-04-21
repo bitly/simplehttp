@@ -16,6 +16,7 @@ supported comparators are:
   less than or equal: ','
   great than: '>', url encoded
   greater than or equal: '.'
+  pcre: '/<re>/'
 
 
 Printindex prints the values for a given field name and
