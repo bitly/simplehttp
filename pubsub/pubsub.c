@@ -8,6 +8,7 @@
 
 #define BOUNDARY "xXPubSubXx"
 #define MAX_PENDING_DATA 1024*1024*50
+#define VERSION "1.1"
 
 int ps_debug = 0;
 
@@ -288,16 +289,30 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
+int version_cb(int value) {
+    fprintf(stdout, "Version: %s\n", VERSION);
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
+    
+    define_simplehttp_options();
+    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
+    
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
+    }
+    
     TAILQ_INIT(&clients);
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
     simplehttp_set_cb("/sub*", sub_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
-    simplehttp_main(argc, argv);
+    simplehttp_main();
+    free_options();
 
     return 0;
 }

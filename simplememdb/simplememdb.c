@@ -17,7 +17,7 @@
 #include "pcre.h"
 
 #define NAME                    "simplememdb"
-#define VERSION                 "1.4"
+#define VERSION                 "1.5"
 #define BUFFER_SZ               1048576
 #define SM_BUFFER_SZ            4096
 
@@ -32,7 +32,6 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void vanish_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
-void usage();
 void info();
 
 static TCADB *adb;
@@ -682,19 +681,7 @@ void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void info()
 {
     fprintf(stdout, "%s: simplehttp in-memory tokyo cabinet abstract database.\n", NAME);
-    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/simplememdb\n", VERSION);
-}
-
-void usage()
-{
-    fprintf(stderr, "%s: simplehttp in-memory tokyo cabinet abstract database.\n", NAME);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "usage: %s\n", NAME);
-    fprintf(stderr, "\t-a 127.0.0.1 (address to listen on)\n");
-    fprintf(stderr, "\t-p 8080 (port to listen on)\n");
-    fprintf(stderr, "\t-D (daemonize)\n");
-    fprintf(stderr, "\n");
-    exit(1);
+    fprintf(stdout, "Version: %s, https://github.com/bitly/simplehttp/tree/master/simplememdb\n", VERSION);
 }
 
 void do_dump(int fd, short what, void *ctx)
@@ -817,33 +804,26 @@ void dump_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     set_dump_timer(req);
 }
 
+int version_cb(int value) {
+    fprintf(stdout, "Version: %s\n", VERSION);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     char buf[SM_BUFFER_SZ];
     unsigned long bnum = 1024;
-    int ch;
+
+    define_simplehttp_options();
+    option_define_int("bnum", OPT_OPTIONAL, 1024, NULL, NULL, "the number of buckets");
+    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
-    info();
-    
-    opterr=0;
-    while ((ch = getopt(argc, argv, "b:vh")) != -1) {
-        if (ch == '?') {
-            optind--; // re-set for next getopt() parse by simplehttp_init
-            break;
-        }
-        switch (ch) {
-            case 'b':
-                bnum = atoi(optarg);
-                break;
-            case 'v':
-                exit(1);
-                break;
-            case 'h':
-                usage();
-                exit(1);
-                break;
-        }
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
     }
+    
+    bnum = (unsigned long) option_get_int("bnum");
+    info();
     
     sprintf(buf, "+#bnum=%lu", bnum);
     adb = tcadbnew();
@@ -866,10 +846,11 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/dump*", dump_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
-    simplehttp_main(argc, argv);
+    simplehttp_main();
     
     tcadbclose(adb);
     tcadbdel(adb);
+    free_options();
     
     return 0;
 }

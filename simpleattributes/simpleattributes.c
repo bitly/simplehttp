@@ -23,11 +23,10 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 struct event ev;
 struct timeval tv = {RECONNECT,0};
-static char *db_host = "0.0.0.0";
-static int db_port = 1978;
-static TCRDB *rdb;
-static int db_status;
-static char *g_progname;
+char *db_host = "127.0.0.1";
+int db_port = 1978;
+TCRDB *rdb;
+int db_status;
 
 
 void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
@@ -291,32 +290,15 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     finalize_json(req, evb, &args, jsobj);
 }
 
-void usage()
-{
-    fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", g_progname);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "usage:\n");
-    fprintf(stderr, "  %s [-tchost 0.0.0.0] [-tcport 1978]\n", g_progname);
-    fprintf(stderr, "\n");
-    exit(1);
-}
 
 int
 main(int argc, char **argv)
 {   
-    int i;
-    
-    g_progname = argv[0];
-    for (i=1; i < argc; i++) {
-        if(!strcmp(argv[i], "-tchost")) {
-            if(++i >= argc) usage();
-            db_host = argv[i];
-        } else if(!strcmp(argv[i], "-tcport")) {
-            if(++i >= argc) usage();
-            db_port = tcatoi(argv[i]);
-        } else if (!strcmp(argv[i], "-help")) {
-            usage();
-        }
+    define_simplehttp_options();
+    option_define_str("ttserver_host", OPT_OPTIONAL, "127.0.0.1", &db_host, NULL, NULL);
+    option_define_int("ttserver_port", OPT_OPTIONAL, 1978, &db_port, NULL, NULL);
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
     }
     
     memset(&db_status, -1, sizeof(db_status));
@@ -326,7 +308,8 @@ main(int argc, char **argv)
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/del*", del_cb, NULL);
     simplehttp_set_cb("/idx*", idx_cb, NULL);
-    simplehttp_main(argc, argv);
+    simplehttp_main();
+    free_options();
 
     return 0;
 }

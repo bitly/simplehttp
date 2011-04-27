@@ -14,7 +14,7 @@
 #define DEBUG 1
 #define SUCCESS 0
 #define FAILURE 1
-#define LOCALHOST "127.0.0.1"
+#define VERSION "1.1"
 #define RECONNECT_SECS 5
 #define ADDR_BUFSZ 256
 #define BOUNDARY "xXPubSubXx"
@@ -62,9 +62,8 @@ int connect_to_source();
 char* md5_hash(const char *string);
 void process_message_cb(struct evhttp_request *req, void *arg);
 
-void parse_address_arg(char *optarg, char *addr, int *port);
-void parse_encrypted_fields(char *str);
-void parse_blacklisted_fields(char *str);
+int parse_encrypted_fields(char *str);
+int parse_blacklisted_fields(char *str);
 int parse_fields(char *str, char **field_array);
 
 int can_kick(struct cli *client);
@@ -82,49 +81,29 @@ uint64_t msgRecv = 0;
 uint64_t msgSent = 0;
 uint64_t number_reconnects = 0;
 
-static char *version  = "1.1";
-static char *g_progname = "pubsub_filtered";
+char *version  = "1.1";
+char *g_progname = "pubsub_filtered";
 struct event reconnect_ev;
 struct timeval reconnect_tv = {RECONNECT_SECS,0};
 struct evhttp_connection *evhttp_source_connection = NULL;
 struct evhttp_request *evhttp_source_request = NULL;
 
-static char *source_path = "/sub?multipart=0";
-static char source_address[ADDR_BUFSZ];
-static int  source_port = 0;
+char *source_path = "/sub?multipart=0";
+char *source_address = "127.0.0.1";
+int  source_port = 80;
 
-static char *encrypted_fields[64];
-static int  num_encrypted_fields = 0;
-static char *blacklisted_fields[64];
-static char expected_key[1024];
-static char expected_value[1024];
-static int expect_value=0;
-static int  num_blacklisted_fields = 0;
+char *encrypted_fields[64];
+int  num_encrypted_fields = 0;
+char *blacklisted_fields[64];
+char *expected_key = NULL;
+char *expected_value = NULL;
+int expect_value=0;
+int  num_blacklisted_fields = 0;
 
 
 struct global_data *data = NULL;
 
-/*
- * Convenience function to parse address and port info
- * out of command line args.
- *
- */
-void parse_address_arg(char *optarg, char *addr, int *port)
-{
-    char *ptr;
-    char tmp_addr[ADDR_BUFSZ];
 
-    ptr = strchr(optarg,':');
-    if (ptr != NULL && (ptr - optarg) < strlen(optarg)) {
-        sscanf(optarg, "%[^:]:%d", (char *)&tmp_addr, port);
-        strcpy(addr, tmp_addr);
-    } else {
-        strcpy(addr, LOCALHOST);
-        *port = atoi(optarg);
-    }
-
-    return;
-}
 
 /*
  * Parse a comma-delimited  string and populate
@@ -132,7 +111,7 @@ void parse_address_arg(char *optarg, char *addr, int *port)
  *
  * See parse_fields().
  */
-void parse_blacklisted_fields(char *str)
+int parse_blacklisted_fields(char *str)
 {
     int i;
 
@@ -142,7 +121,7 @@ void parse_blacklisted_fields(char *str)
         fprintf(stdout, "Blacklist field: \"%s\"\n", blacklisted_fields[i]);
     }
 
-    return;
+    return 1;
 }
 
 
@@ -152,7 +131,7 @@ void parse_blacklisted_fields(char *str)
  *
  * See parse_fields().
  */
-void parse_encrypted_fields(char *str)
+int parse_encrypted_fields(char *str)
 {
     int i;
     num_encrypted_fields = parse_fields(str, encrypted_fields);
@@ -161,7 +140,7 @@ void parse_encrypted_fields(char *str)
         fprintf(stdout, "Encrypted field: \"%s\"\n", encrypted_fields[i]);
     }
 
-    return;
+    return 1;
 }
 
 /*
@@ -651,72 +630,29 @@ int connect_to_source()
     return SUCCESS;
 }
 
-
-void print_version()
-{
-    fprintf(stdout, "%s v%s\n", g_progname, version);
+int version_cb(int value) {
+    fprintf(stdout, "Version: %s\n", VERSION);
+    return 0;
 }
-
-void usage()
-{
-    fprintf(stderr, "%s: expose a filtered pubsub stream by connecting to -s\n", g_progname);
-    fprintf(stderr, "and applying -e -b and -x operations before sending to clients\n");
-    fprintf(stderr, "\n");
-    fprintf(stderr, "usage:\n");
-    fprintf(stderr, "\t-s source_pubsub_address:port\n");
-    fprintf(stderr, "\t-b comma separated list of keys to blacklist\n");
-    fprintf(stderr, "\t-e comma separated list of keys for values to be encrypted\n");
-    fprintf(stderr, "\t-x key=value (require a key=value field in the message body)\n");
-    fprintf(stderr, "\t-v print version\n");
-    fprintf(stderr, "\t-h print help\n");
-    fprintf(stderr, "\t---------------\n");
-        fprintf(stderr, "\tpubsub server options. note: these must appear after filter options\n");
-    fprintf(stderr, "\t---------------\n");
-    fprintf(stderr, "\t-a 0.0.0.0 (address to bind to)\n");
-    fprintf(stderr, "\t-p 8080 (port to bind to)\n");
-    fprintf(stderr, "\n");
-}
-
 
 int
 main(int argc, char **argv)
 {
-    int ch;
-    char *ptr;
-    opterr=0;
-    while ((ch = getopt(argc, argv, "vs:b:e:x:h")) != -1) {
-        if (ch == '?') {
-            optind--; // re-set for next getopt() parse
-            break;
-        }
-        switch (ch) {
-        case 'v':
-            print_version();
-            exit(0);
-        case 's':
-            parse_address_arg(optarg, source_address, &source_port);
-            break;
-        case 'b':
-            // blacklist output fields
-            parse_blacklisted_fields(optarg);
-            break;
-        case 'e':
-            // encrypt output fields
-            parse_encrypted_fields(optarg);
-            break;
-        case 'x':
-            // expected key=value
-            sscanf(optarg, "%[^=]=%s", (char *)&expected_key, (char *)&expected_value);
-            fprintf(stdout, "expecting %s=\"%s\" in messages\n", expected_key, expected_value);
-            expect_value=1;
-            break;
-        case 'h':
-            usage();
-            exit(0);
-        }
+    
+    define_simplehttp_options();
+    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
+    option_define_str("source_host", OPT_OPTIONAL, "127.0.0.1", &source_address, NULL, NULL);
+    option_define_int("source_port", OPT_OPTIONAL, 80, &source_port, NULL, NULL);
+    option_define_str("blacklist_fields", OPT_OPTIONAL, NULL, NULL, parse_blacklisted_fields, "comma separated list of fields to remove");
+    option_define_str("encrypted_fields", OPT_OPTIONAL, NULL, NULL, parse_encrypted_fields, "comma separated list of fields to encrypt");
+    option_define_str("expected_key", OPT_OPTIONAL, NULL, &expected_key, NULL, "key to expect in messages before echoing to clients");
+    option_define_str("expected_value", OPT_OPTIONAL, NULL, &expected_value, NULL, "value to expect in --expected-key field in messages before echoing to clients");
+    
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
     }
-    if (!source_port){
-        usage();
+    if ((expected_value && !expected_key) || (expected_key && !expected_value)) {
+        fprintf(stderr, "--expected-key and --expected-value must be used together\n");
         exit(1);
     }
 
@@ -730,7 +666,8 @@ main(int argc, char **argv)
         exit(1);
     }
 
-    simplehttp_main(argc, argv);
+    simplehttp_main();
+    free_options();
 
     return 0;
 }
