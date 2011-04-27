@@ -2,7 +2,6 @@
 #define _SIMPLEHTTP_H
 
 #include "queue.h"
-#include "options.h"
 #include <event.h>
 #include <evhttp.h>
 
@@ -32,7 +31,7 @@ struct simplehttp_stats {
 };
 
 void simplehttp_init();
-int simplehttp_main();
+int simplehttp_main(int argc, char **argv);
 void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *,void *), void *ctx);
 
 uint64_t simplehttp_request_id(struct evhttp_request *req);
@@ -64,6 +63,5 @@ int get_argument_format(struct evkeyvalq *args);
 int get_int_argument(struct evkeyvalq *args, char *key, int default_value);
 double get_double_argument(struct evkeyvalq *args, char *key, double default_value);
 
-void define_simplehttp_options();
 
 #endif

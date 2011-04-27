@@ -11,7 +11,7 @@
 #include <json/json.h>
 
 #define NAME                    "simpletokyo"
-#define VERSION                 "1.9"
+#define VERSION                 "1.8"
 #define RECONNECT               5
 
 void finalize_request(struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
@@ -753,26 +753,48 @@ void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void info()
 {
     fprintf(stdout, "simpletokyo: a light http interface to Tokyo Tyrant.\n");
-    fprintf(stdout, "Version: %s, https://github.com/bitly/simplehttp/tree/master/simpletokyo\n", VERSION);
+    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/simpletokyo\n", VERSION);
 }
 
-int version_cb(int value) {
-    fprintf(stdout, "Version: %s\n", VERSION);
-    return 0;
+void usage()
+{
+    fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", NAME);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage:\n");
+    fprintf(stderr, "\t-A ttserver address\n");
+    fprintf(stderr, "\t-P ttserver port\n");
+    fprintf(stderr, "\t-a listen address\n");
+    fprintf(stderr, "\t-p listen port\n");
+    fprintf(stderr, "\t-D daemonize\n");
+    fprintf(stderr, "\n");
+    exit(1);
 }
 
 int main(int argc, char **argv)
 {
-    define_simplehttp_options();
-    option_define_str("ttserver_host", OPT_OPTIONAL, "127.0.0.1", &db_host, NULL, NULL);
-    option_define_int("ttserver_port", OPT_OPTIONAL, 1978, &db_port, NULL, NULL);
-    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-    
-    if (!option_parse_command_line(argc, argv)){
-        return 1;
-    }
+    int ch;
     
     info();
+    
+    opterr=0;
+    while ((ch = getopt(argc, argv, "A:P:h")) != -1) {
+        if (ch == '?') {
+            optind--; // re-set for next getopt() parse by simplehttp_init
+            break;
+        }
+        switch (ch) {
+        case 'A':
+            db_host = optarg;
+            break;
+        case 'P':
+            db_port = atoi(optarg);
+            break;
+        case 'h':
+            usage();
+            exit(1);
+        }
+    }
+    
     memset(&db_status, -1, sizeof(db_status));
     
     simplehttp_init();
@@ -790,8 +812,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/incr*", incr_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
-    simplehttp_main();
-    free_options();
+    simplehttp_main(argc, argv);
     
     return 0;
 }

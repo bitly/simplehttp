@@ -8,7 +8,7 @@
 #include "request.h"
 #include "stat.h"
 
-extern int simplehttp_logging;
+extern int verbose;
 
 struct simplehttp_request *simplehttp_request_new(struct evhttp_request *req, uint64_t id)
 {
@@ -88,7 +88,7 @@ void simplehttp_request_finish(struct evhttp_request *req, struct simplehttp_req
         simplehttp_stats_store(s_req->index, req_time);
     }
     
-    if (simplehttp_logging) {
+    if (verbose) {
         sprintf(id_buf, "%"PRIu64, s_req->id);
         simplehttp_log("", req, req_time, id_buf);
     }

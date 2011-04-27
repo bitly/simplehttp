@@ -78,13 +78,13 @@ typedef struct juju_db {
     TAILQ_ENTRY(juju_db) entries;
 } juju_db;
 
-size_t db_size = DB_SIZE;
-char *db_file = "db";
-int ndatabases = 100;
+static size_t db_size = DB_SIZE;
+static char *db_name = "db";
+static int ndatabases = 100;
 
-int fieldc;
-char **fieldv;
-int *field_indexed;
+static int fieldc;
+static char **fieldv;
+static int *field_indexed;
 Pvoid_t field_array = (PWord_t)NULL;
 
 TAILQ_HEAD(db_list, juju_db) dbs;
@@ -336,7 +336,7 @@ void roll_dbs()
                             jjdb->filename, strerror(errno));
                     exit(1);                    
                 } else {
-                    sprintf(buf, "%s.%03d", db_file, i+1);
+                    sprintf(buf, "%s.%03d", db_name, i+1);
                     rename(jjdb->filename, buf);
                     free(jjdb->filename);
                     jjdb->filename = strdup(buf);
@@ -354,7 +354,7 @@ void open_all_dbs()
     char buf[1024];
     int i;
     
-    sprintf(buf, "%s.[0-9][0-9][0-9]", db_file);
+    sprintf(buf, "%s.[0-9][0-9][0-9]", db_name);
     fprintf(stderr, "looking for: %s\n", buf);
     glob(buf, 0, NULL, &g);
     for (i=0; i < GLOBC(g) && i < ndatabases; i++) {
@@ -386,7 +386,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
             while (append_record(jjdb, s) == false) {
                 roll_dbs();
                 jjdb = calloc(1, sizeof(*jjdb));
-                asprintf(&jjdb->filename, "%s.000", db_file);
+                asprintf(&jjdb->filename, "%s.000", db_name);
                 open_db(jjdb);
                 TAILQ_INSERT_HEAD(&dbs, jjdb, entries);
             }
@@ -686,30 +686,56 @@ void dbstats_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
+void info()
+{
+    fprintf(stdout, "%s: time series server with indices.\n", NAME);
+    fprintf(stdout, "Version %s, "
+            "https://github.com/bitly/simplehttp/tree/master/jujufly\n",
+            VERSION);
+}
 
-int version_cb(int value) {
-    fprintf(stdout, "Version: %s\n", VERSION);
-    return 0;
+void usage()
+{
+    fprintf(stderr, "Provides search access to time based streams\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage: jujufly\n");
+    fprintf(stderr, "\t-f /path/to/dbfile\n");
+    fprintf(stderr, "\t-n field1,field2,field3 (field names)\n");
+    fprintf(stderr, "\t-i field2,field3 (index by field name)\n");
+    fprintf(stderr, "\t-a 127.0.0.1 (address to listen on)\n");
+    fprintf(stderr, "\t-p 8080 (port to listen on)\n");
+    fprintf(stderr, "\t-D (daemonize)\n");
+    fprintf(stderr, "\n");
+    exit(1);
 }
 
 int main(int argc, char **argv)
 {
-    int i, j, indexc=0;
+    int i, j, ch, indexc=0;
     Word_t *val;
     char **indexv;
     
-    define_simplehttp_options();
-    option_define_str("db_file", OPT_REQUIRED, "db", &db_file, NULL, NULL);
-    option_define_str("field_names", OPT_REQUIRED, NULL, NULL, NULL, "field1,field2,field3 (field names)");
-    option_define_str("field_index", OPT_REQUIRED, NULL, NULL, NULL, "field2,field3 (index by field name)");
-    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-    
-    if (!option_parse_command_line(argc, argv)){
-        return 1;
+    opterr = 0;
+    while ((ch = getopt(argc, argv, "f:i:n:h")) != -1) {
+        if (ch == '?') {
+            optind--;
+            break;
+        }
+        switch (ch) {
+        case 'f':
+            db_name = strdup(optarg);
+            break;
+        case 'n':
+            fieldv = split_keys(optarg, &fieldc, ',');
+            break;
+        case 'i':
+            indexv = split_keys(optarg, &indexc, ',');
+            break;
+        case 'h':
+            usage();
+            exit(1);
+        }
     }
-    
-    fieldv = split_keys(option_get_str("field_names"), &fieldc, ',');
-    indexv = split_keys(option_get_str("field_index"), &indexc, ',');
 
     field_indexed = calloc(fieldc+1, sizeof(int));
     for (i=0; i < indexc; i++) {
@@ -729,7 +755,6 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/search*", search_cb, NULL);
     simplehttp_set_cb("/printidx*", printidx_cb, NULL);
     simplehttp_set_cb("/dbstats*", dbstats_cb, NULL);
-    simplehttp_main();
-    free_options();
+    simplehttp_main(argc, argv);
     return 0;
 }

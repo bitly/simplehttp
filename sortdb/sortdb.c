@@ -13,7 +13,7 @@
 #include <simplehttp/simplehttp.h>
 
 #define NAME        "sortdb"
-#define VERSION     "1.5"
+#define VERSION     "1.4.1"
 #define DEBUG       1
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -22,6 +22,7 @@ void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 char *prev_line(char *pos);
 char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks, int allow_prefix);
+void usage();
 void info();
 int main(int argc, char **argv);
 void close_dbfile();
@@ -294,7 +295,21 @@ void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void info()
 {
     fprintf(stdout, "%s: sorted database server.\n", NAME);
-    fprintf(stdout, "Version: %s, https://github.com/bitly/simplehttp/tree/master/sortdb\n", VERSION);
+    fprintf(stdout, "Version %s, https://github.com/bitly/simplehttp/tree/master/sortdb\n", VERSION);
+}
+
+void usage()
+{
+    fprintf(stderr, "Provides search access to sorted tab delimited files\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage: sortdb\n");
+    fprintf(stderr, "\t-f /path/to/dbfile\n");
+    fprintf(stderr, "\t-F \"\\t\" (field deliminator)\n");
+    fprintf(stderr, "\t-a 127.0.0.1 (address to listen on)\n");
+    fprintf(stderr, "\t-p 8080 (port to listen on)\n");
+    fprintf(stderr, "\t-D (daemonize)\n");
+    fprintf(stderr, "\n");
+    exit(1);
 }
 
 void hup_handler(int signum)
@@ -342,28 +357,40 @@ void open_dbfile()
     }
 }
 
-int version_cb(int value) {
-    fprintf(stdout, "Version: %s\n", VERSION);
-    return 0;
-}
-
 int main(int argc, char **argv)
 {
-    define_simplehttp_options();
-    option_define_str("db_file", OPT_REQUIRED, NULL, &db_filename, NULL, NULL);
-    option_define_char("field_separator", OPT_OPTIONAL, '\0', &deliminator, NULL, "field separator (eg: comma, tab, pipe). default: TAB");
-    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
+    int ch;
     
-    if (!option_parse_command_line(argc, argv)){
-        return 1;
-    }
-
     info();
-    fprintf(stdout, "--field-separator is \"%c\"\n", deliminator);
-    fprintf(stdout, "--db-file is %s\n", db_filename);
     
-    open_dbfile();
+    opterr=0;
+    while ((ch = getopt(argc, argv, "f:F:h")) != -1) {
+        if (ch == '?') {
+            optind--; // re-set for next getopt() parse by simplehttp_init
+            break;
+        }
+        switch (ch) {
+        case 'f':
+            db_filename = optarg;
+            open_dbfile();
+            break;
+        case 'F':
+            // field deliminator
+            if (strlen(optarg) != 1) {
+                fprintf(stderr, "Field (-F) deliminator must be a single character");
+                usage();
+                exit(1);
+            }
+            deliminator = optarg[0];
+            break;
+        case 'h':
+            usage();
+            exit(1);
+        }
+    }
+    
     if (map_base == NULL) {
+        usage();
         exit(1);
     }
     
@@ -375,8 +402,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/reload", reload_cb, NULL);
     simplehttp_set_cb("/exit", exit_cb, NULL);
-    simplehttp_main();
-    free_options();
+    simplehttp_main(argc, argv);
     
     return 0;
 }

@@ -28,16 +28,16 @@ static int CmpElem(const void *e1, const void *e2);
 
 struct event ev;
 struct timeval tv = {RECONNECT,0};
-char *db_host = "127.0.0.1";
-int db_port = 1978;
-TCRDB *rdb;
-int db_status;
-char *g_progname;
+static char *db_host = "0.0.0.0";
+static int db_port = 1978;
+static TCRDB *rdb;
+static int db_status;
+static char *g_progname;
 
-double pi;
-double longDistance[181];
-double latDistance = 69.169144;
-double radius = 3958.75587;
+static double pi;
+static double longDistance[181];
+static double latDistance = 69.169144;
+static double radius = 3958.75587;
 
 typedef struct Geo_Result {
     int id;
@@ -447,6 +447,16 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     finalize_json(req, evb, &args, jsobj);
 }
 
+void usage()
+{
+    fprintf(stderr, "%s: http wrapper for Tokyo Tyrant\n", g_progname);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "usage:\n");
+    fprintf(stderr, "  %s [-tchost 0.0.0.0] [-tcport 1978]\n", g_progname);
+    fprintf(stderr, "\n");
+    exit(1);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -454,11 +464,17 @@ main(int argc, char **argv)
     double magic, rlat, s, c;
     int lat;
     
-    define_simplehttp_options();
-    option_define_str("ttserver_host", OPT_OPTIONAL, "127.0.0.1", &db_host, NULL, NULL);
-    option_define_int("ttserver_port", OPT_OPTIONAL, 1978, &db_port, NULL, NULL);
-    if (!option_parse_command_line(argc, argv)){
-        return 1;
+    g_progname = argv[0];
+    for (i=1; i < argc; i++) {
+        if(!strcmp(argv[i], "-tchost")) {
+            if(++i >= argc) usage();
+            db_host = argv[i];
+        } else if(!strcmp(argv[i], "-tcport")) {
+            if(++i >= argc) usage();
+            db_port = tcatoi(argv[i]);
+        } else if (!strcmp(argv[i], "-help")) {
+            usage();
+        }
     }
     
     pi = atan(1.0)*4;
@@ -479,14 +495,13 @@ main(int argc, char **argv)
     simplehttp_set_cb("/del*", del_cb, NULL);
     simplehttp_set_cb("/distance*", distance_cb, NULL);
     simplehttp_set_cb("/box*", box_cb, NULL);
-    simplehttp_main();
+    simplehttp_main(argc, argv);
     
     if (!tcrdbclose(rdb)) {
         errCode = tcrdbecode(rdb);
         fprintf(stderr, "close error: %s\n", tcrdberrmsg(errCode));
     }
     tcrdbdel(rdb);
-    free_options();
 
     return 0;
 }
