@@ -4,13 +4,23 @@ simpletokyo
 SimpleTokyo provides a light http interface to [Tokyo Tyrant](http://fallabs.com/tokyotyrant/). It supports
 the following commands.
 
-Cmdline usage:
+Command Line Options:
 
-    -A 127.0.0.1 (ttserver host to connect to)
-    -P 1978 (ttserver port to connect to)
-    -a 0.0.0.0 (address to bind to)
-    -p 8080 (port to bind to)
-    -D daemonize (default off)
+  --address=<str>        address to listen on
+                         default: 0.0.0.0
+  --daemon               daemonize process
+  --enable-logging       request logging
+  --group=<str>          run as this group
+  --help                 list usage
+  --port=<int>           port to listen on
+                         default: 8080
+  --root=<str>           chdir and run from this directory
+  --ttserver-host=<str> 
+                         default: 127.0.0.1
+  --ttserver-port=<int> 
+                         default: 1978
+  --user=<str>           run as this user
+  --version              
 
 API endpoints:
 
