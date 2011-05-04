@@ -49,6 +49,7 @@ int option_sort(struct Option *a, struct Option *b)
 
 int help_cb(int value) {
     option_help();
+    free_options();
     return 0;
 }
 
