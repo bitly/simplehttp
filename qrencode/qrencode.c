@@ -185,17 +185,23 @@ main(int argc, char **argv)
 
     char *outfile = "/tmp/qrencode.png";
 
+    define_simplehttp_options();
+    option_define_str("temp_file", OPT_OPTIONAL, "/tmp/qrencode.png", &outfile, NULL, NULL);
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
+    }
+
     fp = fopen(outfile, "a+");
     if(fp == NULL) {
         fprintf(stderr, "Failed to create file: %s\n", outfile);
         perror(NULL);
         exit(EXIT_FAILURE);
     }
-    //unlink(outfile);
 
     simplehttp_init();
     simplehttp_set_cb("/qr*", cb, NULL);
-    simplehttp_main(argc, argv);
+    simplehttp_main();
+    free_options();
     
     fclose(fp);
     return 0;

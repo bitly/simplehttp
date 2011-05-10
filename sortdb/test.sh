@@ -26,7 +26,7 @@ run_vg (){
 err=$?
 
 ln -s -f test.tab test.db
-run_vg sortdb "-f test.db -a 127.0.0.1 -p 8080"
+run_vg sortdb "--db-file=test.db --address=127.0.0.1 --port=8080"
 sleep 1
 for key in a b c m o zzzzzzzzzzzzzzzzzzzzzzzz zzzzzzzzzzzzzzzzzzzzzzzzz zzzzzzzzzzzzzzzzzzzzzzzzzz; do 
     echo "/get?key=$key" >> $testsubdir/test.out

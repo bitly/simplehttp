@@ -6,6 +6,8 @@
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
 
+#define VERSION "1.2"
+
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;
     size_t bytes;
@@ -15,7 +17,6 @@ struct queue_entry {
 TAILQ_HEAD(, queue_entry) queues;
 
 char *progname = "simplequeue";
-char *version = "1.1";
 char *overflow_log = NULL;
 FILE *overflow_log_fp = NULL;
 uint64_t max_depth = 0;
@@ -169,54 +170,53 @@ dump(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void usage()
 {   
     fprintf(stderr, "%s: A simple http buffer queue.\n", progname);
-    fprintf(stderr, "Version %s, http://code.google.com/p/simplehttp/\n", version);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "usage:\n");
-    fprintf(stderr, "  %s -- [--overflow_log] [--max_bytes] [--max_depth]\n", progname);
-    fprintf(stderr, "\n");
+    fprintf(stderr, "Version %s, http://code.google.com/p/simplehttp/\n", VERSION);
+    option_help();
     exit(1);
 }   
+
+int version_cb(int value) {
+    fprintf(stdout, "Version: %s\n", VERSION);
+    return 0;
+}
 
 int
 main(int argc, char **argv)
 {
-    int i;
     TAILQ_INIT(&queues);
 
-    for (i=1; i < argc; i++) {
-        if(!strcmp(argv[i], "--overflow_log")) {
-            if(++i >= argc) usage();
-            overflow_log = argv[i];
-        } else if(!strcmp(argv[i], "--max_bytes")) {
-            if(++i >= argc) usage();
-            max_bytes = strtod(argv[i], (char **) NULL);
-        } else if(!strcmp(argv[i], "--max_depth")) {
-            if(++i >= argc) usage();
-            max_depth = strtod(argv[i], (char **) NULL);
-            fprintf(stdout, "max_depth set to %"PRIu64"\n", max_depth);
-        } else if (!strcmp(argv[i], "--help")) {
-            usage();
-        }
-    }
+    define_simplehttp_options();
+    option_define_str("overflow_log", OPT_OPTIONAL, NULL, &overflow_log, NULL, "file to write data beyond --max-depth or --max-bytes");
+    // float?
+    option_define_int("max_bytes", OPT_OPTIONAL, 0, NULL, NULL, "memory limit");
+    option_define_int("max_depth", OPT_OPTIONAL, 0, NULL, NULL, "maximum items in queue");
+    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
+    }
+    max_bytes = (size_t)option_get_int("max_bytes");
+    max_depth = (uint64_t)option_get_int("max_depth");
+
     if (overflow_log) {
         overflow_log_fp = fopen(overflow_log, "a");
         if (!overflow_log_fp) {
             perror("fopen failed: ");
             exit(1);
         }
-        fprintf(stdout, "opened overflow_log: %s\n", overflow_log);
+        fprintf(stdout, "opened --overflow-log: %s\n", overflow_log);
     }
 
-    fprintf(stderr, "Version %s, http://code.google.com/p/simplehttp/\n", version);
-    fprintf(stderr, "\"%s -- --help\" for options\n", progname);
+    fprintf(stderr, "Version: %s, http://code.google.com/p/simplehttp/\n", VERSION);
+    fprintf(stderr, "use --help for options\n");
     simplehttp_init();
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/put*", put, NULL);
     simplehttp_set_cb("/get*", get, NULL);
     simplehttp_set_cb("/dump*", dump, NULL);
     simplehttp_set_cb("/stats*", stats, NULL);
-    simplehttp_main(argc, argv);
+    simplehttp_main();
+    free_options();
     
     if (overflow_log_fp) {
         while (depth) {
