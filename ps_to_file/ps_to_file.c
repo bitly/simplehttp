@@ -8,6 +8,7 @@
 #include <simplehttp/simplehttp.h>
 
 #define DEBUG 0
+#define VERSION "1.1"
 
 struct output_metadata {
     char *filename_format;
@@ -43,44 +44,26 @@ process_message_cb(char *source, void *cbarg){
     fprintf(data->output_file,"%s\n",source);
 }
 
-void usage(){
-    fprintf(stderr, "You must specify -s SOURCE_PORT -f /path/to/output_%%Y_%%m_%%d_%%H.csv\n");
-    fprintf(stderr, "or -s HOST:PORT\n");
+int version_cb(int value) {
+    fprintf(stdout, "Version: %s\n", VERSION);
+    return 0;
 }
 
 int
 main(int argc, char **argv)
 {
-    int source_port;
-    source_port = 0;
-    char source_address[20];
+    char *source_address = "127.0.0.1";
+    int source_port = 80;
     char *filename_format = NULL;
-    char *ptr;
-    int ch;
-
-    while ((ch = getopt(argc, argv, "s:f:h")) != -1) {
-        switch (ch) {
-        case 's':
-            ptr = strchr(optarg,':');
-            if (ptr != NULL && (ptr - optarg) < strlen(optarg)){
-                sscanf(optarg, "%[^:]:%d",&source_address, &source_port);
-            }else{
-                source_port = atoi(optarg);
-                strcpy(source_address,"127.0.0.1");
-            }
-            break;
-        case 'f':
-            filename_format = optarg;
-            fprintf(stdout,"format is %s\n",filename_format);
-            break;
-        case 'h':
-            usage();
-            exit(1);
-        }
-    }
-    if (!source_port || !filename_format){
-        usage();
-        exit(1);
+    
+    define_simplehttp_options();
+    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
+    option_define_str("source_host", OPT_OPTIONAL, "127.0.0.1", &source_address, NULL, NULL);
+    option_define_int("source_port", OPT_OPTIONAL, 80, &source_port, NULL, NULL);
+    option_define_str("filename_format", OPT_REQUIRED, NULL, &filename_format, NULL, "/var/log/pubsub.%%Y-%%m-%%d_%%H.log");
+    
+    if (!option_parse_command_line(argc, argv)){
+        return 1;
     }
     
     struct output_metadata *data;
@@ -89,7 +72,7 @@ main(int argc, char **argv)
     data->current_filename[0] = '\0';
     data->temp_filename[0] = '\0';
     data->output_file = NULL;
-
+    
     return pubsub_to_pubsub_main(source_address, source_port, process_message_cb, data);
     
 }

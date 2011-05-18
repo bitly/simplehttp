@@ -3,13 +3,20 @@ sortdb
 
 Sorted database server. Makes a tab (or comma) delimitated sorted file accessible via HTTP
 
-Cmdline usage:
-
-    -f /path/to/dbfile
-    -F "\t" (field deliminator)
-    -a 127.0.0.1 (address to listen on)
-    -p 8080 (port to listen on)
-    -D (daemonize)
+	OPTIONS
+	
+	--address=<str>        address to listen on
+	                       default: 0.0.0.0
+	--daemon               daemonize process
+	--db-file=<str>       
+	--enable-logging       request logging
+	--field-separator=<char> field separator (eg: comma, tab, pipe). default: TAB
+	--group=<str>          run as this group
+	--help                 list usage
+	--port=<int>           port to listen on
+	                       default: 8080
+	--root=<str>           chdir and run from this directory
+	--user=<str>           run as this user
 
 API endpoints:
 

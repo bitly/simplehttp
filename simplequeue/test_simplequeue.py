@@ -13,7 +13,7 @@ RANDOM_STRINGS = [
 #'string with \x00**', # this will fail
 ]
 
-PORT=8082
+PORT=5150
 
 def pytest_generate_tests(metafunc):
     if metafunc.function in [test_put_get]:
