@@ -189,8 +189,8 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -299,8 +299,8 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -405,8 +405,8 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -483,8 +483,8 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -545,8 +545,8 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -601,8 +601,8 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -659,8 +659,8 @@ void get_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         if (db_should_reconnect(db_status)) {
             db_reconnect();
-            retry = true;
         }
+        retry = true;
     }
     
     // retry
@@ -720,8 +720,8 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             db_status = tcrdbecode(rdb);
             if (db_should_reconnect(db_status)) {
                 db_reconnect();
-                retry = true;
             }
+            retry = true;
         }
         
         // retry
@@ -805,8 +805,8 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             db_status = tcrdbecode(rdb);
             if (db_should_reconnect(db_status)) {
                 db_reconnect();
-                retry = true;
             }
+            retry = true;
         }
         
         if (retry && !(value = (int *)tcrdbget2(rdb, key))) {
@@ -891,8 +891,8 @@ void incr_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                 db_status = tcrdbecode(rdb);
                 if (db_should_reconnect(db_status)) {
                     db_reconnect();
-                    retry = true;
                 }
+                retry = true;
             }
             
             // retry
