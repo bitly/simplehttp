@@ -59,4 +59,3 @@ and turn off buffering. Note: this has been tested with Nginx 0.7 series.
         proxy_next_upstream off;
         charset utf-8;
     }
-
