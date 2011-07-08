@@ -20,6 +20,6 @@ setup(name='pysimplehttp',
         scripts = scripts,
         packages=['pysimplehttp'],
         package_dir = {'pysimplehttp' : 'pysimplehttp/src'},
-        install_requires=['tornado'],
-        requires=['tornado'],
+        install_requires=['tornado', 'ujson'],
+        requires=['tornado', 'ujson'],
     )

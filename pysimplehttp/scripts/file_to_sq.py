@@ -11,6 +11,8 @@ if __name__ == "__main__":
     tornado.options.define("stats_interval", type=int, default=60, help="seconds between displaying stats")
     tornado.options.define("concurrent_requests", type=int, default=20, help="number of simultaneous requests")
     tornado.options.define("check_simplequeue_interval", type=int, default=1, help="seconds between checking simplequeue depth")
+    tornado.options.define('filter_require', type=str, multiple=True, help="filter json message to require for key=value")
+    tornado.options.define('filter_exclude', type=str, multiple=True, help="filter json message to exclude for key=value")
     tornado.options.parse_command_line()
     
     options = tornado.options.options
@@ -23,7 +25,10 @@ if __name__ == "__main__":
                 options.max_queue_depth, 
                 options.simplequeue_url, 
                 options.check_simplequeue_interval,
-                options.stats_interval)
+                options.stats_interval,
+                filter_require=options.filter_require,
+                filter_exclude=options.filter_exclude,
+                )
     file_to_sq.start()
 
     

@@ -38,7 +38,7 @@ class PubsubReader(object):
     
     def _callback(self, data):
         try:
-            self.callback(data)
+            self.callback(data[:-1])
         except Exception:
             logging.exception('failed in callback')
         # NOTE: to work around a maximum recursion error (later fix by https://github.com/facebook/tornado/commit/f8f3a9bf08f1cab1d2ab232074a14e7a94eaa4b1)
@@ -75,7 +75,6 @@ class PubsubReader(object):
     def on_headers(self, data):
         headers = {}
         lines = data.split("\r\n")
-        logging.info(lines)
         status_line = lines[0]
         if status_line.count(' ') < 2:
             raise HTTPError(599, 'connect error')
