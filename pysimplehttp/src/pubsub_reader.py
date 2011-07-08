@@ -2,6 +2,10 @@ import tornado.iostream
 import tornado.ioloop
 import socket
 import logging
+import urlparse
+import functools
+import base64
+
 
 class HTTPError(Exception):
     def __init__(self, code, msg=None):
@@ -10,30 +14,54 @@ class HTTPError(Exception):
         super(HTTPError, self).__init__('%s %s' % (code , msg))
 
 class PubsubReader(object):
-    def __init__(self, io_loop=None):
+    def __init__(self, pubsub_url, io_loop=None):
         self.io_loop = io_loop or tornado.ioloop.IOLoop.instance()
         self.socket = None
+
+        urlinfo = urlparse.urlparse(pubsub_url)
+        assert urlinfo.scheme == 'http'
+        netloc = urlinfo.netloc
+        self.basic_auth = None
+        port = 80
+        if '@' in netloc:
+            self.basic_auth, netloc = netloc.split('@', 1)
+        if ':' in netloc:
+            netloc, port = netloc.rsplit(':', 1)
+            port = int(port)
+        self.host = netloc
+        self.port = port
+        self.get_line = urlparse.urlunparse(('', '', urlinfo.path, urlinfo.params, urlinfo.query, urlinfo.fragment))
+    
+    def start(self):
+        self.open(self.host, self.port)
+        self.io_loop.start()
     
     def _callback(self, data):
         try:
             self.callback(data)
-        except:
+        except Exception:
             logging.exception('failed in callback')
-        self.stream.read_until('\n', self._callback)
+        # NOTE: to work around a maximum recursion error (later fix by https://github.com/facebook/tornado/commit/f8f3a9bf08f1cab1d2ab232074a14e7a94eaa4b1)
+        # we schedule the read_until for later call by the io_loop
+        # this can go away w/ tornado 2.0
+        callback = functools.partial(self.stream.read_until, '\n', self._callback)
+        self.io_loop.add_callback(callback)
         
     def callback(self, data):
-        raise
+        raise Exception("Not Implemented")
         
     def close(self):
         logging.info('closed')
         self.io_loop.stop()
     
     def http_get_line(self):
-        return "GET /sub?multipart=0 HTTP/1.0\r\n\r\n"
+        line = "GET %s HTTP/1.0\r\n" % self.get_line
+        if self.basic_auth:
+            line += "Authorization: Basic %s\r\n" % base64.b64encode(self.basic_auth)
+        return line + "\r\n"
     
-    def open(self, host, port=80):
-        self.host = host
-        self.port = port
+    def open(self, host, port):
+        assert isinstance(port, int)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
         logging.info('opening socket to %s:%s' % (host, port))
         self.socket.connect((host, port))

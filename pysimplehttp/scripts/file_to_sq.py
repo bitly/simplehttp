@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+import tornado.options
+import os
+import sys
+import pysimplehttp.file_to_simplequeue
+
+if __name__ == "__main__":
+    tornado.options.define("input_file", type=str, default=None, help="File to load")
+    tornado.options.define("max_queue_depth", type=int, default=2500, help="only fill the queue to DEPTH entries")
+    tornado.options.define("simplequeue_url", type=str, multiple=True, help="(multiple) url(s) for simplequeue to write to")
+    tornado.options.define("stats_interval", type=int, default=60, help="seconds between displaying stats")
+    tornado.options.define("concurrent_requests", type=int, default=20, help="number of simultaneous requests")
+    tornado.options.define("check_simplequeue_interval", type=int, default=1, help="seconds between checking simplequeue depth")
+    tornado.options.parse_command_line()
+    
+    options = tornado.options.options
+    if not options.input_file or not os.path.exists(options.input_file):
+        sys.stderr.write("ERROR: --input_file=%r does not exist" % options.input_file)
+        sys.exit(1)
+
+    file_to_sq = pysimplehttp.file_to_simplequeue.FileToSimplequeue(options.input_file, 
+                options.max_concurrent, 
+                options.max_queue_depth, 
+                options.simplequeue_url, 
+                options.check_simplequeue_interval,
+                options.stats_interval)
+    file_to_sq.start()
+
+    

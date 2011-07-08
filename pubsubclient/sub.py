@@ -1,9 +1,7 @@
-import sys
 import pycurl
-import StringIO
-from pytc import HDB, HDBOWRITER, HDBOCREAT
 
 def read_cb(data):
+    # note: this may not be called with per-message blocks of data
     print "data: **%s**" % (data)
 
 def dbg_cb(debug_type, debug_msg):
