@@ -1,4 +1,7 @@
 *.o
 *.a
 *.dSYM
+*.pyc
+build
+dist
 sortdb/sortdb
