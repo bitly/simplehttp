@@ -14,8 +14,8 @@ The following daemons are built on simplehttp and included
  * simplememdb - an in-memory version of simpletokyo
  * qrencode
 
-INSTALL INSTRUCTIONS
-====================
+simplehttp Install Instructions
+===============================
 
 to install any of the simplehttp components you will need to install 
 [libevent](http://www.monkey.org/~provos/libevent/) 1.4.13+ and the 'simplehttp' module first.
@@ -38,4 +38,9 @@ Some modules have additional dependencies:
 * [tokyocabinet](http://fallabs.com/tokyocabinet/) / [tokyotyrant](http://fallabs.com/tokyotyrant/)
 * [qrencode](http://fukuchi.org/works/qrencode/index.en.html)
 * [pcre](http://www.pcre.org/)
+
+pysimplehttp Install Instructions
+=================================
+
+    pip install pysimplehttp
 
