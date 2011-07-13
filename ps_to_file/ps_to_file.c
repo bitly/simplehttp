@@ -4,11 +4,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
-#include <simplehttp/pubsubclient.h>
 #include <simplehttp/simplehttp.h>
+#include <pubsubclient/pubsubclient.h>
 
-#define DEBUG 0
-#define VERSION "1.1"
+#ifdef DEBUG
+#define _DEBUG(...) fprintf(stdout, __VA_ARGS__)
+#else
+#define _DEBUG(...) do {;} while (0)
+#endif
+
+#define VERSION "1.2"
 
 struct output_metadata {
     char *filename_format;
@@ -17,62 +22,85 @@ struct output_metadata {
     FILE *output_file;
 };
 
-void
-process_message_cb(char *source, void *cbarg){
-    if(DEBUG) fprintf(stdout, "processing message\n");
-    if (source == NULL || strlen(source) < 3){return;}
-
-    struct output_metadata *data = (struct output_metadata *)cbarg;
+void process_message_cb(char *message, void *cbarg)
+{
+    struct output_metadata *data;
+    time_t timer;
+    struct tm *time_struct;
     
-    time_t timer = time(NULL);
-    struct tm *time_struct = gmtime(&timer);
-    if (DEBUG) fprintf(stdout, "strftime format %s\n", data->filename_format);
+    _DEBUG("process_message_cb()\n");
+    
+    if (message == NULL || strlen(message) < 3) {
+        return;
+    }
+    
+    data = (struct output_metadata *)cbarg;
+    
+    timer = time(NULL);
+    time_struct = gmtime(&timer);
+    _DEBUG("strftime format %s\n", data->filename_format);
     strftime(data->temp_filename, 255, data->filename_format, time_struct);
-    if (DEBUG) fprintf(stdout, "after strftime %s\n", data->temp_filename);
-    if (strcmp(data->temp_filename, data->current_filename) != 0){
-        if (DEBUG) fprintf(stdout, "rolling file\n");
+    _DEBUG("after strftime %s\n", data->temp_filename);
+    if (strcmp(data->temp_filename, data->current_filename) != 0) {
+        _DEBUG("rolling file\n");
         // roll file or open file
-        if (data->output_file){
-            if(DEBUG) fprintf(stdout, "closing file %s\n", data->current_filename);
+        if (data->output_file) {
+            _DEBUG("closing file %s\n", data->current_filename);
             fclose(data->output_file);
         }
-        if (DEBUG) fprintf(stdout, "opening file %s\n", data->temp_filename);
+        _DEBUG("opening file %s\n", data->temp_filename);
         strcpy(data->current_filename, data->temp_filename);
         data->output_file = fopen(data->current_filename, "ab");
     }
     
-    fprintf(data->output_file,"%s\n",source);
+    fprintf(data->output_file, "%s\n", message);
 }
 
-int version_cb(int value) {
+int version_cb(int value)
+{
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
-    char *source_address = "127.0.0.1";
-    int source_port = 80;
+    char *pubsub_url;
+    char *address;
+    int port;
+    char *path;
     char *filename_format = NULL;
+    struct output_metadata *data;
     
     define_simplehttp_options();
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-    option_define_str("source_host", OPT_OPTIONAL, "127.0.0.1", &source_address, NULL, NULL);
-    option_define_int("source_port", OPT_OPTIONAL, 80, &source_port, NULL, NULL);
+    option_define_str("pubsub_url", OPT_REQUIRED, "http://127.0.0.1:80/sub?multipart=0", &pubsub_url, NULL, "url of pubsub to read from");
     option_define_str("filename_format", OPT_REQUIRED, NULL, &filename_format, NULL, "/var/log/pubsub.%%Y-%%m-%%d_%%H.log");
     
     if (!option_parse_command_line(argc, argv)){
         return 1;
     }
     
-    struct output_metadata *data;
-    data = calloc(1,sizeof(*data));
+    data = calloc(1, sizeof(struct output_metadata));
     data->filename_format = filename_format;
     data->current_filename[0] = '\0';
     data->temp_filename[0] = '\0';
     data->output_file = NULL;
     
-    return pubsub_to_pubsub_main(source_address, source_port, process_message_cb, data);
+    if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
+        pubsub_to_pubsub_main(address, port, path, process_message_cb, NULL);
+        
+        if (data->output_file) {
+            fclose(data->output_file);
+        }
+        
+        free(address);
+        free(path);
+    } else {
+        fprintf(stderr, "ERROR: failed to parse pubsub_url\n");
+    }
     
+    free(data);
+    free_options();
+    
+    return 0;
 }

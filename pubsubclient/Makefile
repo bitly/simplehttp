@@ -25,7 +25,6 @@ install:
 	/usr/bin/install -d $(TARGET)/bin/
 	/usr/bin/install -d $(TARGET)/include/simplehttp
 	/usr/bin/install pubsub-reader $(TARGET)/bin/
-	/usr/bin/install pubsub2simplequeue.sh $(TARGET)/bin/
 	/usr/bin/install libpubsubclient.a $(TARGET)/lib/
 	/usr/bin/install pubsubclient.h $(TARGET)/include/simplehttp
 

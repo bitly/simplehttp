@@ -44,7 +44,7 @@ static void async_simplehttp_log(struct evhttp_request *req, struct AsyncCallbac
     
     if (request_logging) {
         sprintf(host_buf, "%s:%d", callback->conn->address, callback->conn->port);
-        sprintf(id_buf, "%"PRIu64":%"PRIu64, callback_group->id, callback->id);
+        sprintf(id_buf, "%"PRIu64":%"PRIu64, callback_group ? callback_group->id : 0, callback->id);
         simplehttp_log(host_buf, req, req_time, id_buf);
     }
 }
@@ -102,10 +102,10 @@ void free_async_callback_group(struct AsyncCallbackGroup *callback_group)
     }
 }
 
-int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, 
-                                void (*cb)(struct evhttp_request *, void *), void *cb_arg)
+struct AsyncCallback *new_async_request(char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
-    /* create new connection to endpoint */
+    static uint64_t counter = 0;
+    // create new connection to endpoint
     struct AsyncCallback *callback = NULL;
     simplehttp_ts start_ts;
     
@@ -113,8 +113,8 @@ int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address,
     
     callback = malloc(sizeof(*callback));
     callback->start_ts = start_ts;
-    callback->id = callback_group->count++;
-    callback->callback_group = callback_group;
+    callback->id = counter++;
+    callback->callback_group = NULL;
     callback->cb = cb;
     callback->cb_arg = cb_arg;
     
@@ -141,12 +141,25 @@ int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address,
         // free the callback object
         free_async_callback(callback);
         
-        return 0;
-    } else {
+        return NULL;
+    }
+    
+    return callback;
+}
+
+int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, 
+                                void (*cb)(struct evhttp_request *, void *), void *cb_arg)
+{
+    struct AsyncCallback *callback = NULL;
+    
+    if ((callback = new_async_request(address, port, path, cb, cb_arg))) {
+        callback->id = callback_group->count++;
+        callback->callback_group = callback_group;
         TAILQ_INSERT_TAIL(&callback_group->callback_list, callback, entries);
-        
         return 1;
     }
+    
+    return 0;
 }
 
 void free_async_callback(struct AsyncCallback *callback)
@@ -180,11 +193,16 @@ void finish_async_request(struct evhttp_request *req, void *cb_arg)
         callback->cb(req, callback->cb_arg);
     }
     
-    // remove from the list of callbacks
-    TAILQ_REMOVE(&callback_group->callback_list, callback, entries);
+    if (callback_group) {
+        // remove from the list of callbacks
+        TAILQ_REMOVE(&callback_group->callback_list, callback, entries);
+    }
+    
     // free this object
     free_async_callback(callback);
     
-    // re-check if this callback_group needs to be freed
-    free_async_callback_group(callback_group);
+    if (callback_group) {
+        // re-check if this callback_group needs to be freed
+        free_async_callback_group(callback_group);
+    }
 }
