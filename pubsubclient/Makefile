@@ -23,10 +23,10 @@ all: libpubsubclient.a pubsub-reader
 install:
 	/usr/bin/install -d $(TARGET)/lib/
 	/usr/bin/install -d $(TARGET)/bin/
-	/usr/bin/install -d $(TARGET)/include/simplehttp
+	/usr/bin/install -d $(TARGET)/include/pubsubclient
 	/usr/bin/install pubsub-reader $(TARGET)/bin/
 	/usr/bin/install libpubsubclient.a $(TARGET)/lib/
-	/usr/bin/install pubsubclient.h $(TARGET)/include/simplehttp
+	/usr/bin/install pubsubclient.h $(TARGET)/include/pubsubclient
 
 clean:
 	/bin/rm -f *.a *.o pubsub-reader
