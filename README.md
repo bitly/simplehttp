@@ -5,14 +5,16 @@ simplehttp is a library built upon libevent that makes high performance http bas
 
 The following daemons are built on simplehttp and included
 
- * pubsub - a daemon that receives data via http POST events and writes that data to all currently connected long-lived http connections
- * pubsub_to_pubsub - a library for piping data from one pubsub stream to another pubsub server
- * simplequeue - an in memory queue with HTTP /get and /post endpoints to push/pop data
- * simpletokyo - a HTTP /get /post /del /fwmatch /incr interface in front of ttserver
- * sortdb - Sorted database server
- * simplegeo
- * simplememdb - an in-memory version of simpletokyo
- * qrencode
+ * `pubsub` - a daemon that receives data via HTTP POST events and writes to all subscribed long-lived HTTP connections
+ * `pubsubclient` - a library for writing clients that read from a pubsub
+ * `ps_to_sq` - a daemon built on top of pubsubclient to write messages from a source pubsub to destination simplequeue(s)
+ * `ps_to_file` - a daemon built on top of pubsubclient to write messages from a source pubsub to time rolled output files
+ * `simplequeue` - an in memory queue with HTTP /put and /get endpoints to push and pop data
+ * `simpletokyo` - a HTTP CRUD interface to front tokyo cabinet's ttserver
+ * `sortdb` - sorted database server
+ * `simplegeo`
+ * `simplememdb` - an in-memory version of simpletokyo
+ * `qrencode`
 
 simplehttp Install Instructions
 ===============================
