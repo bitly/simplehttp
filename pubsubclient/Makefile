@@ -5,7 +5,6 @@ LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
 LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
 
 CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -g
-LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -levent -ldl -lm -lc -lsimplehttp -lpubsubclient -lpthread -lcurl
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
@@ -15,18 +14,14 @@ libpubsubclient.a: pubsubclient.o
 	$(AR) $(AR_FLAGS) $@ $<
 	$(RANLIB) $@
 
-pubsub-reader: pubsub-reader.o
-	$(CC) $(CFLAGS) -o $@ $< $(LIBS) 
-
-all: libpubsubclient.a pubsub-reader
+all: libpubsubclient.a
 
 install:
 	/usr/bin/install -d $(TARGET)/lib/
 	/usr/bin/install -d $(TARGET)/bin/
 	/usr/bin/install -d $(TARGET)/include/pubsubclient
-	/usr/bin/install pubsub-reader $(TARGET)/bin/
 	/usr/bin/install libpubsubclient.a $(TARGET)/lib/
 	/usr/bin/install pubsubclient.h $(TARGET)/include/pubsubclient
 
 clean:
-	/bin/rm -f *.a *.o pubsub-reader
+	/bin/rm -f *.a *.o
