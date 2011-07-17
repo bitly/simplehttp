@@ -16,8 +16,8 @@ class FileToSimplequeue(object):
         assert isinstance(max_concurrent, int)
         assert isinstance(check_simplequeue_interval, int)
         assert isinstance(stats_interval, int)
-        assert isinstance(filter_require, (None, list, tuple))
-        assert isinstance(filter_exclude, (None, list, tuple))
+        assert isinstance(filter_require, (None.__class__, list, tuple))
+        assert isinstance(filter_exclude, (None.__class__, list, tuple))
         for entry in simplequeue_urls:
             assert entry.startswith("http://") or entry.startswith("https://"), "simplequeue url %s is not valid" % entry
         self.simplequeue_urls = simplequeue_urls
