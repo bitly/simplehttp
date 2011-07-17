@@ -27,7 +27,7 @@ class FileToSimplequeue(object):
         self.fill_check = False
         self.max_queue_depth = max_queue_depth
         self.max_concurrent = max_concurrent
-        self.check_simplequeue_interval
+        self.check_simplequeue_interval = check_simplequeue_interval
         self.pending = dict([[simplequeue, 0] for simplequeue in simplequeue_urls])
         self.stats_interval = stats_interval
         self.filter_require = dict([data.split('=', 1) for data in (filter_require or [])])
