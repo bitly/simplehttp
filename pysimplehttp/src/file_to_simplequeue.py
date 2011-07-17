@@ -13,7 +13,7 @@ except ImportError:
 class FileToSimplequeue(object):
     http = tornado.httpclient.AsyncHTTPClient(max_simultaneous_connections=50, max_clients=50)
     def __init__(self, input_file, max_concurrent, max_queue_depth, simplequeue_urls,
-                check_simplequeue_interval, stats_interval, filter_require=None, filter_exclude=None):
+                check_simplequeue_interval, stats_interval, filter_require=None, filter_exclude=None, io_loop=None):
         assert isinstance(simplequeue_urls, (list, tuple))
         assert isinstance(max_queue_depth, int)
         assert isinstance(max_concurrent, int)
@@ -40,6 +40,7 @@ class FileToSimplequeue(object):
         for key, value in self.filter_exclude.items():
             logging.info("excluding json key=%s value=%s" % (key, value) )
         self.stats_reset()
+        self.io_loop = io_loop or tornado.ioloop.IOLoop.instance()
     
     def stats_incr(self, successful=True, filtered=False):
         if filtered:
@@ -65,7 +66,7 @@ class FileToSimplequeue(object):
         self.check_timer = tornado.ioloop.PeriodicCallback(self.check_simplequeue_depth, self.check_simplequeue_interval * 1000)
         self.check_timer.start()
         self.check_simplequeue_depth() # seed the loop
-        tornado.ioloop.IOLoop.instance().start()
+        self.io_loop.start()
     
     def open_file(self, filename):
         assert os.path.exists(filename), "%r is not accessible" % filename
@@ -83,6 +84,10 @@ class FileToSimplequeue(object):
                 callback=functools.partial(self.finish_check_simplequeue_depth, simplequeue=simplequeue))
     
     def finish_check_simplequeue_depth(self, response, simplequeue):
+        if response.code != 200:
+            logging.error('failed checking simplequeue depth %s/stats?format=json' % simplequeue)
+            self.continue_fill()
+            return
         stats = json.loads(response.body)
         entries_needed = self.max_queue_depth - stats['depth']
         entries_needed = max(0, entries_needed)
@@ -93,7 +98,7 @@ class FileToSimplequeue(object):
     def continue_fill(self):
         if not self.fill_check:
             self.fill_check = True
-            tornado.ioloop.IOLoop.instance().add_callback(self.fill_as_needed)
+            self.io_loop.add_callback(self.fill_as_needed)
     
     def fill_as_needed(self):
         """
@@ -113,6 +118,8 @@ class FileToSimplequeue(object):
         """read one line from `self.input` and send it to a simplequeue"""
         data = self.input.readline()
         if not data:
+            if not self.finished:
+                logging.info('at end of input stream')
             self.finish()
             return True
         
@@ -121,7 +128,7 @@ class FileToSimplequeue(object):
                 msg = json.loads(data)
             except Exception:
                 logging.error('failed json.loads(%r)' % data)
-                self.stats_incr(failed=True)
+                self.stats_incr(successful=False)
                 return False
             for key, value in self.filter_require.items():
                 if msg.get(key) != value:
@@ -141,9 +148,9 @@ class FileToSimplequeue(object):
         self.concurrent -= 1
         if response.code != 200:
             logging.info(response)
-            self.stats.failed += 1
+            self.failed += 1
         else:
-            self.stats.success += 1
+            self.success += 1
         
         # continue loop
         if self.max_concurrent > self.concurrent:
@@ -153,4 +160,4 @@ class FileToSimplequeue(object):
         self.finished = True
         if self.concurrent == 0:
             logging.info('stopping ioloop')
-            tornado.ioloop.IOLoop.instance().stop()
+            self.io_loop.stop()

@@ -17,7 +17,10 @@ if __name__ == "__main__":
     
     options = tornado.options.options
     if not options.input_file or not os.path.exists(options.input_file):
-        sys.stderr.write("ERROR: --input_file=%r does not exist" % options.input_file)
+        sys.stderr.write("ERROR: --input_file=%r does not exist\n" % options.input_file)
+        sys.exit(1)
+    if not options.simplequeue_url:
+        sys.stderr.write('ERROR: --simplequeue_url required\n' )
         sys.exit(1)
 
     file_to_sq = pysimplehttp.file_to_simplequeue.FileToSimplequeue(options.input_file, 
