@@ -13,7 +13,10 @@ import tornado.options
 import sys
 import urllib
 import random
-import ujson as json
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 from pysimplehttp.pubsub_reader import PubsubReader
 

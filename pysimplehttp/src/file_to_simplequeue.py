@@ -3,9 +3,12 @@ import tornado.httpclient
 import os
 import functools
 import gzip
-import ujson as json
 import logging
 import urllib
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 class FileToSimplequeue(object):
     http = tornado.httpclient.AsyncHTTPClient(max_simultaneous_connections=50, max_clients=50)

@@ -46,3 +46,4 @@ pysimplehttp Install Instructions
 
     pip install pysimplehttp
 
+provides `file_to_sq.py` and `ps_to_sq.py`. It will use ujson if available.
