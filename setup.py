@@ -5,7 +5,15 @@ from distutils.core import setup
 scripts = ['pysimplehttp/scripts/ps_to_sq.py', 
            'pysimplehttp/scripts/file_to_sq.py']
 
-version = "0.1"
+# release steps
+# ---------------
+# update version variable (below)
+# update pysimplehttp/src/__init__.__version__
+# run python setup.py sdist
+# upload .tar.gz to github
+# run python setup.py register to update pypi
+
+version = "0.1.1"
 setup(name='pysimplehttp',
         version=version,
         description='Python libraries for simplehttp',

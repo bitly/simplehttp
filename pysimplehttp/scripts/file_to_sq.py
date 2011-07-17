@@ -21,7 +21,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     file_to_sq = pysimplehttp.file_to_simplequeue.FileToSimplequeue(options.input_file, 
-                options.max_concurrent, 
+                options.concurrent_requests, 
                 options.max_queue_depth, 
                 options.simplequeue_url, 
                 options.check_simplequeue_interval,
