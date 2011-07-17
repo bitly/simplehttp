@@ -57,7 +57,7 @@ class FileToSimplequeue(object):
         self.filtered = 0
     
     def print_and_reset_stats(self):
-        logging.warning('success: %5d failed: %5d filtered: %5d concurrent: %2d' % (self.success, self.failed, self.filterd, self.concurrent))
+        logging.warning('success: %5d failed: %5d filtered: %5d concurrent: %2d' % (self.success, self.failed, self.filtered, self.concurrent))
         self.stats_reset()
     
     def start(self):
