@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     data->output_file = NULL;
     
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
-        pubsub_to_pubsub_main(address, port, path, process_message_cb, NULL);
+        pubsub_to_pubsub_main(address, port, path, process_message_cb, data);
         
         if (data->output_file) {
             fclose(data->output_file);
