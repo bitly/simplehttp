@@ -1,4 +1,4 @@
-ps_to_sq
+ps_to_http
 ======
 
 helper application to subscribe to a pubsub and write incoming messages

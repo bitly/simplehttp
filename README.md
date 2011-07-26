@@ -7,7 +7,7 @@ The following daemons are built on simplehttp and included
 
  * `pubsub` - a daemon that receives data via HTTP POST events and writes to all subscribed long-lived HTTP connections
  * `pubsubclient` - a library for writing clients that read from a pubsub
- * `ps_to_sq` - a daemon built on top of pubsubclient to write messages from a source pubsub to destination simplequeue(s)
+ * `ps_to_http` - a daemon built on top of pubsubclient to write messages from a source pubsub to destination simplequeue or pubsub server
  * `ps_to_file` - a daemon built on top of pubsubclient to write messages from a source pubsub to time rolled output files
  * `simplequeue` - an in memory queue with HTTP /put and /get endpoints to push and pop data
  * `simpletokyo` - a HTTP CRUD interface to front tokyo cabinet's ttserver
