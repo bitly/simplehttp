@@ -104,9 +104,15 @@ void free_async_callback_group(struct AsyncCallbackGroup *callback_group)
 
 struct AsyncCallback *new_async_request(char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
+    return new_async_request_with_body(address, port, path, NULL, cb, cb_arg);
+}
+
+struct AsyncCallback *new_async_request_with_body(char *address, int port, char *path, char *body, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
+{
     static uint64_t counter = 0;
     // create new connection to endpoint
     struct AsyncCallback *callback = NULL;
+    int request_method = EVHTTP_REQ_GET;
     simplehttp_ts start_ts;
     
     simplehttp_ts_get(&start_ts);
@@ -125,9 +131,14 @@ struct AsyncCallback *new_async_request(char *address, int port, char *path, voi
     callback->request = evhttp_request_new(finish_async_request, callback);
     evhttp_add_header(callback->request->output_headers, "Host", address);
     
+    if (body) {
+        evbuffer_add(callback->request->output_buffer, body, strlen(body));
+        request_method=EVHTTP_REQ_POST;
+    }
+    
     AS_DEBUG("calling evhttp_make_request to %s (%p)\n", path, callback->request);
     
-    if (evhttp_make_request(callback->evcon, callback->request, EVHTTP_REQ_GET, path) == -1) {
+    if (evhttp_make_request(callback->evcon, callback->request, request_method, path) == -1) {
         AS_DEBUG("*** request failed for source %s:%d%s ***\n", address, port, path);
         
         async_simplehttp_log(callback->request, callback);
