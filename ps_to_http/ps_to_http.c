@@ -13,7 +13,7 @@
 #define _DEBUG(...) do {;} while (0)
 #endif
 
-#define VERSION "0.3"
+#define VERSION "0.3.1"
 
 struct destination_url {
     char *address;
@@ -154,13 +154,16 @@ int main(int argc, char **argv)
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     option_define_str("pubsub_url", OPT_REQUIRED, "http://127.0.0.1:80/sub?multipart=0", &pubsub_url, NULL, "url of pubsub to read from");
     option_define_bool("round_robin", OPT_OPTIONAL, 0, &round_robin, NULL, "write round-robin to destination urls");
-    option_define_str("destination_get_url", OPT_REQUIRED, NULL, NULL, destination_get_url_cb, "(multiple) url(s) to HTTP GET to\n\t\t\t This URL must contain a %s for the message data\n\t\t\t for a simplequeue use \"http://127.0.0.1:8080/put?data=%s\"");
-    option_define_str("destination_post_url", OPT_REQUIRED, NULL, NULL, destination_post_url_cb, "(multiple) url(s) to HTTP POST to\n\t\t\t For a pubsub endpoint use \"http://127.0.0.1:8080/pub\"");
+    option_define_str("destination_get_url", OPT_OPTIONAL, NULL, NULL, destination_get_url_cb, "(multiple) url(s) to HTTP GET to\n\t\t\t This URL must contain a %s for the message data\n\t\t\t for a simplequeue use \"http://127.0.0.1:8080/put?data=%s\"");
+    option_define_str("destination_post_url", OPT_OPTIONAL, NULL, NULL, destination_post_url_cb, "(multiple) url(s) to HTTP POST to\n\t\t\t For a pubsub endpoint use \"http://127.0.0.1:8080/pub\"");
     
     if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
-    
+    if (destinations == NULL) {
+        fprintf(stderr, "ERROR: --destination-get-url or --destination-post-url required\n");
+        return 1;
+    }
     init_async_connection_pool(1);
     
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
