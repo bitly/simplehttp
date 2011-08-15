@@ -44,7 +44,18 @@ class SimpleQueue:
         except:
             traceback.print_tb(sys.exc_info()[2])
             return False
-            
+
+    def mget(self, timeout_ms=500, num_items=1, separator=None):
+        url = "http://%s:%d/mget?items=%d" % (self.address, self.port, num_items)
+        if separator:
+            url += "&separator=" + separator
+        
+        try:
+            return self.request(url, timeout_ms)
+        except:
+            traceback.print_tb(sys.exc_info()[2])
+            return False
+                        
     def dump(self, timeout_ms=500):
         url = "http://%s:%d/dump" % (self.address, self.port)
         
