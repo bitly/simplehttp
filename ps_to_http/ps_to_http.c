@@ -13,7 +13,7 @@
 #define _DEBUG(...) do {;} while (0)
 #endif
 
-#define VERSION "0.3.1"
+#define VERSION "0.4"
 
 struct destination_url {
     char *address;
@@ -60,7 +60,7 @@ void free_destination_url(struct destination_url *sq_dest)
 
 void finish_destination_cb(struct evhttp_request *req, void *cb_arg)
 {
-    _DEBUG("finish_destination_cb()\n");
+    //_DEBUG("finish_destination_cb()\n");
 }
 
 void process_message_cb(char *message, void *cb_arg)
@@ -84,12 +84,12 @@ void process_message_cb(char *message, void *cb_arg)
             evb = evbuffer_new();
             encoded_message = simplehttp_encode_uri(message);
             evbuffer_add_printf(evb, destination->path, encoded_message);
-            _DEBUG("process_message_cb(GET %s)\n", (char *)EVBUFFER_DATA(evb));
+            //_DEBUG("process_message_cb(GET %s)\n", (char *)EVBUFFER_DATA(evb));
             new_async_request(destination->address, destination->port, (char *)EVBUFFER_DATA(evb), finish_destination_cb, NULL);
             evbuffer_free(evb);
             free(encoded_message);
         } else {
-            _DEBUG("process_message_cb(POST %s:%d%s)\n", destination->address, destination->port, destination->path);
+            //_DEBUG("process_message_cb(POST %s:%d%s)\n", destination->address, destination->port, destination->path);
             new_async_request_with_body(destination->address, destination->port, destination->path, message, finish_destination_cb, NULL);
         }
         
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
     init_async_connection_pool(1);
     
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
-        pubsub_to_pubsub_main(address, port, path, process_message_cb, NULL);
+        pubsubclient_main(address, port, path, process_message_cb, NULL);
         
         free(address);
         free(path);
