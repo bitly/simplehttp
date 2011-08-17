@@ -133,7 +133,7 @@ struct AsyncCallback *new_async_request_with_body(char *address, int port, char 
     
     if (body) {
         evbuffer_add(callback->request->output_buffer, body, strlen(body));
-        request_method=EVHTTP_REQ_POST;
+        request_method = EVHTTP_REQ_POST;
     }
     
     AS_DEBUG("calling evhttp_make_request to %s (%p)\n", path, callback->request);
