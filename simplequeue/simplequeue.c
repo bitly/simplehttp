@@ -21,6 +21,8 @@ char *overflow_log = NULL;
 FILE *overflow_log_fp = NULL;
 uint64_t max_depth = 0;
 size_t   max_bytes = 0;
+int max_mget = 0;
+char *mget_item_sep = "\n";
 uint64_t depth = 0;
 uint64_t depth_high_water = 0;
 uint64_t n_puts = 0;
@@ -101,21 +103,78 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
+struct queue_entry*
+get_queue_entry() 
+{
+    struct queue_entry *entry;
+    entry = TAILQ_FIRST(&queues);
+    if (entry != NULL) {
+        TAILQ_REMOVE(&queues, entry, entries);
+        depth--;
+    }
+    return entry;
+}
+
 void
 get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    struct queue_entry *entry;
-    
+    struct queue_entry *entry;    
     n_gets++;
-    entry = TAILQ_FIRST(&queues);
+    
+    entry = get_queue_entry();    
     if (entry != NULL) {
         evbuffer_add_printf(evb, "%s", entry->data);
-        TAILQ_REMOVE(&queues, entry, entries);
         free(entry);
-        depth--;
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
+void
+mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    struct evkeyvalq args;
+    const char *items_arg;
+    const char *separator;
+    struct queue_entry *entry;    
+    int num_items = 1;
+    int i = 0;    
+   
+    // parse the number of items to return, defaults to 1
+    evhttp_parse_query(req->uri, &args);
+    items_arg = evhttp_find_header(&args, "items");
+    
+    // if arg, must be > 0, it is constrained to max
+    if (items_arg != NULL) {
+        num_items = atoi(items_arg);
+        if (num_items <= 0) {
+          evbuffer_add_printf(evb, "%s\n", "number of items must be > 0");
+          evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
+          evhttp_clear_headers(&args);   
+          return;     
+        } 
+    }  
+    if (max_mget > 0 && num_items > max_mget) {
+        num_items = max_mget;
+    }
+    
+    // allow dynamically setting separator for items, defaults to newline
+    separator = evhttp_find_header(&args, "separator");
+    if (separator == NULL) {
+        separator = mget_item_sep;
+    }
+    
+    // get n number of items from the queue to return
+    for (i = 0; i < num_items && (entry = get_queue_entry()); n_gets++, i++) {
+        evbuffer_add_printf(evb, "%s", entry->data);
+        if (i < (num_items - 1)) {              
+            evbuffer_add_printf(evb, "%s", separator);
+        }
+        free(entry);            
+    }
+    
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    evhttp_clear_headers(&args);
 }
 
 void
@@ -131,7 +190,7 @@ put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     data = evhttp_find_header(&args, "data");
     if (data == NULL) {
         evbuffer_add_printf(evb, "%s\n", "missing data");
-        evhttp_send_reply(req, HTTP_BADREQUEST, "OK", evb);
+        evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
         evhttp_clear_headers(&args);
         return;
     }
@@ -187,16 +246,19 @@ main(int argc, char **argv)
 
     define_simplehttp_options();
     option_define_str("overflow_log", OPT_OPTIONAL, NULL, &overflow_log, NULL, "file to write data beyond --max-depth or --max-bytes");
+    option_define_str("mget_item_sep", OPT_OPTIONAL, "\n", &mget_item_sep, NULL, "separator between items in mget, defaults to newline");
     // float?
     option_define_int("max_bytes", OPT_OPTIONAL, 0, NULL, NULL, "memory limit");
     option_define_int("max_depth", OPT_OPTIONAL, 0, NULL, NULL, "maximum items in queue");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
+    option_define_int("max_mget", OPT_OPTIONAL, 0, NULL, NULL, "maximum items to return in a single mget");
     
     if (!option_parse_command_line(argc, argv)){
         return 1;
     }
     max_bytes = (size_t)option_get_int("max_bytes");
     max_depth = (uint64_t)option_get_int("max_depth");
+    max_mget = (int)option_get_int("max_mget");
 
     if (overflow_log) {
         overflow_log_fp = fopen(overflow_log, "a");
@@ -213,6 +275,7 @@ main(int argc, char **argv)
     signal(SIGHUP, hup_handler);
     simplehttp_set_cb("/put*", put, NULL);
     simplehttp_set_cb("/get*", get, NULL);
+    simplehttp_set_cb("/mget*", mget, NULL);
     simplehttp_set_cb("/dump*", dump, NULL);
     simplehttp_set_cb("/stats*", stats, NULL);
     simplehttp_main();
