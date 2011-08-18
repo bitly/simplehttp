@@ -13,7 +13,7 @@
 #define _DEBUG(...) do {;} while (0)
 #endif
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 struct output_metadata {
     char *filename_format;
@@ -87,7 +87,7 @@ int main(int argc, char **argv)
     data->output_file = NULL;
     
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
-        pubsub_to_pubsub_main(address, port, path, process_message_cb, data);
+        pubsubclient_main(address, port, path, process_message_cb, data);
         
         if (data->output_file) {
             fclose(data->output_file);
