@@ -54,7 +54,7 @@ void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_t
         response_code = req->response_code;
         method = simplehttp_method(req);
         uri = req->uri;
-        type = req->type;
+        type = (req->kind == EVHTTP_REQUEST) ? req->type : -1;
     } else {
         code = 'E';
         response_code = 0;

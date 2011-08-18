@@ -9,9 +9,9 @@ AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
 
-libpubsubclient.a: pubsubclient.o
+libpubsubclient.a: pubsubclient.o stream_request.o
 	/bin/rm -f $@
-	$(AR) $(AR_FLAGS) $@ $<
+	$(AR) $(AR_FLAGS) $@ $^
 	$(RANLIB) $@
 
 all: libpubsubclient.a
