@@ -26,6 +26,32 @@ def test_put_get(data):
     d = c.get()
     assert d == data
 
+def test_put_mget():
+    c = SimpleQueue(port=PORT, debug=True)
+    c.put('test1')
+    c.put('test2')
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 2
+    assert items[0] == 'test1'
+    assert items[1] == 'test2'
+    c.put('test3')
+    c.put('test4')
+    items = c.mget().splitlines()
+    assert len(items) == 1
+    assert items[0] == 'test3'
+    assert c.get() == 'test4'
+    
+def test_mget_badindex():
+    c = SimpleQueue(port=PORT, debug=True)
+    msg = c.mget(num_items=-2)
+    assert msg == 'number of items must be > 0\n'
+    msg2 = c.mget(num_items=0)
+    assert msg2 == 'number of items must be > 0\n'
+    c.put('test1')
+    items = c.mget().splitlines()
+    assert len(items) == 1
+    assert items[0] == 'test1'
+    
 def test_order():
     # first thing put in, should be first thing out
     c = SimpleQueue(port=PORT, debug=True)
