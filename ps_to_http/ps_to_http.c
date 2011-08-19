@@ -101,6 +101,11 @@ void process_message_cb(char *message, void *cb_arg)
     }
 }
 
+void error_cb(int status_code, void *cb_arg)
+{
+    event_loopbreak();
+}
+
 int version_cb(int value)
 {
     fprintf(stdout, "Version: %s\n", VERSION);
@@ -167,7 +172,7 @@ int main(int argc, char **argv)
     init_async_connection_pool(1);
     
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
-        pubsubclient_main(address, port, path, process_message_cb, NULL);
+        pubsubclient_main(address, port, path, process_message_cb, error_cb, NULL);
         
         free(address);
         free(path);

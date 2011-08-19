@@ -56,6 +56,11 @@ void process_message_cb(char *message, void *cbarg)
     fprintf(data->output_file, "%s\n", message);
 }
 
+void error_cb(int status_code, void *cb_arg)
+{
+    event_loopbreak();
+}
+
 int version_cb(int value)
 {
     fprintf(stdout, "Version: %s\n", VERSION);
@@ -87,7 +92,7 @@ int main(int argc, char **argv)
     data->output_file = NULL;
     
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
-        pubsubclient_main(address, port, path, process_message_cb, data);
+        pubsubclient_main(address, port, path, process_message_cb, error_cb, data);
         
         if (data->output_file) {
             fclose(data->output_file);
