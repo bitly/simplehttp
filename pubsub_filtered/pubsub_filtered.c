@@ -53,14 +53,12 @@ struct global_data {
     void *cbarg;
 };   
 
-
-void source_callback (struct evhttp_request *req, void *arg);
-void source_reconnect_cb(int fd, short what, void *ctx);
-void source_req_close_cb(struct evhttp_request *req, void *arg);
-void reconnect_to_source(int retryNow);
-int connect_to_source();
 char* md5_hash(const char *string);
-void process_message_cb(struct evhttp_request *req, void *arg);
+
+void error_cb(int status_code, void *arg);
+void source_reconnect_cb(int fd, short what, void *ctx);
+void reconnect_to_source(int retryNow);
+void process_message_cb(char *source, void *arg);
 
 int parse_encrypted_fields(char *str);
 int parse_blacklisted_fields(char *str);
@@ -171,8 +169,8 @@ int parse_fields(char *str, char **field_array)
 }
 
 /* md5 encrypt a string */
-char *
-md5_hash(const char *string){
+char *md5_hash(const char *string)
+{
     char *output = calloc(33, sizeof(char));
     struct cvs_MD5Context context;
     unsigned char checksum[16];
@@ -193,11 +191,11 @@ md5_hash(const char *string){
 /*
  * Callback for each fetched pubsub message.
  */
-void process_message_cb(struct evhttp_request *req, void *arg) {
+void process_message_cb(char *source, void *arg)
+{
     struct json_object *json_in;
     struct json_object *element;
     char *field_key;
-    char *source;
     const char *raw_string;
     char *encrypted_string;
     const char *json_out;
@@ -207,27 +205,14 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
     int subject_length;
     int ovector[OVECCOUNT];
     int rc, i=0;
-
-    if (EVBUFFER_LENGTH(req->input_buffer) < 3){
-        // if (DEBUG) fprintf(stderr, "skipping\n");
-        return;
-    }
-    //if (DEBUG) fprintf(stderr, "handling %d bytes of data\n", EVBUFFER_LENGTH(req->input_buffer));
-    msgRecv++;
-    source = calloc(EVBUFFER_LENGTH(req->input_buffer), sizeof(char *));
-    evbuffer_remove(req->input_buffer, source, EVBUFFER_LENGTH(req->input_buffer));
     
-    if (source == NULL || strlen(source) < 3){
-        free(source);
-        return;
-    }
+    msgRecv++;
     
     fprintf(stderr, "%s\n", source);
     json_in = json_tokener_parse(source);
     
     if (json_in == NULL) {
         fprintf(stderr, "ERR: unable to parse json %s\n", source);
-        free(source);
         return ;
     }
     
@@ -235,18 +220,15 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
         element = json_object_object_get(json_in, expected_key);
         if (element == NULL) {
             json_object_put(json_in);
-            free(source);
             return;
         }
         if (json_object_is_type(element, json_type_null)) {
             json_object_put(json_in);
-            free(source);
             return;
         }
         raw_string = json_object_get_string(element);
         if (raw_string == NULL || !strlen(raw_string) || strcmp(raw_string, expected_value) != 0) {
             json_object_put(json_in);
-            free(source);
             return;
         }
     }
@@ -325,12 +307,10 @@ void process_message_cb(struct evhttp_request *req, void *arg) {
         i++;
     }
     json_object_put(json_in);
-    free(source);
-    return ;
 }
 
-int
-is_slow(struct cli *client) {
+int is_slow(struct cli *client)
+{
     if (client->kick_client == KICK_CLIENT) { return 1; }
     struct evhttp_connection *evcon;
     unsigned long output_buffer_length;
@@ -349,8 +329,8 @@ is_slow(struct cli *client) {
     return 0;
 }
 
-int 
-can_kick(struct cli *client) {
+int can_kick(struct cli *client)
+{
     if (client->kick_client == CLIENT_OK){return 0;}
     // if the buffer length is back to zero, we can kick now
     // our error notice has been pushed to the client
@@ -362,8 +342,7 @@ can_kick(struct cli *client) {
     return 0;
 }
 
-void
-clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct cli *client;
     struct tm *time_struct;
@@ -391,8 +370,7 @@ clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
-void
-stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     char buf[33];
     struct evkeyvalq args;
@@ -507,29 +485,34 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 
 /*
+ * Callback for timer-driven reconnect.
+ */
+void source_reconnect_cb(int fd, short what, void *ctx)
+{
+    pubsubclient_connect();
+}
+
+/*
  * Callback function that gets invoked if our connection
  * to the source pubsub stream fails.
  *
  * On failure retry connection.
  *
  */
-void source_req_close_cb(struct evhttp_request *req, void *arg)
+void error_cb(int status_code, void *arg)
 {
-    if (req != NULL) {
-        fprintf(stderr, "HTTP STATUS: %d\n", req->response_code);
-    }
-
-    if (req == NULL || req->response_code != HTTP_OK) {
-        fprintf(stderr, "Source connection failed.\n");
-        reconnect_to_source(0);
-    } else {
+    fprintf(stderr, "HTTP STATUS: %d\n", status_code);
+    
+    if (status_code == HTTP_OK) {
         fprintf(stderr, "Source connection closed.\n");
         reconnect_to_source(1);
+    } else {
+        fprintf(stderr, "Source connection failed.\n");
+        reconnect_to_source(0);
     }
-
+    
     return;
 }
-
 
 /*
  * Reconnect function.
@@ -546,7 +529,7 @@ void reconnect_to_source(int retryNow)
 
     if (retryNow) {
         fprintf(stderr, "Reconnecting now\n");
-        connect_to_source();
+        pubsubclient_connect();
     } else {
         fprintf(stderr, "Reconnecting in %d secs...\n", RECONNECT_SECS);
         /* try again in RECONNECT_SECS */
@@ -558,85 +541,13 @@ void reconnect_to_source(int retryNow)
     return;
 }
 
-/*
- * Callback for timer-driven reconnect.
- */
-void source_reconnect_cb(int fd, short what, void *ctx)
+int version_cb(int value)
 {
-    if (DEBUG) fprintf(stdout, "Timed reconnect attempt...\n");
-    connect_to_source();
-}
-
-/*
- * Connect to the pubsub source stream
- *
- * This may be the initial connection or a reconnect.
- * If it's a reconnect and it fails, we'll retry every
- * RECONNECT_SECS seconds.
- *
- */
-int connect_to_source()
-{
-    number_reconnects++;
-
-    /*
-     * clear event timer so another one doesn't fire
-     * while we're connecting. A new timer will be 
-     * started if we fail on this attempt.
-     */
-    evtimer_del(&reconnect_ev);
-
-    fprintf(stdout, "Connecting to http://%s:%d%s\n", source_address, source_port, source_path);
-
-    /* free previously attempted connection */
-    if (evhttp_source_connection) {
-        evhttp_connection_free(evhttp_source_connection);
-    }
-
-    /* create new connection to source */
-    evhttp_source_connection =
-            evhttp_connection_new(source_address, source_port);
-
-    if (evhttp_source_connection == NULL) {
-        /*
-         * This NULL check never seems to fail, even if
-         * the addr:port is bogus...
-         */
-        fprintf(stderr, "Connection failed for source %s:%d\n", source_address, source_port);
-        reconnect_to_source(0);
-
-        return FAILURE;
-    }
-
-    evhttp_connection_set_retries(evhttp_source_connection, 1);
-
-    evhttp_source_request = 
-            evhttp_request_new(source_req_close_cb, NULL);
-    evhttp_add_header(evhttp_source_request->output_headers,
-            "Host", source_address);
-    evhttp_request_set_chunked_cb(evhttp_source_request, process_message_cb);
-
-    if (evhttp_make_request(evhttp_source_connection,
-            evhttp_source_request, EVHTTP_REQ_GET, source_path) == -1) {
-        fprintf(stdout, "REQUEST FAILED for source %s:%d%s\n", 
-                source_address, source_port, source_path);
-        evhttp_connection_free(evhttp_source_connection);
-
-        reconnect_to_source(0);
-
-        return FAILURE;
-    }
-
-    return SUCCESS;
-}
-
-int version_cb(int value) {
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     
     define_simplehttp_options();
@@ -661,12 +572,9 @@ main(int argc, char **argv)
     simplehttp_set_cb("/sub*", sub_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
-
-    if (connect_to_source() == FAILURE) {
-        exit(1);
-    }
-
-    simplehttp_main();
+    
+    pubsubclient_main(source_address, source_port, source_path, process_message_cb, error_cb, data);
+    
     free_options();
 
     return 0;
