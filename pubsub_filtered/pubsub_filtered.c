@@ -86,10 +86,6 @@ struct timeval reconnect_tv = {RECONNECT_SECS,0};
 struct evhttp_connection *evhttp_source_connection = NULL;
 struct evhttp_request *evhttp_source_request = NULL;
 
-char *source_path = "/sub?multipart=0";
-char *source_address = "127.0.0.1";
-int  source_port = 80;
-
 char *encrypted_fields[64];
 int  num_encrypted_fields = 0;
 char *blacklisted_fields[64];
@@ -213,7 +209,7 @@ void process_message_cb(char *source, void *arg)
     
     if (json_in == NULL) {
         fprintf(stderr, "ERR: unable to parse json %s\n", source);
-        return ;
+        return;
     }
     
     if (expect_value) {
@@ -490,6 +486,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void source_reconnect_cb(int fd, short what, void *ctx)
 {
     pubsubclient_connect();
+    number_reconnects++;
 }
 
 /*
@@ -530,6 +527,7 @@ void reconnect_to_source(int retryNow)
     if (retryNow) {
         fprintf(stderr, "Reconnecting now\n");
         pubsubclient_connect();
+        number_reconnects++;
     } else {
         fprintf(stderr, "Reconnecting in %d secs...\n", RECONNECT_SECS);
         /* try again in RECONNECT_SECS */
@@ -549,11 +547,14 @@ int version_cb(int value)
 
 int main(int argc, char **argv)
 {
+    char *pubsub_url;
+    char *source_address;
+    char *source_path;
+    int source_port;
     
     define_simplehttp_options();
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-    option_define_str("source_host", OPT_OPTIONAL, "127.0.0.1", &source_address, NULL, NULL);
-    option_define_int("source_port", OPT_OPTIONAL, 80, &source_port, NULL, NULL);
+    option_define_str("pubsub_url", OPT_REQUIRED, "http://127.0.0.1/sub?multipart=0", &pubsub_url, NULL, "url of pubsub to read from");
     option_define_str("blacklist_fields", OPT_OPTIONAL, NULL, NULL, parse_blacklisted_fields, "comma separated list of fields to remove");
     option_define_str("encrypted_fields", OPT_OPTIONAL, NULL, NULL, parse_encrypted_fields, "comma separated list of fields to encrypt");
     option_define_str("expected_key", OPT_OPTIONAL, NULL, &expected_key, NULL, "key to expect in messages before echoing to clients");
@@ -562,11 +563,17 @@ int main(int argc, char **argv)
     if (!option_parse_command_line(argc, argv)){
         return 1;
     }
+    
     if ((expected_value && !expected_key) || (expected_key && !expected_value)) {
         fprintf(stderr, "--expected-key and --expected-value must be used together\n");
         exit(1);
     }
-
+    
+    if (!simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &source_address, &source_port, &source_path)) {
+        fprintf(stderr, "ERROR: failed to parse pubsub-url\n");
+        exit(1);
+    }
+    
     TAILQ_INIT(&clients);
     simplehttp_init();
     simplehttp_set_cb("/sub*", sub_cb, NULL);
