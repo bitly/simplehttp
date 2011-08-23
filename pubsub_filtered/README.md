@@ -6,14 +6,27 @@ hashes entries before re-publishing as a pubsub stream
 
 if you have a message like '{desc:"ip added", ip:"127.0.0.1"}' to encrypt the ip you would start pubsub_filtered with '-e ip'
 
-Cmdline Usage: (these options must come before normal pubsub server options)
+OPTIONS
 
-    -s host:port
-    -b comma separated list of keys to blacklist
-    -e comma separated list of keys for values to be encrypted
-    -x key=value (to require a key=value field in the message body)
-    -v print version
-    -h print help
+```
+  --address=<str>        address to listen on
+                         default: 0.0.0.0
+  --blacklist-fields=<str> comma separated list of fields to remove
+  --daemon               daemonize process
+  --enable-logging       request logging
+  --encrypted-fields=<str> comma separated list of fields to encrypt
+  --expected-key=<str>   key to expect in messages before echoing to clients
+  --expected-value=<str> value to expect in --expected-key field in messages before echoing to clients
+  --group=<str>          run as this group
+  --help                 list usage
+  --port=<int>           port to listen on
+                         default: 8080
+  --pubsub-url=<str>     url of pubsub to read from
+                         default: http://127.0.0.1/sub?multipart=0
+  --root=<str>           chdir and run from this directory
+  --user=<str>           run as this user
+  --version              
+```
 
 API endpoints:
 
