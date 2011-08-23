@@ -183,6 +183,9 @@ int main(int argc, char **argv)
     free_destination_urls();
     free_async_connection_pool();
     free_options();
+    free(pubsub_url);
+    free(address);
+    free(path);
     
     return 0;
 }
