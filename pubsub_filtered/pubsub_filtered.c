@@ -204,7 +204,6 @@ void process_message_cb(char *source, void *arg)
     
     msgRecv++;
     
-    fprintf(stderr, "%s\n", source);
     json_in = json_tokener_parse(source);
     
     if (json_in == NULL) {
@@ -580,9 +579,14 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
     
-    pubsubclient_main(source_address, source_port, source_path, process_message_cb, error_cb, data);
+    pubsubclient_init(source_address, source_port, source_path, process_message_cb, error_cb, data);
+    simplehttp_main();
+    pubsubclient_free();
     
     free_options();
-
+    free(pubsub_url);
+    free(source_address);
+    free(source_path);
+    
     return 0;
 }

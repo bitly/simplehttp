@@ -18,6 +18,8 @@ static struct GlobalData *data = NULL;
 static struct StreamRequest *stream_request = NULL;
 static struct evhttp_connection *evhttp_source_connection = NULL;
 static struct evhttp_request *evhttp_source_request = NULL;
+static struct StreamRequest *autodetect_sr = NULL;
+extern struct event_base *current_base;
 
 struct GlobalData {
     void (*message_cb)(char *data, void *cbarg);
@@ -160,19 +162,20 @@ void pubsubclient_autodetect_headercb(struct bufferevent *bev, struct evkeyvalq 
     }
 }
 
-int pubsubclient_main(const char *source_address, int source_port, const char *path, 
+void pubsubclient_init(const char *source_address, int source_port, const char *path, 
     void (*message_cb)(char *data, void *arg),
     void (*error_cb)(int status_code, void *arg),
     void *cbarg)
 {
-    struct StreamRequest *autodetect_sr = NULL;
     
     signal(SIGINT, pubsubclient_termination_handler);
     signal(SIGQUIT, pubsubclient_termination_handler);
     signal(SIGTERM, pubsubclient_termination_handler);
     signal(SIGHUP, pubsubclient_termination_handler);
     
-    event_init();
+    if (!current_base) {
+        event_init();
+    }
     
     data = calloc(1, sizeof(struct GlobalData));
     data->message_cb = message_cb;
@@ -191,9 +194,26 @@ int pubsubclient_main(const char *source_address, int source_port, const char *p
         fprintf(stderr, "ERROR: new_stream_request() failed for %s:%d%s\n", source_address, source_port, path);
         exit(1);
     }
-    
+}
+
+int pubsubclient_main(const char *source_address, int source_port, const char *path, 
+    void (*message_cb)(char *data, void *arg),
+    void (*error_cb)(int status_code, void *arg),
+    void *cbarg)
+{
+    pubsubclient_init(source_address, source_port, path, message_cb, error_cb, cbarg);
     event_dispatch();
-    
+    pubsubclient_free();
+    return 0;
+}
+
+void pubsubclient_run()
+{
+    event_dispatch();
+}    
+
+void pubsubclient_free()
+{
     free_stream_request(autodetect_sr);
     
     if (chunked) {
@@ -203,6 +223,4 @@ int pubsubclient_main(const char *source_address, int source_port, const char *p
     }
     
     free(data);
-    
-    return 0;
 }

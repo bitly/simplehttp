@@ -29,6 +29,9 @@ TAILQ_HEAD(, cb_entry) callbacks;
 int simplehttp_logging = 0;
 int callback_count = 0;
 uint64_t request_count = 0;
+struct evhttp *httpd;
+extern struct event_base *current_base;
+
 
 int help_cb(int *value);
 
@@ -146,7 +149,9 @@ void generic_request_handler(struct evhttp_request *req, void *arg)
 
 void simplehttp_init()
 {
-    event_init();
+    if (!current_base) {
+        event_init();
+    }
     TAILQ_INIT(&callbacks);
     TAILQ_INIT(&simplehttp_reqs);
 }
@@ -160,6 +165,8 @@ void simplehttp_free()
         free(entry->path);
         free(entry);
     }
+    evhttp_free(httpd);
+    simplehttp_stats_destruct();
 }
 
 void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
@@ -187,13 +194,12 @@ void define_simplehttp_options() {
     option_define_str("group", OPT_OPTIONAL, NULL, NULL, NULL, "run as this group");
 }
 
-int simplehttp_main()
+int simplehttp_listen()
 {
     uid_t uid = 0;
     gid_t gid = 0;
     pid_t pid, sid;
     int errno;
-    struct evhttp *httpd;
     struct event pipe_ev;
     
     char *address = option_get_str("address");
@@ -208,7 +214,7 @@ int simplehttp_main()
     if (daemon) {
         pid = fork();
         if (pid < 0) {
-            exit(EXIT_FAILURE);
+            return 0;
         } else if (pid > 0) {
             exit(EXIT_SUCCESS);
         }
@@ -216,7 +222,7 @@ int simplehttp_main()
         umask(0);
         sid = setsid();
         if (sid < 0) {
-            exit(EXIT_FAILURE);
+            return 0;
         }
     }
     
@@ -280,21 +286,26 @@ int simplehttp_main()
     httpd = evhttp_start(address, port);
     if (!httpd) {
         printf("could not bind to %s:%d\n", address, port);
-        return 1;
+        return 0;
     }
     
     printf("listening on %s:%d\n", address, port);
     
     evhttp_set_gencb(httpd, generic_request_handler, NULL);
+    return 1;
+}
+
+void simplehttp_run()
+{
     event_dispatch();
-    
-    printf("exiting\n");
-    
-    evhttp_free(httpd);
-    
-    simplehttp_stats_destruct();
-    
+}
+
+int simplehttp_main()
+{
+    if (!simplehttp_listen()) {
+        return 1;
+    }
+    simplehttp_run();
     simplehttp_free();
-    
     return 0;
 }
