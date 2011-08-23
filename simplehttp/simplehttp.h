@@ -6,7 +6,7 @@
 #include <event.h>
 #include <evhttp.h>
 
-#define SIMPLEHTTP_VERSION "0.1.1" 
+#define SIMPLEHTTP_VERSION "0.1.2" 
 #ifndef DUPE_N_TERMINATE
 #define DUPE_N_TERMINATE(buf, len, tmp) \
             tmp = malloc((len) + 1); \
@@ -42,6 +42,9 @@ struct simplehttp_stats {
 
 void simplehttp_init();
 int simplehttp_main();
+int simplehttp_listen();
+void simplehttp_run();
+void simplehttp_free();
 void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *,void *), void *ctx);
 
 uint64_t simplehttp_request_id(struct evhttp_request *req);
