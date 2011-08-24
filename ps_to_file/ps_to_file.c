@@ -107,8 +107,7 @@ int main(int argc, char **argv)
     free(data);
     free_options();
     free(pubsub_url);
-    free(address);
-    free(path);
+    free(filename_format);
     
     return 0;
 }
