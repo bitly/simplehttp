@@ -6,8 +6,8 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <errno.h>
-#include <simplehttp/queue.h>
-#include <simplehttp/simplehttp.h>
+#include <event.h>
+#include <evhttp.h>
 #include "stream_request.h"
 
 #ifdef DEBUG

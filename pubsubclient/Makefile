@@ -1,10 +1,7 @@
 LIBEVENT ?= /usr/local
 TARGET ?= /usr/local
-LIBSIMPLEHTTP ?= ../simplehttp
-LIBSIMPLEHTTP_INC ?= $(LIBSIMPLEHTTP)/..
-LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
 
-CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -g
+CFLAGS = -I. -I$(LIBEVENT)/include -g
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
