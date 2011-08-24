@@ -3,8 +3,8 @@ TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= /usr/local
 LIBPUBSUBCLIENT ?= /usr/local
 
-CFLAGS = -I. -I$(LIBSIMPLEHTTP)/include -I$(LIBPUBSUBCLIENT)/include -I$(LIBEVENT)/include -I.. -g -Wall -O2
-LIBS = -L. -L$(LIBSIMPLEHTTP)/lib -L$(LIBPUBSUBCLIENT)/lib -L$(LIBEVENT)/lib -L../pubsubclient -L../simplehttp -levent -lpubsubclient -lsimplehttp -lm
+CFLAGS = -I. -I$(LIBSIMPLEHTTP)/include -I$(LIBPUBSUBCLIENT)/include -I.. -I$(LIBEVENT)/include -g -Wall -O2
+LIBS = -L. -L$(LIBSIMPLEHTTP)/lib -L$(LIBPUBSUBCLIENT)/lib -L../simplehttp -L../pubsubclient -L$(LIBEVENT)/lib -levent -lpubsubclient -lsimplehttp -lm
 
 all: ps_to_http
 
