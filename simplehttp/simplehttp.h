@@ -51,7 +51,7 @@ uint64_t simplehttp_request_id(struct evhttp_request *req);
 void simplehttp_async_enable(struct evhttp_request *req);
 void simplehttp_async_finish(struct evhttp_request *req);
 
-void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_time, const char *id);
+void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_time, const char *id, int display_post);
 
 struct simplehttp_stats *simplehttp_stats_new();
 void simplehttp_stats_get(struct simplehttp_stats *st);

@@ -27,7 +27,7 @@ const char *simplehttp_method(struct evhttp_request *req)
     return method;
 }
 
-void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_time, const char *id)
+void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_time, const char *id, int display_post)
 {
     // NOTE: this is localtime not gmtime
     time_t now;
@@ -54,7 +54,7 @@ void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_t
         response_code = req->response_code;
         method = simplehttp_method(req);
         uri = req->uri;
-        type = (req->kind == EVHTTP_REQUEST) ? req->type : -1;
+        type = req->type;
     } else {
         code = 'E';
         response_code = 0;
@@ -65,7 +65,7 @@ void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_t
     
     fprintf(stdout, "[%c %s %s] %d %s %s%s", code, datetime_buf, id, response_code, method, host, uri);
     
-    if (type == EVHTTP_REQ_POST) {
+    if (display_post && (type == EVHTTP_REQ_POST)) {
         fprintf(stdout, "?");
         fwrite(EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer), 1, stdout);
     }

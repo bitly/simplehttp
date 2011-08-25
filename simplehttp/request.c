@@ -90,7 +90,7 @@ void simplehttp_request_finish(struct evhttp_request *req, struct simplehttp_req
     
     if (simplehttp_logging) {
         sprintf(id_buf, "%"PRIu64, s_req->id);
-        simplehttp_log("", req, req_time, id_buf);
+        simplehttp_log("", req, req_time, id_buf, 1);
     }
     
     AS_DEBUG("\n");

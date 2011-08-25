@@ -45,7 +45,7 @@ static void async_simplehttp_log(struct evhttp_request *req, struct AsyncCallbac
     if (request_logging) {
         sprintf(host_buf, "%s:%d", callback->conn->address, callback->conn->port);
         sprintf(id_buf, "%"PRIu64":%"PRIu64, callback_group ? callback_group->id : 0, callback->id);
-        simplehttp_log(host_buf, req, req_time, id_buf);
+        simplehttp_log(host_buf, req, req_time, id_buf, 0);
     }
 }
 
