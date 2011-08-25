@@ -10,7 +10,6 @@
 #include "md5.h"
 #include "pcre.h"
 
-
 #define DEBUG 1
 #define SUCCESS 0
 #define FAILURE 1
@@ -21,7 +20,6 @@
 #define MAX_PENDING_DATA 1024*1024*50
 #define OVECCOUNT 30    /* should be a multiple of 3 */
 #define STRDUP(x) (x ? strdup(x) : NULL)
-
 
 enum kick_client_enum {
     CLIENT_OK = 0,
@@ -48,12 +46,7 @@ typedef struct cli {
     TAILQ_ENTRY(cli) entries;
 } cli;
 
-struct global_data {
-    void (*cb)(char *data, void *cbarg);
-    void *cbarg;
-};   
-
-char* md5_hash(const char *string);
+char *md5_hash(const char *string);
 
 void error_cb(int status_code, void *arg);
 void source_reconnect_cb(int fd, short what, void *ctx);
@@ -72,32 +65,25 @@ void on_close(struct evhttp_connection *evcon, void *ctx);
 
 TAILQ_HEAD(, cli) clients;
 
-uint64_t totalConns = 0;
-uint64_t currentConns = 0;
-uint64_t kickedClients = 0;
-uint64_t msgRecv = 0;
-uint64_t msgSent = 0;
-uint64_t number_reconnects = 0;
+static uint64_t totalConns = 0;
+static uint64_t currentConns = 0;
+static uint64_t kickedClients = 0;
+static uint64_t msgRecv = 0;
+static uint64_t msgSent = 0;
+static uint64_t number_reconnects = 0;
 
-char *version  = "1.1";
-char *g_progname = "pubsub_filtered";
-struct event reconnect_ev;
-struct timeval reconnect_tv = {RECONNECT_SECS,0};
-struct evhttp_connection *evhttp_source_connection = NULL;
-struct evhttp_request *evhttp_source_request = NULL;
+static struct event reconnect_ev;
+static struct timeval reconnect_tv = {RECONNECT_SECS,0};
+static struct evhttp_connection *evhttp_source_connection = NULL;
+static struct evhttp_request *evhttp_source_request = NULL;
 
-char *encrypted_fields[64];
-int  num_encrypted_fields = 0;
-char *blacklisted_fields[64];
-char *expected_key = NULL;
-char *expected_value = NULL;
-int expect_value=0;
-int  num_blacklisted_fields = 0;
-
-
-struct global_data *data = NULL;
-
-
+static char *encrypted_fields[64];
+static int  num_encrypted_fields = 0;
+static char *blacklisted_fields[64];
+static char *expected_key = NULL;
+static char *expected_value = NULL;
+static int expect_value=0;
+static int  num_blacklisted_fields = 0;
 
 /*
  * Parse a comma-delimited  string and populate
@@ -579,7 +565,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/clients", clients_cb, NULL);
     
-    pubsubclient_init(source_address, source_port, source_path, process_message_cb, error_cb, data);
+    pubsubclient_init(source_address, source_port, source_path, process_message_cb, error_cb, NULL);
     simplehttp_main();
     pubsubclient_free();
     
