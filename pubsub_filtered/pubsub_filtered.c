@@ -5,6 +5,7 @@
 #include <time.h>
 #include <simplehttp/queue.h>
 #include <simplehttp/simplehttp.h>
+#include <pubsubclient/pubsubclient.h>
 #include <json/json.h>
 #include "http-internal.h"
 #include "md5.h"
@@ -45,6 +46,7 @@ typedef struct cli {
     struct filter fltr;
     TAILQ_ENTRY(cli) entries;
 } cli;
+TAILQ_HEAD(, cli) clients;
 
 char *md5_hash(const char *string);
 
@@ -62,8 +64,6 @@ int is_slow(struct cli *client);
 void clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void on_close(struct evhttp_connection *evcon, void *ctx);
-
-TAILQ_HEAD(, cli) clients;
 
 static uint64_t totalConns = 0;
 static uint64_t currentConns = 0;

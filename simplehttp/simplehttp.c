@@ -30,8 +30,8 @@ int simplehttp_logging = 0;
 int callback_count = 0;
 uint64_t request_count = 0;
 struct evhttp *httpd;
+struct event pipe_ev;
 extern struct event_base *current_base;
-
 
 int help_cb(int *value);
 
@@ -200,7 +200,6 @@ int simplehttp_listen()
     gid_t gid = 0;
     pid_t pid, sid;
     int errno;
-    struct event pipe_ev;
     
     char *address = option_get_str("address");
     int port = option_get_int("port");
