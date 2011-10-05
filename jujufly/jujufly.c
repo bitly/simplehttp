@@ -93,6 +93,21 @@ TAILQ_HEAD(db_list, juju_db) dbs;
  * utils
  */
 
+void timestr(time_t seconds, struct evbuffer *evb)
+{
+    if (seconds < 60) {
+        evbuffer_add_printf(evb, "%lu seconds", seconds);
+    } else if (seconds < 3600) {
+        evbuffer_add_printf(evb, "%lu minutes %lu seconds", seconds/60, seconds%60);
+    } else if (seconds < 86400) {
+        evbuffer_add_printf(evb, "%lu hours %lu minutes %lu seconds", seconds/3600,
+                            (seconds%3600)/60, seconds%60);
+    } else {
+        evbuffer_add_printf(evb, "%lu days %lu hours %lu minutes %lu seconds", seconds/86400,
+                            (seconds%86400)/3600, (seconds%3600)/60, seconds%60);
+    }
+}
+
 char **split_keys(char *keys, int *nkeys, int sep)
 {
     char *c, **elems;
@@ -175,8 +190,10 @@ bool append_record(juju_db *jjdb, char *line)
         if (*p == '\t') *p = '\0';
     }
 
+/*
     fprintf(stderr, "append_record #%llu btyes %d remaining %lu\n",
             jjdb->header->nrecords, len, jjdb->remaining_space);
+*/
     where = (off_t *)jjdb->header->end;
     WRITE(jjdb, &recsz, sizeof(uint32_t));
     WRITE(jjdb, &when, sizeof(uint32_t));
@@ -370,6 +387,7 @@ void open_all_dbs()
 void put_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 {
     size_t pos = 0;
+    int nputs = 0;
     char *s;
     juju_db *jjdb;
     size_t len = EVBUFFER_LENGTH(req->input_buffer);
@@ -391,10 +409,12 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
                 TAILQ_INSERT_HEAD(&dbs, jjdb, entries);
             }
             s = data+pos;
+            nputs++;
         }
         pos++;
     }
-    evbuffer_add_printf(evb, "Hello bitches\n%s\n", req->uri);
+    evbuffer_add_printf(evb, "nputs\t%d\n", nputs);
+    evhttp_add_header(req->output_headers, "content-type", "text/plain");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
@@ -628,6 +648,7 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     }
 
 done:
+    evhttp_add_header(req->output_headers, "content-type", "text/plain");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
     if (predlist) free(predlist);
@@ -663,6 +684,7 @@ void printidx_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
             }
         }
     }
+    evhttp_add_header(req->output_headers, "content-type", "text/plain");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
 }
@@ -670,6 +692,12 @@ void printidx_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 void dbstats_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 {
     juju_db *jjdb;
+    time_t min, max;
+
+    jjdb = TAILQ_FIRST(&dbs);
+    if (jjdb) max = jjdb->header->oldest;
+    jjdb = TAILQ_LAST(&dbs, db_list);
+    if (jjdb) min = jjdb->header->youngest;
 
     evbuffer_add_printf(evb, "file\tnrecords\tused\tremaining\tavgrecsz\t"
                         "idxsz\tidxpct\n");
@@ -683,9 +711,47 @@ void dbstats_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
                             jjdb->index_size,
                             (jjdb->index_size * 100.0 / jjdb->header->end));
     }
+    evhttp_add_header(req->output_headers, "content-type", "text/plain");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
+void stats_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+{
+    juju_db *jjdb;
+    time_t min = 0, max = 0, now = time(NULL);
+    uint64_t nrec = 0, recsz = 0, idxsz = 0;
+
+    jjdb = TAILQ_FIRST(&dbs);
+    if (jjdb) max = jjdb->header->oldest;
+    jjdb = TAILQ_LAST(&dbs, db_list);
+    if (jjdb) min = jjdb->header->youngest;
+    TAILQ_FOREACH(jjdb, &dbs, entries) {
+        nrec += jjdb->header->nrecords;
+        recsz += jjdb->header->end;
+        idxsz += jjdb->index_size;
+    }
+
+    evbuffer_add_printf(evb, "db_file\t%s\n", db_file);
+    evbuffer_add_printf(evb, "db_size\t%lu\n", db_size);
+    evbuffer_add_printf(evb, "num_dbs\t%d\n", ndatabases);
+    evbuffer_add_printf(evb, "records\t%llu\n", nrec);
+    evbuffer_add_printf(evb, "recsz\t%llu\n", recsz);
+    evbuffer_add_printf(evb, "idxsz\t%llu\n", idxsz);
+    evbuffer_add_printf(evb, "recent\t");
+    timestr(now - min, evb);
+    evbuffer_add_printf(evb, "\n");
+    evbuffer_add_printf(evb, "first\t");
+    timestr(now - max, evb);
+    evbuffer_add_printf(evb, "\n");
+    evbuffer_add_printf(evb, "span\t");
+    timestr(max - min, evb);
+    evbuffer_add_printf(evb, "\n");
+    evbuffer_add_printf(evb, "est\t");
+    timestr(((db_size * ndatabases)*1.0/recsz) * (max - min), evb);
+    evbuffer_add_printf(evb, "\n");
+    evhttp_add_header(req->output_headers, "content-type", "text/plain");
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
 
 int version_cb(int value) {
     fprintf(stdout, "Version: %s\n", VERSION);
@@ -699,9 +765,11 @@ int main(int argc, char **argv)
     char **indexv;
     
     define_simplehttp_options();
-    option_define_str("db_file", OPT_REQUIRED, "db", &db_file, NULL, NULL);
+    option_define_str("db_file", OPT_REQUIRED, "db", &db_file, NULL, "path of root db file (/tmp/db)");
     option_define_str("field_names", OPT_REQUIRED, NULL, NULL, NULL, "field1,field2,field3 (field names)");
     option_define_str("field_index", OPT_REQUIRED, NULL, NULL, NULL, "field2,field3 (index by field name)");
+    option_define_int("db_size", OPT_OPTIONAL, db_size, (int *)&db_size, NULL, "size in bytes");
+    option_define_int("num_dbs", OPT_OPTIONAL, ndatabases, &ndatabases, NULL, "number of databases");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
     if (!option_parse_command_line(argc, argv)){
@@ -728,7 +796,8 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/search*", search_cb, NULL);
     simplehttp_set_cb("/printidx*", printidx_cb, NULL);
-    simplehttp_set_cb("/dbstats*", dbstats_cb, NULL);
+    simplehttp_set_cb("/dbstats", dbstats_cb, NULL);
+    simplehttp_set_cb("/stats", stats_cb, NULL);
     simplehttp_main();
     free_options();
     return 0;
