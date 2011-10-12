@@ -304,22 +304,28 @@ void open_db(juju_db *jjdb)
 
 void close_db(juju_db *jjdb)
 {
-    Word_t *val, rc;
-    uint8_t Index[1024];
+    Word_t *arr1, *arr2, rc;
+    uint8_t field[1024], key[1024*4];
     
     TAILQ_REMOVE(&dbs, jjdb, entries);
     munmap(jjdb->map_base, jjdb->map_size);
     close(jjdb->fd);
     
-    Index[0] = '\0';
-    JSLF(val, jjdb->indices, Index);
-    while (val) {
-        JLFA(rc, *(PPvoid_t)val);
-        fprintf(stderr, "freed %d %s\n", (int)rc, Index);
-        JSLN(val, jjdb->indices, Index);
+    field[0] = '\0';
+    JSLF(arr1, jjdb->indices, field);
+    while (arr1) {
+        // loop through each indexed field name 
+        key[0] = '\0';
+        JSLF(arr2, *(PPvoid_t)arr1, key);
+        while (arr2) {
+            // loop through each key in an index
+            JLFA(rc, *(PPvoid_t)arr2);
+            JSLN(arr2, *(PPvoid_t)arr1, key);
+        }
+        JSLFA(rc, *(PPvoid_t)arr1);
+        JSLN(arr1, jjdb->indices, field);
     }
     JSLFA(rc, jjdb->indices);
-    fprintf(stderr, "end idx free %d\n", (int)rc);
     free(jjdb->filename);
     free(jjdb);
 }
