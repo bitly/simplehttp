@@ -490,30 +490,30 @@ predicate *build_predicates(struct evkeyvalq *pargs, int *npredicates)
         switch (pair->value[0]) {
             case '<':
                 pred->comp = LT;
-                pred->value = ++pair->value;
+                pred->value = pair->value+1;
                 break;
             case ',':
                 pred->comp = LTEQ;
-                pred->value = ++pair->value;
+                pred->value = pair->value+1;
                 break;
             case '>':
                 pred->comp = GT;
-                pred->value = ++pair->value;
+                pred->value = pair->value+1;
                 break;
             case '.':
                 pred->comp = GTEQ;
-                pred->value = ++pair->value;
+                pred->value = pair->value+1;
                 break;
             case '!':
                 pred->comp = NEQ;
-                pred->value = ++pair->value;
+                pred->value = pair->value+1;
                 break;
             case '/':
                 pred->comp = RE;
-                re_tail = strrchr(pair->value+1, '/');
+                pred->value = pair->value+1;
+                re_tail = strrchr(pred->value, '/');
                 if (re_tail) {
                     *re_tail = '\0';
-                    pred->value = ++pair->value;
                     pred->re = pcre_compile(
                         pred->value,
                         0,
@@ -657,7 +657,12 @@ done:
     evhttp_add_header(req->output_headers, "content-type", "text/plain");
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
-    if (predlist) free(predlist);
+    if (predlist) {
+        for (i=0; i < npredicates; i++) {
+            if (predlist[i].re) free(predlist[i].re);
+        }
+        free(predlist);
+    }
     j_arg_d_free(&jargv);
 }
 
