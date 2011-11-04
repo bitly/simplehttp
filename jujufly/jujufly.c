@@ -81,6 +81,7 @@ typedef struct juju_db {
 size_t db_size = DB_SIZE;
 char *db_file = "db";
 int ndatabases = 100;
+time_t when_i_started;
 
 int fieldc;
 char **fieldv;
@@ -96,7 +97,7 @@ TAILQ_HEAD(db_list, juju_db) dbs;
 void timestr(time_t seconds, struct evbuffer *evb)
 {
     if (seconds < 60) {
-        evbuffer_add_printf(evb, "%lu seconds", seconds);
+        evbuffer_add_printf(evb, "%lu seconds", (seconds < 0 ? 0 : seconds));
     } else if (seconds < 3600) {
         evbuffer_add_printf(evb, "%lu minutes %lu seconds", seconds/60, seconds%60);
     } else if (seconds < 86400) {
@@ -545,9 +546,9 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     int i, cmp, matches, npredicates, limit=1000, result_count=0;
     predicate *pred1, *pred2, *predlist;
     Word_t *arr1, *arr2, *val1, *val2, pos;
-    char *slimit, *sbefore;
+    char *slimit, *sbefore, *ssince;
     int ovector[OVECCOUNT];
-    time_t before = time(NULL);
+    time_t since = 0, before = time(NULL);
     
     j_arg_d_init(&jargv);    
     evhttp_parse_query(req->uri, &args);
@@ -558,8 +559,10 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
 
     slimit = (char *)evhttp_find_header(&args, "_limit");
     sbefore = (char *)evhttp_find_header(&args, "_before");
+    ssince = (char *)evhttp_find_header(&args, "_since");
     if (slimit) limit = strtol(slimit, NULL, 10);
     if (sbefore) before = strtol(sbefore, NULL, 10);
+    if (ssince) since = strtol(ssince, NULL, 10);
 
     for (i=0, pred1=NULL; i < npredicates; i++) {
         if (predlist[i].comp == EQ
@@ -577,10 +580,14 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
             printf("cant find %s == %s\n", pred1->field, pred1->value);
             continue;
         }
+        if (jjdb->header->oldest < since
+            || jjdb->header->youngest > before) {
+            continue;
+        }
         pos = -1;
         JLL(val1, *(PPvoid_t)arr1, pos);
         while (val1 && result_count < limit) {
-            if (*val1 >= before) {
+            if (*val1 >= before || *val1 <= since) {
                 JLP(val1, *(PPvoid_t)arr1, pos);
                 continue;
             }
@@ -742,17 +749,20 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         idxsz += jjdb->index_size;
     }
 
+    evbuffer_add_printf(evb, "uptime\t");
+    timestr(now - when_i_started, evb);
+    evbuffer_add_printf(evb, "\n");
     evbuffer_add_printf(evb, "db_file\t%s\n", db_file);
     evbuffer_add_printf(evb, "db_size\t%lu\n", db_size);
     evbuffer_add_printf(evb, "num_dbs\t%d\n", ndatabases);
     evbuffer_add_printf(evb, "records\t%llu\n", nrec);
     evbuffer_add_printf(evb, "recsz\t%llu\n", recsz);
     evbuffer_add_printf(evb, "idxsz\t%llu\n", idxsz);
-    evbuffer_add_printf(evb, "recent\t");
-    timestr(now - min, evb);
-    evbuffer_add_printf(evb, "\n");
-    evbuffer_add_printf(evb, "first\t");
+    evbuffer_add_printf(evb, "youngest\t");
     timestr(now - max, evb);
+    evbuffer_add_printf(evb, "\n");
+    evbuffer_add_printf(evb, "oldest\t");
+    timestr(now - min, evb);
     evbuffer_add_printf(evb, "\n");
     evbuffer_add_printf(evb, "span\t");
     timestr(max - min, evb);
@@ -775,6 +785,7 @@ int main(int argc, char **argv)
     Word_t *val;
     char **indexv;
     
+    when_i_started = time(NULL);
     define_simplehttp_options();
     option_define_str("db_file", OPT_REQUIRED, "db", &db_file, NULL, "path of root db file (/tmp/db)");
     option_define_str("field_names", OPT_REQUIRED, NULL, NULL, NULL, "field1,field2,field3 (field names)");
