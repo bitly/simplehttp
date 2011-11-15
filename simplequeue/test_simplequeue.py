@@ -13,7 +13,7 @@ RANDOM_STRINGS = [
 #'string with \x00**', # this will fail
 ]
 
-PORT=5150
+PORT=8080
 
 def pytest_generate_tests(metafunc):
     if metafunc.function in [test_put_get]:
@@ -25,7 +25,7 @@ def test_put_get(data):
     c.put(data)
     d = c.get()
     assert d == data
-
+    
 def test_put_mget():
     c = SimpleQueue(port=PORT, debug=True)
     c.put('test1')
@@ -40,7 +40,7 @@ def test_put_mget():
     assert len(items) == 1
     assert items[0] == 'test3'
     assert c.get() == 'test4'
-    
+        
 def test_mget_badindex():
     c = SimpleQueue(port=PORT, debug=True)
     msg = c.mget(num_items=-2)
@@ -51,7 +51,95 @@ def test_mget_badindex():
     items = c.mget().splitlines()
     assert len(items) == 1
     assert items[0] == 'test1'
+
+def test_mput_get():
+    c = SimpleQueue(port=PORT, debug=True)
     
+    # default separator
+    c.mput('test1\ntest2\ntest3')
+    assert c.get() == 'test1'
+    assert c.get() == 'test2'
+    assert c.get() == 'test3'
+    
+    # separator specified
+    c.mput(data='test4|test5|test6', separator='|')
+    assert c.get() == 'test4'
+    assert c.get() == 'test5'
+    assert c.get() == 'test6'
+    
+    # default separator with get request instead of post
+    c.mput('test1\ntest2\ntest3', post=False)
+    assert c.get() == 'test1'
+    assert c.get() == 'test2'
+    assert c.get() == 'test3'
+    
+    # separator specified with get request instead of post
+    c.mput(data='test4|test5|test6', separator='|', post=False)
+    assert c.get() == 'test4'
+    assert c.get() == 'test5'
+    assert c.get() == 'test6'
+    
+    # yes this looks like double, actually checking nothing on queue == ''
+    # instead of None
+    assert c.get() == ''
+    assert c.get() == ''
+    
+def test_mput_mget():
+    c = SimpleQueue(port=PORT, debug=True)
+    
+    # default separator
+    c.mput('test1\ntest2\ntest3')
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 3
+    assert items[0] == 'test1'
+    assert items[1] == 'test2'
+    assert items[2] == 'test3'
+    
+    # separator specified
+    c.mput(data='test4|test5|test6', separator='|')
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 3
+    assert items[0] == 'test4'
+    assert items[1] == 'test5'
+    assert items[2] == 'test6'
+
+    # multichar separator specified, and at end
+    c.mput(data='test7SEPtest8SEPtest9SEP', separator='SEP')
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 3
+    assert items[0] == 'test7'
+    assert items[1] == 'test8'
+    assert items[2] == 'test9'
+
+    # default separator with get request instead of post
+    c.mput('test1\ntest2\ntest3', post=False)
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 3
+    assert items[0] == 'test1'
+    assert items[1] == 'test2'
+    assert items[2] == 'test3'
+    
+    # separator specified with get request instead of post
+    c.mput(data='test4|test5|test6', separator='|', post=False)
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 3
+    assert items[0] == 'test4'
+    assert items[1] == 'test5'
+    assert items[2] == 'test6'
+
+    # multichar separator specified, and at end with get request instead of post
+    c.mput(data='test7SEPtest8SEPtest9SEP', separator='SEP', post=False)
+    items = c.mget(num_items=10).splitlines()
+    assert len(items) == 3
+    assert items[0] == 'test7'
+    assert items[1] == 'test8'
+    assert items[2] == 'test9'
+        
+    # yes this looks like double, actually checking nothing on queue == ''
+    # instead of None
+    assert c.get() == ''
+    assert c.get() == ''
+        
 def test_order():
     # first thing put in, should be first thing out
     c = SimpleQueue(port=PORT, debug=True)
@@ -72,5 +160,5 @@ def test_dump():
     assert d == ['test1', 'test2']
 
 if __name__ == "__main__":
-    print "tests against port 8082"
+    print "tests against port 5150"
     print "usage: py.test test_simplequeue.py"

@@ -5,8 +5,9 @@
 #include <inttypes.h>
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
+#include "simplehttp/util.h"
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;
@@ -23,6 +24,7 @@ uint64_t max_depth = 0;
 size_t   max_bytes = 0;
 int max_mget = 0;
 char *mget_item_sep = "\n";
+char *mput_item_sep = "\n";
 uint64_t depth = 0;
 uint64_t depth_high_water = 0;
 uint64_t n_puts = 0;
@@ -178,39 +180,129 @@ mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 }
 
 void
+put_queue_entry(const char *data, size_t record_size) 
+{
+    struct queue_entry *entry;
+
+    // don't put empty records on the queue
+    if (record_size > 0) {
+    
+        // copy the record
+        entry = malloc(sizeof(*entry) + record_size + 1);
+        strncpy(entry->data, data, record_size);
+        entry->data[record_size] = '\0';
+        entry->bytes = record_size;
+        
+        // insert it into the queue, overflow if needed
+        TAILQ_INSERT_TAIL(&queues, entry, entries);
+        n_bytes += entry->bytes;
+        depth++;
+        if (depth > depth_high_water) {
+            depth_high_water = depth;
+        }
+        while ((max_depth > 0 && depth > max_depth) 
+               || (max_bytes > 0 && n_bytes > max_bytes)) {
+            overflow_one();
+        }
+    }
+}
+
+void
 put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
-    struct queue_entry *entry;
     const char *data;
-    size_t size;
-    
+    size_t data_size = 0;
+
     n_puts++;
-    evhttp_parse_query(req->uri, &args);
-    data = evhttp_find_header(&args, "data");
-    if (data == NULL) {
+
+    // try to get the data from get first, then from post
+    evhttp_parse_query(req->uri, &args);    
+    if ((data = evhttp_find_header(&args, "data")) != NULL) {
+        data_size = strlen(data);
+    }
+    else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
+        data = (char *)EVBUFFER_DATA(req->input_buffer);
+    }
+
+    // no data, ignore the call
+    if (data) {
+        put_queue_entry(data, data_size);
+        evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    }
+    else {
         evbuffer_add_printf(evb, "%s\n", "missing data");
         evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
-        evhttp_clear_headers(&args);
-        return;
+    }    
+
+    evhttp_clear_headers(&args);
+}
+
+void
+mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    struct evkeyvalq args;
+    const char *data = NULL;
+    size_t data_size = 0;
+    const char *sep = NULL;
+    size_t sep_size = 0;
+    int data_left = 0;
+    char *sep_start = NULL;
+    const char *record_start;
+    size_t record_size = 0;
+    
+    // try to get the data from get first, then from post
+    evhttp_parse_query(req->uri, &args);    
+    if ((data = evhttp_find_header(&args, "data")) != NULL) {
+        data_size = strlen(data);
+    }
+    else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
+        data = (char *)EVBUFFER_DATA(req->input_buffer);
     }
 
-    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+    // no data, ignore the call
+    if (data) {
+    
+        // allow dynamically setting separator for items, defaults to newline
+        sep = evhttp_find_header(&args, "separator");
+        if (sep == NULL) {
+            sep = mput_item_sep;
+        }    
+        sep_size = strlen(sep);
+        record_start = data;
+        data_left = data_size;
 
-    size = strlen(data);
-    entry = malloc(sizeof(*entry)+size);
-    entry->bytes = size;
-    strcpy(entry->data, data);
-    TAILQ_INSERT_TAIL(&queues, entry, entries);
-    n_bytes += size;
-    depth++;
-    if (depth > depth_high_water) {
-        depth_high_water = depth;
+        // loop through to find the next record but only up to the size of the 
+        // post, the request input buffer can hold much more data, we only want
+        // the post part of it
+        while ((sep_start = simplehttp_strnstr(record_start, sep, data_left)) != NULL) {
+
+            // put each record on the queue
+            record_size = sep_start - record_start;
+            if (record_size > 0) {        
+                if (record_size > data_left) {
+                  record_size = data_left;
+                }            
+                put_queue_entry(record_start, record_size);
+                record_start = sep_start + sep_size;
+                data_left -= (record_size + sep_size);
+                n_puts++;                          
+            }
+        }
+        
+        // any ending record
+        if (data_left > 0) {
+            put_queue_entry(record_start, data_left);
+            n_puts++;                          
+        }
+        
+        evhttp_send_reply(req, HTTP_OK, "OK", evb);
     }
-    while ((max_depth > 0 && depth > max_depth) 
-           || (max_bytes > 0 && n_bytes > max_bytes)) {
-        overflow_one();
+    else {
+        evbuffer_add_printf(evb, "%s\n", "missing data");
+        evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
     }
+
     evhttp_clear_headers(&args);
 }
 
@@ -247,7 +339,7 @@ main(int argc, char **argv)
     define_simplehttp_options();
     option_define_str("overflow_log", OPT_OPTIONAL, NULL, &overflow_log, NULL, "file to write data beyond --max-depth or --max-bytes");
     option_define_str("mget_item_sep", OPT_OPTIONAL, "\n", &mget_item_sep, NULL, "separator between items in mget, defaults to newline");
-    // float?
+    option_define_str("mput_item_sep", OPT_OPTIONAL, "\n", &mput_item_sep, NULL, "separator between items in mput, defaults to newline");
     option_define_int("max_bytes", OPT_OPTIONAL, 0, NULL, NULL, "memory limit");
     option_define_int("max_depth", OPT_OPTIONAL, 0, NULL, NULL, "maximum items in queue");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
@@ -276,6 +368,7 @@ main(int argc, char **argv)
     simplehttp_set_cb("/put*", put, NULL);
     simplehttp_set_cb("/get*", get, NULL);
     simplehttp_set_cb("/mget*", mget, NULL);
+    simplehttp_set_cb("/mput*", mput, NULL);
     simplehttp_set_cb("/dump*", dump, NULL);
     simplehttp_set_cb("/stats*", stats, NULL);
     simplehttp_main();
