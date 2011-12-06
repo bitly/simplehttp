@@ -12,11 +12,13 @@ int j_arg_d_append(j_arg_d *jad, char *arg)
 {
     int i;
     if (jad->argc == jad->size) {
-        char **tmpv = (char **)calloc(jad->size*2, sizeof(char *));
-        for (i=0; i < jad->argc; i++) {
+        char **tmpv = (char **)calloc(jad->size * 2, sizeof(char *));
+        for (i = 0; i < jad->argc; i++) {
             tmpv[i] = jad->argv[i];
         }
-        if (jad->size != J_ARG_D_STATIC_SIZE) free(jad->argv);
+        if (jad->size != J_ARG_D_STATIC_SIZE) {
+            free(jad->argv);
+        }
         jad->argv = tmpv;
         jad->size *= 2;
     }
@@ -33,7 +35,7 @@ void j_arg_d_print(FILE *out, j_arg_d *jad)
 {
     int i;
     fprintf(out, "j_arg_d: %d items %d space\n", jad->argc, jad->size);
-    for (i=0; i < jad->argc; i++) {
+    for (i = 0; i < jad->argc; i++) {
         fprintf(out, "\t%d: %s\n", i, jad->argv[i]);
     }
 }

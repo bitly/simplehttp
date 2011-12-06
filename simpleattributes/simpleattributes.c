@@ -11,8 +11,8 @@
 #define RECONNECT 5
 #define MAXRES 1000
 
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-                    struct evkeyvalq *args, struct json_object *jsobj);
+void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
+                   struct evkeyvalq *args, struct json_object *jsobj);
 int open_db(char *addr, int port, TCRDB **rdb);
 void db_reconnect(int fd, short what, void *ctx);
 void db_error_to_json(int code, struct json_object *jsobj);
@@ -22,15 +22,15 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 struct event ev;
-struct timeval tv = {RECONNECT,0};
+struct timeval tv = {RECONNECT, 0};
 char *db_host = "127.0.0.1";
 int db_port = 1978;
 TCRDB *rdb;
 int db_status;
 
 
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-                    struct evkeyvalq *args, struct json_object *jsobj)
+void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
+                   struct evkeyvalq *args, struct json_object *jsobj)
 {
     char *json, *jsonp;
     
@@ -42,32 +42,34 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
         evbuffer_add_printf(evb, "%s\n", json);
     }
     json_object_put(jsobj); // Odd free function
-
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(args);
 }
 
 int open_db(char *addr, int port, TCRDB **rdb)
 {
-    int ecode=0;
-
+    int ecode = 0;
+    
     if (*rdb != NULL) {
-        if(!tcrdbclose(*rdb)){
-          ecode = tcrdbecode(*rdb);
-          fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
+        if (!tcrdbclose(*rdb)) {
+            ecode = tcrdbecode(*rdb);
+            fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
         }
         tcrdbdel(*rdb);
         *rdb = NULL;
     }
     *rdb = tcrdbnew();
-    if(!tcrdbopen(*rdb, addr, port)){
+    if (!tcrdbopen(*rdb, addr, port)) {
         ecode = tcrdbecode(*rdb);
         fprintf(stderr, "open error(%s:%d): %s\n", addr, port, tcrdberrmsg(ecode));
         *rdb = NULL;
     } else {
         char *status = tcrdbstat(*rdb);
         printf("%s---------------------\n", status);
-        if (status) free(status);
+        if (status) {
+            free(status);
+        }
     }
     return ecode;
 }
@@ -75,7 +77,7 @@ int open_db(char *addr, int port, TCRDB **rdb)
 void db_reconnect(int fd, short what, void *ctx)
 {
     int i, s;
-
+    
     s = db_status;
     if (s != TTESUCCESS && s != TTEINVALID && s != TTEKEEP && s != TTENOREC) {
         db_status = open_db(db_host, db_port, &rdb);
@@ -91,7 +93,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
     json_object_object_add(jsobj, "status", json_object_new_string("error"));
     json_object_object_add(jsobj, "code", json_object_new_int(code));
     json_object_object_add(jsobj, "message",
-                            json_object_new_string((char *)tcrdberrmsg(code)));
+                           json_object_new_string((char *)tcrdberrmsg(code)));
 }
 
 void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -101,13 +103,13 @@ void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     TCLIST              *keylist = NULL;
     struct evkeyvalq    args;
     struct json_object  *jsobj, *jsobj2, *jsarr;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
     max = get_int_argument(&args, "max", 1000);
     len = get_int_argument(&args, "length", 10);
@@ -122,17 +124,19 @@ void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     jsarr = json_object_new_array();
     
     keylist = tcrdbfwmkeys2(rdb, key, max);
-    for (i=off; keylist!=NULL && i<(len+off) && i<tclistnum(keylist); i++){
-      kbuf = (char *)tclistval2(keylist, i);
-      value = tcrdbget2(rdb, kbuf);
-      if (value) {
-          jsobj2 = json_object_new_object();
-          json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
-          json_object_array_add(jsarr, jsobj2);
-          tcfree(value);
-      }
+    for (i = off; keylist != NULL && i < (len + off) && i < tclistnum(keylist); i++) {
+        kbuf = (char *)tclistval2(keylist, i);
+        value = tcrdbget2(rdb, kbuf);
+        if (value) {
+            jsobj2 = json_object_new_object();
+            json_object_object_add(jsobj2, kbuf, json_object_new_string(value));
+            json_object_array_add(jsarr, jsobj2);
+            tcfree(value);
+        }
     }
-    if (keylist) tcfree(keylist);
+    if (keylist) {
+        tcfree(keylist);
+    }
     json_object_object_add(jsobj, "results", jsarr);
     
     if (keylist != NULL) {
@@ -141,7 +145,7 @@ void idx_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -150,13 +154,13 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char                *json, *key;
     struct evkeyvalq    args;
     struct json_object  *jsobj;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     evhttp_parse_query(req->uri, &args);
-
+    
     key = (char *)evhttp_find_header(&args, "key");
     if (key == NULL) {
         evhttp_send_error(req, 400, "key is required");
@@ -171,7 +175,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -182,13 +186,13 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq args;
     struct json_object *jsobj, *jsonPtr, *jsonPtr2;
     TCMAP *cols;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     evhttp_parse_query(req->uri, &args);
-
+    
     hash = (char *)evhttp_find_header(&args, "hash");
     kvs = (char *)evhttp_find_header(&args, "kvs");
     
@@ -211,8 +215,8 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     cols = tcmapnew();
-        
-    for (i=0; i < json_object_array_length(jsonPtr); i++) {
+    
+    for (i = 0; i < json_object_array_length(jsonPtr); i++) {
         jsonPtr2 = json_object_array_get_idx(jsonPtr, i);
         key = (char *)json_object_get_string(json_object_array_get_idx(jsonPtr2, 0));
         value = (char *)json_object_get_string(json_object_array_get_idx(jsonPtr2, 1));
@@ -229,7 +233,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     tcmapdel(cols);
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -244,9 +248,9 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     hash = (char *)evhttp_find_header(&args, "hash");
     key = (char *)evhttp_find_header(&args, "key");
     
@@ -267,7 +271,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         if (key) {
             value = (char *)tcmapget2(cols, key);
-
+            
             if (!value) {
                 value = "";
             }
@@ -278,7 +282,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                 json_object_object_add(jsobj2, name, json_object_new_string(tcmapget2(cols, name)));
             }
         }
-     
+        
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         json_object_object_add(jsobj, "results", jsobj2);
         
@@ -286,18 +290,17 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         json_object_object_add(jsobj, "status", json_object_new_string("error"));
     }
-   
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
 
-int
-main(int argc, char **argv)
-{   
+int main(int argc, char **argv)
+{
     define_simplehttp_options();
     option_define_str("ttserver_host", OPT_OPTIONAL, "127.0.0.1", &db_host, NULL, NULL);
     option_define_int("ttserver_port", OPT_OPTIONAL, 1978, &db_port, NULL, NULL);
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     
@@ -310,6 +313,6 @@ main(int argc, char **argv)
     simplehttp_set_cb("/idx*", idx_cb, NULL);
     simplehttp_main();
     free_options();
-
+    
     return 0;
 }

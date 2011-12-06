@@ -4,7 +4,7 @@
  * Dynamic stack oriented array routines.
  *
  * Uses a static space to store arguments on the heap. Past J_ARG_D_STATIC_SIZE
- * this switches to a power of two allocator using malloc. Redefine 
+ * this switches to a power of two allocator using malloc. Redefine
  * J_ARG_D_STATIC_SIZE to change the static space for your application.
  *
  */

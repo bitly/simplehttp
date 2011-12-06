@@ -17,7 +17,7 @@
 #define DEBUG       1
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
-void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx);
+void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void reload_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 char *prev_line(char *pos);
@@ -44,8 +44,10 @@ static uint64_t total_seeks = 0;
 
 char *prev_line(char *pos)
 {
-    if (!pos) return NULL; 
-    while (pos != map_base && *(pos-1) != '\n') {
+    if (!pos) {
+        return NULL;
+    }
+    while (pos != map_base && *(pos - 1) != '\n') {
         pos--;
     }
     return pos;
@@ -59,13 +61,17 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks,
     int rc;
     
     distance = (upper - lower);
-    if (distance <= 1) return NULL;
+    if (distance <= 1) {
+        return NULL;
+    }
     
     *seeks += 1;
     total_seeks++;
-    current = lower + (distance/2);
+    current = lower + (distance / 2);
     line = prev_line(current);
-    if (!line) return NULL;
+    if (!line) {
+        return NULL;
+    }
     
     /*
     char *tmp = malloc(keylen + 1);
@@ -86,7 +92,7 @@ char *map_search(char *key, size_t keylen, char *lower, char *upper, int *seeks,
     }
 }
 
-void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     char *key, *line, *prev, *start, *end, *newline, buf[32];
@@ -96,17 +102,21 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     key = (char *)evhttp_find_header(&args, "key");
     keylen = key ? strlen(key) : 0;
     
-    if(DEBUG) fprintf(stderr, "/fwmatch %s\n", key);
+    if (DEBUG) {
+        fprintf(stderr, "/fwmatch %s\n", key);
+    }
     
     if (key) {
-        if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base+st.st_size, &seeks, enable_prefix))) {
+        if ((line = map_search(key, keylen, (char *)map_base, (char *)map_base + st.st_size, &seeks, enable_prefix))) {
             /*
              * Walk backwards while key prefix matches.
              * There's probably a better way to do this, however
              * this is easy and faults page in 4k chunks anyway.
              */
-            while (line != (char *)map_base && (prev = prev_line(line-1)) != line) {
-                if (strncmp(key, prev, keylen) != 0) break;
+            while (line != (char *)map_base && (prev = prev_line(line - 1)) != line) {
+                if (strncmp(key, prev, keylen) != 0) {
+                    break;
+                }
                 line = prev;
             }
             
@@ -116,9 +126,11 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
              */
             start = end = line;
             while ((newline = strchr(line, '\n')) != NULL
-                   && newline != (char *)map_base+st.st_size) {
-                line = end = newline+1;
-                if (strncmp(key, line, keylen) != 0) break;
+                    && newline != (char *)map_base + st.st_size) {
+                line = end = newline + 1;
+                if (strncmp(key, line, keylen) != 0) {
+                    break;
+                }
             }
             
             if (end != start) {
@@ -127,7 +139,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
                 evbuffer_add(evb, start, (size_t)(end - start));
             } else {
                 evbuffer_add_printf(evb, "%s\n", line);
-            }   
+            }
             fwmatch_hits++;
             sprintf(buf, "%d", seeks);
             evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
@@ -144,7 +156,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_clear_headers(&args);
 }
 
-void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     char *key, *line, *newline, *delim, buf[32];
@@ -153,21 +165,23 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_parse_query(req->uri, &args);
     key = (char *)evhttp_find_header(&args, "key");
     
-    if(DEBUG) fprintf(stderr, "/get %s\n", key);
+    if (DEBUG) {
+        fprintf(stderr, "/get %s\n", key);
+    }
     
     if (!key) {
         evbuffer_add_printf(evb, "missing argument: key\n");
         evhttp_send_reply(req, HTTP_BADREQUEST, "MISSING_ARG_KEY", evb);
-    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, disable_prefix))) {
+    } else if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base + st.st_size, &seeks, disable_prefix))) {
         sprintf(buf, "%d", seeks);
         evhttp_add_header(req->output_headers, "x-sortdb-seeks", buf);
         delim = strchr(line, deliminator);
         if (delim) {
-            line = delim+1;
+            line = delim + 1;
         }
         newline = strchr(line, '\n');
         if (newline) {
-            evbuffer_add(evb, line, (newline-line)+1);
+            evbuffer_add(evb, line, (newline - line) + 1);
         } else {
             evbuffer_add_printf(evb, "%s\n", line);
         }
@@ -181,7 +195,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
     evhttp_clear_headers(&args);
 }
 
-void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
+void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     struct evkeyval *pair;
@@ -197,14 +211,16 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb,void *ctx)
         key = (char *)pair->value;
         nkeys++;
         
-        if(DEBUG) fprintf(stderr, "/mget %s\n", key);
+        if (DEBUG) {
+            fprintf(stderr, "/mget %s\n", key);
+        }
         
-        if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base+st.st_size, &seeks, disable_prefix))) {
+        if ((line = map_search(key, strlen(key), (char *)map_base, (char *)map_base + st.st_size, &seeks, disable_prefix))) {
             newline = strchr(line, '\n');
             if (newline) {
                 // this is only supported by libevent2+
                 //evbuffer_add_reference(evb, (const void *)line, (size_t)(newline - line) + 1, NULL, NULL);
-                evbuffer_add(evb, line, (size_t)(newline-line)+1);
+                evbuffer_add(evb, line, (size_t)(newline - line) + 1);
             } else {
                 evbuffer_add_printf(evb, "%s\n", line);
             }
@@ -342,7 +358,8 @@ void open_dbfile()
     }
 }
 
-int version_cb(int value) {
+int version_cb(int value)
+{
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
@@ -354,10 +371,10 @@ int main(int argc, char **argv)
     option_define_char("field_separator", OPT_OPTIONAL, '\0', &deliminator, NULL, "field separator (eg: comma, tab, pipe). default: TAB");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
-
+    
     info();
     fprintf(stdout, "--field-separator is \"%c\"\n", deliminator);
     fprintf(stdout, "--db-file is %s\n", db_filename);

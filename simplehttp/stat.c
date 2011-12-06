@@ -41,8 +41,7 @@ void simplehttp_stats_destruct()
     free(stats_counts);
 }
 
-struct simplehttp_stats *simplehttp_stats_new()
-{
+struct simplehttp_stats *simplehttp_stats_new() {
     struct simplehttp_stats *st;
     
     st = malloc(sizeof(struct simplehttp_stats));
@@ -93,8 +92,8 @@ void simplehttp_stats_get(struct simplehttp_stats *st)
     
     for (i = 0; i < callback_count; i++) {
         request_total = 0;
-        for (j = (i * STAT_WINDOW), request_array_end = j + STAT_WINDOW, c = 0; 
-            (j < request_array_end) && (stats[j] != -1); j++, c++) {
+        for (j = (i * STAT_WINDOW), request_array_end = j + STAT_WINDOW, c = 0;
+                (j < request_array_end) && (stats[j] != -1); j++, c++) {
             request_total += stats[j];
         }
         if (c) {

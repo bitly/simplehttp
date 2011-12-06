@@ -128,8 +128,8 @@ int pubsubclient_connect()
         }
         
         // use our stream_request library to handle non-chunked
-        stream_request = new_stream_request("GET", data->source_address, data->source_port, data->path, 
-                                NULL, pubsubclient_source_readcb, pubsubclient_errorcb, data);
+        stream_request = new_stream_request("GET", data->source_address, data->source_port, data->path,
+                                            NULL, pubsubclient_source_readcb, pubsubclient_errorcb, data);
         if (!stream_request) {
             fprintf(stderr, "ERROR: new_stream_request() failed for %s:%d%s\n", data->source_address, data->source_port, data->path);
             return 0;
@@ -162,12 +162,12 @@ void pubsubclient_autodetect_headercb(struct bufferevent *bev, struct evkeyvalq 
     }
 }
 
-void pubsubclient_init(const char *source_address, int source_port, const char *path, 
-    void (*message_cb)(char *data, void *arg),
-    void (*error_cb)(int status_code, void *arg),
-    void *cbarg)
+void pubsubclient_init(const char *source_address, int source_port, const char *path,
+                       void (*message_cb)(char *data, void *arg),
+                       void (*error_cb)(int status_code, void *arg),
+                       void *cbarg)
 {
-    
+
     signal(SIGINT, pubsubclient_termination_handler);
     signal(SIGQUIT, pubsubclient_termination_handler);
     signal(SIGTERM, pubsubclient_termination_handler);
@@ -188,18 +188,18 @@ void pubsubclient_init(const char *source_address, int source_port, const char *
     // perform a request for headers so we can autodetect whether or not we're
     // getting a chunked response
     fprintf(stdout, "AUTODETECTING ENCODING FOR http://%s:%d%s\n", source_address, source_port, path);
-    autodetect_sr = new_stream_request("HEAD", source_address, source_port, path, 
-                        pubsubclient_autodetect_headercb, NULL, pubsubclient_errorcb, data);
+    autodetect_sr = new_stream_request("HEAD", source_address, source_port, path,
+                                       pubsubclient_autodetect_headercb, NULL, pubsubclient_errorcb, data);
     if (!autodetect_sr) {
         fprintf(stderr, "ERROR: new_stream_request() failed for %s:%d%s\n", source_address, source_port, path);
         exit(1);
     }
 }
 
-int pubsubclient_main(const char *source_address, int source_port, const char *path, 
-    void (*message_cb)(char *data, void *arg),
-    void (*error_cb)(int status_code, void *arg),
-    void *cbarg)
+int pubsubclient_main(const char *source_address, int source_port, const char *path,
+                      void (*message_cb)(char *data, void *arg),
+                      void (*error_cb)(int status_code, void *arg),
+                      void *cbarg)
 {
     pubsubclient_init(source_address, source_port, path, message_cb, error_cb, cbarg);
     event_dispatch();
@@ -210,7 +210,7 @@ int pubsubclient_main(const char *source_address, int source_port, const char *p
 void pubsubclient_run()
 {
     event_dispatch();
-}    
+}
 
 void pubsubclient_free()
 {

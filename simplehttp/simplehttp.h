@@ -6,7 +6,7 @@
 #include <event.h>
 #include <evhttp.h>
 
-#define SIMPLEHTTP_VERSION "0.1.2" 
+#define SIMPLEHTTP_VERSION "0.1.2"
 #ifndef DUPE_N_TERMINATE
 #define DUPE_N_TERMINATE(buf, len, tmp) \
             tmp = malloc((len) + 1); \
@@ -45,7 +45,7 @@ int simplehttp_main();
 int simplehttp_listen();
 void simplehttp_run();
 void simplehttp_free();
-void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *,void *), void *ctx);
+void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx);
 
 uint64_t simplehttp_request_id(struct evhttp_request *req);
 void simplehttp_async_enable(struct evhttp_request *req);
@@ -62,10 +62,10 @@ char **simplehttp_callback_names();
 struct AsyncCallbackGroup;
 struct AsyncCallback;
 
-/* start a new callback_group. memory will be freed after a call to 
+/* start a new callback_group. memory will be freed after a call to
     release_callback_group or when all the callbacks have been run */
 struct AsyncCallbackGroup *new_async_callback_group(struct evhttp_request *req, void (*finished_cb)(struct evhttp_request *, void *), void *finished_cb_arg);
-/* create a new AsyncCallback. delegation of memory for this callback 
+/* create a new AsyncCallback. delegation of memory for this callback
     will be passed to callback_group */
 int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg);
 struct AsyncCallback *new_async_request(char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg);

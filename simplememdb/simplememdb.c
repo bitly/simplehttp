@@ -74,9 +74,9 @@ void db_error_to_txt(const char *msg, struct evbuffer *evb)
     evbuffer_add_printf(evb, "INTERNAL_ERROR: %s", msg);
 }
 
-/* 
+/*
 forward match for "key" casting values to int
-?format=json returns {"results":[{k:v},{k,v}, ...]} 
+?format=json returns {"results":[{k:v},{k,v}, ...]}
 ?format=txt returns k,v\nk,v\n...
 */
 void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -119,18 +119,18 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     list_count = tclistnum(keylist);
     for (i = off; keylist != NULL && i < (len + off) && i < list_count; i++) {
-      kbuf = (char *)tclistval2(keylist, i);
-      value = (int *)tcadbget(adb, kbuf, strlen(kbuf), &n);
-      if (value) {
-          if (format == json_format) {
-              jsobj2 = json_object_new_object();
-              json_object_object_add(jsobj2, kbuf, json_object_new_int((int)*value));
-              json_object_array_add(jsarr, jsobj2);
-          } else {
-              evbuffer_add_printf(evb, "%s,%d\n", kbuf, (int)*value);
-          }
-          tcfree(value);
-      }
+        kbuf = (char *)tclistval2(keylist, i);
+        value = (int *)tcadbget(adb, kbuf, strlen(kbuf), &n);
+        if (value) {
+            if (format == json_format) {
+                jsobj2 = json_object_new_object();
+                json_object_object_add(jsobj2, kbuf, json_object_new_int((int)*value));
+                json_object_array_add(jsarr, jsobj2);
+            } else {
+                evbuffer_add_printf(evb, "%s,%d\n", kbuf, (int)*value);
+            }
+            tcfree(value);
+        }
     }
     tclistdel(keylist);
     
@@ -202,7 +202,7 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
         kbuf = (char *)tclistval2(keylist, i);
         value = (int *)tcadbget(adb, kbuf, strlen(kbuf), &n);
         if (value) {
-            if (format == txt_format){
+            if (format == txt_format) {
                 if (!started_output) {
                     evbuffer_add(evb, key, strlen(key) - 1);
                     evbuffer_add(evb, ",", 1);
@@ -275,7 +275,7 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     list_count = tclistnum(keylist);
-    for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
+    for (i = off; keylist != NULL && i < (len + off) && i < list_count; i++) {
         kbuf = (char *)tclistval2(keylist, i);
         value = tcadbget(adb, kbuf, strlen(kbuf), &n);
         if (value) {
@@ -488,7 +488,9 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     TAILQ_FOREACH(pair, &args, next) {
-        if (pair->key[0] != 'k') continue;
+        if (pair->key[0] != 'k') {
+            continue;
+        }
         key = (char *)pair->value;
         nkeys++;
         
@@ -534,7 +536,9 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     TAILQ_FOREACH(pair, &args, next) {
-        if (pair->key[0] != 'k') continue;
+        if (pair->key[0] != 'k') {
+            continue;
+        }
         key = (char *)pair->value;
         nkeys++;
         
@@ -710,14 +714,14 @@ void do_dump(int fd, short what, void *ctx)
     while ((key = tcadbiternext2(adb)) != NULL) {
         if (dump_regex) {
             rc = pcre_exec(
-                    dump_regex,           /* the compiled pattern */
-                    NULL,                 /* no extra data - we didn't study the pattern */
-                    key,                  /* the subject string */
-                    strlen(key),          /* the length of the subject */
-                    0,                    /* start at offset 0 in the subject */
-                    0,                    /* default options */
-                    ovector,              /* output vector for substring information */
-                    sizeof(ovector));     /* number of elements in the output vector */
+                     dump_regex,           /* the compiled pattern */
+                     NULL,                 /* no extra data - we didn't study the pattern */
+                     key,                  /* the subject string */
+                     strlen(key),          /* the length of the subject */
+                     0,                    /* start at offset 0 in the subject */
+                     0,                    /* default options */
+                     ovector,              /* output vector for substring information */
+                     sizeof(ovector));     /* number of elements in the output vector */
         }
         
         if ((dump_regex && (rc > 0)) || !dump_regex) {
@@ -759,7 +763,7 @@ void do_dump(int fd, short what, void *ctx)
 
 void set_dump_timer(struct evhttp_request *req)
 {
-    struct timeval tv = {0,500000}; // loop every 0.5 seconds
+    struct timeval tv = {0, 500000}; // loop every 0.5 seconds
     
     evtimer_del(&ev);
     evtimer_set(&ev, do_dump, req);
@@ -804,7 +808,8 @@ void dump_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     set_dump_timer(req);
 }
 
-int version_cb(int value) {
+int version_cb(int value)
+{
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
@@ -813,12 +818,12 @@ int main(int argc, char **argv)
 {
     char buf[SM_BUFFER_SZ];
     unsigned long bnum = 1024;
-
+    
     define_simplehttp_options();
     option_define_int("bnum", OPT_OPTIONAL, 1024, NULL, NULL, "the number of buckets");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     
