@@ -27,8 +27,7 @@ struct destination_url *destinations = NULL;
 struct destination_url *current_destination = NULL;
 int round_robin = 0;
 
-struct destination_url *new_destination_url(char *url)
-{
+struct destination_url *new_destination_url(char *url) {
     struct destination_url *sq_dest;
     char *address;
     int port;
@@ -79,7 +78,7 @@ void process_message_cb(char *message, void *cb_arg)
         // start loop over again for round-robin
         current_destination = destinations;
     }
-    LL_FOREACH(current_destination, destination){
+    LL_FOREACH(current_destination, destination) {
         if (destination->method == EVHTTP_REQ_GET) {
             evb = evbuffer_new();
             encoded_message = simplehttp_encode_uri(message);
@@ -93,7 +92,7 @@ void process_message_cb(char *message, void *cb_arg)
             new_async_request_with_body(destination->address, destination->port, destination->path, message, finish_destination_cb, NULL);
         }
         
-        if (round_robin){
+        if (round_robin) {
             // break and set the next loop to start at the next destination
             current_destination = destination->next;
             break;

@@ -61,12 +61,12 @@ void finalize_request(int response_code, struct evhttp_request *req, struct evbu
 
 void db_close()
 {
-    int ecode=0;
+    int ecode = 0;
     if (rdb != NULL) {
         fprintf(stderr, "closing db\n");
-        if(!tcrdbclose(rdb)){
-          ecode = tcrdbecode(rdb);
-          fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
+        if (!tcrdbclose(rdb)) {
+            ecode = tcrdbecode(rdb);
+            fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
         }
         tcrdbdel(rdb);
         rdb = NULL;
@@ -76,7 +76,7 @@ void db_close()
 int db_open(char *addr, int port)
 {
     db_opened++;
-    int ecode=0;
+    int ecode = 0;
     char *status;
     
     db_close();
@@ -138,9 +138,9 @@ void db_error_to_txt(int code, struct evbuffer *evb)
     evbuffer_add_printf(evb, "DB_ERROR: %s", (char *)tcrdberrmsg(code));
 }
 
-/* 
+/*
 forward match for "key" casting values to int
-?format=json returns {"results":[{k:v},{k,v}, ...]} 
+?format=json returns {"results":[{k:v},{k,v}, ...]}
 ?format=txt returns k,v\nk,v\n...
 */
 void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -203,11 +203,11 @@ void fwmatch_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     if (keylist) {
         list_count = tclistnum(keylist);
-        for (i = off; i < (len+off) && i < list_count; i++) {
+        for (i = off; i < (len + off) && i < list_count; i++) {
             kbuf = (char *)tclistval2(keylist, i);
             value = (int *)tcrdbget2(rdb, kbuf);
             if (value) {
-                if (format == txt_format){
+                if (format == txt_format) {
                     evbuffer_add_printf(evb, "%s,%d\n", kbuf, (int)*value);
                 } else {
                     jsobj2 = json_object_new_object();
@@ -283,7 +283,7 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
         evhttp_clear_headers(&args);
         return;
     }
-
+    
     format = get_argument_format(&args);
     max = get_int_argument(&args, "max", 1000);
     len = get_int_argument(&args, "length", 10);
@@ -313,11 +313,11 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
     
     if (keylist) {
         list_count = tclistnum(keylist);
-        for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
+        for (i = off; keylist != NULL && i < (len + off) && i < list_count; i++) {
             kbuf = (char *)tclistval2(keylist, i);
             value = (int *)tcrdbget2(rdb, kbuf);
             if (value) {
-                if (format == txt_format){
+                if (format == txt_format) {
                     if (!started_output) {
                         evbuffer_add(evb, key, strlen(key) - 1);
                         evbuffer_add(evb, ",", 1);
@@ -343,7 +343,7 @@ void fwmatch_int_merged_cb(struct evhttp_request *req, struct evbuffer *evb, voi
         if (format == txt_format) {
             evbuffer_add(evb, "\n", 1);
         }
-    
+        
         if (format == json_format) {
             json_object_object_add(jsobj, "results", jsarr);
             json_object_object_add(jsobj, "status", json_object_new_string(list_count ? "ok" : "no results"));
@@ -419,11 +419,11 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     if (keylist) {
         list_count = tclistnum(keylist);
-        for (i = off; keylist != NULL && i < (len+off) && i < list_count; i++) {
+        for (i = off; keylist != NULL && i < (len + off) && i < list_count; i++) {
             kbuf = (char *)tclistval2(keylist, i);
             value = tcrdbget2(rdb, kbuf);
             if (value) {
-                if (format == txt_format){
+                if (format == txt_format) {
                     evbuffer_add_printf(evb, "%s,%s\n", kbuf, value);
                 } else {
                     jsobj2 = json_object_new_object();
@@ -710,7 +710,9 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     TAILQ_FOREACH(pair, &args, next) {
-        if (pair->key[0] != 'k') continue;
+        if (pair->key[0] != 'k') {
+            continue;
+        }
         key = (char *)pair->value;
         nkeys++;
         retry = false;
@@ -795,7 +797,9 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     TAILQ_FOREACH(pair, &args, next) {
-        if (pair->key[0] != 'k') continue;
+        if (pair->key[0] != 'k') {
+            continue;
+        }
         key = (char *)pair->value;
         nkeys++;
         retry = false;
@@ -999,7 +1003,8 @@ void info()
     fprintf(stdout, "Version: %s, https://github.com/bitly/simplehttp/tree/master/simpletokyo\n", VERSION);
 }
 
-int version_cb(int value) {
+int version_cb(int value)
+{
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
@@ -1011,7 +1016,7 @@ int main(int argc, char **argv)
     option_define_int("ttserver_port", OPT_OPTIONAL, 1978, &db_port, NULL, NULL);
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     

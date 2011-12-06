@@ -18,12 +18,11 @@
 
 enum read_states { read_firstline, read_headers, read_body };
 
-struct StreamRequest *new_stream_request(const char *method, const char *source_address, int source_port, const char *path, 
-    void (*header_cb)(struct bufferevent *bev, struct evkeyvalq *headers, void *arg), 
-    void (*read_cb)(struct bufferevent *bev, void *arg), 
-    void (*error_cb)(struct bufferevent *bev, void *arg), 
-    void *arg)
-{
+struct StreamRequest *new_stream_request(const char *method, const char *source_address, int source_port, const char *path,
+        void (*header_cb)(struct bufferevent *bev, struct evkeyvalq *headers, void *arg),
+        void (*read_cb)(struct bufferevent *bev, void *arg),
+        void (*error_cb)(struct bufferevent *bev, void *arg),
+        void *arg) {
     struct StreamRequest *sr;
     int fd;
     struct evbuffer *http_request;

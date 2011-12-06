@@ -27,7 +27,7 @@ void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 static int CmpElem(const void *e1, const void *e2);
 
 struct event ev;
-struct timeval tv = {RECONNECT,0};
+struct timeval tv = {RECONNECT, 0};
 char *db_host = "127.0.0.1";
 int db_port = 1978;
 TCRDB *rdb;
@@ -46,22 +46,22 @@ typedef struct Geo_Result {
     double longitude;
     double distance;
 } Geo_Result;
-    
+
 double geo_distance(double lat1, double lng1, double lat2, double lng2)
 {
     double rlat, rlng, rlat2, rlng2;
     double miles;
-
-    rlat = lat1*pi/180;
-    rlng = lng1*pi/180;
-    rlat2 = lat2*pi/180;
-    rlng2 = lng2*pi/180;
+    
+    rlat = lat1 * pi / 180;
+    rlng = lng1 * pi / 180;
+    rlat2 = lat2 * pi / 180;
+    rlng2 = lng2 * pi / 180;
     
     if (rlat == rlat2 && rlng == rlng2) {
         miles = 0;
     } else {
         // Spherical Law of Cosines
-        miles = radius*acos(sin(rlat)*sin(rlat2)+cos(rlng-rlng2)*cos(rlat)*cos(rlat2));
+        miles = radius * acos(sin(rlat) * sin(rlat2) + cos(rlng - rlng2) * cos(rlat) * cos(rlat2));
     }
     
     return miles;
@@ -71,16 +71,16 @@ void geo_box(double lat, double lng, double miles, double *ulat, double *ulng, d
 {
     double latD, lngD, clat, clng;
     
-    lngD = miles/longDistance[(int) fabs(lat)];
-    latD = miles/latDistance;
-    *llat = (lat+latD > 180 ? 180 - lat+latD : lat+latD);
-    *llng = (lng+lngD > 180 ? 180 - lng+lngD : lng+lngD);
-    *ulat = (lat-latD < -180 ? 180 + lat-latD : lat-latD);
-    *ulng = (lng-lngD < -180 ? 180 + lng-lngD : lng-lngD);
+    lngD = miles / longDistance[(int) fabs(lat)];
+    latD = miles / latDistance;
+    *llat = (lat + latD > 180 ? 180 - lat + latD : lat + latD);
+    *llng = (lng + lngD > 180 ? 180 - lng + lngD : lng + lngD);
+    *ulat = (lat - latD < -180 ? 180 + lat - latD : lat - latD);
+    *ulng = (lng - lngD < -180 ? 180 + lng - lngD : lng - lngD);
 }
 
-void finalize_json(struct evhttp_request *req, struct evbuffer *evb, 
-                    struct evkeyvalq *args, struct json_object *jsobj)
+void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
+                   struct evkeyvalq *args, struct json_object *jsobj)
 {
     const char *json;
     char *jsonp;
@@ -93,25 +93,25 @@ void finalize_json(struct evhttp_request *req, struct evbuffer *evb,
         evbuffer_add_printf(evb, "%s\n", json);
     }
     json_object_put(jsobj); // Odd free function
-
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(args);
 }
 
 int open_db(char *addr, int port, TCRDB **rdb)
 {
-    int ecode=0;
-
+    int ecode = 0;
+    
     if (*rdb != NULL) {
-        if(!tcrdbclose(*rdb)){
-          ecode = tcrdbecode(*rdb);
-          fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
+        if (!tcrdbclose(*rdb)) {
+            ecode = tcrdbecode(*rdb);
+            fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));
         }
         tcrdbdel(*rdb);
         *rdb = NULL;
     }
     *rdb = tcrdbnew();
-    if(!tcrdbopen(*rdb, addr, port)){
+    if (!tcrdbopen(*rdb, addr, port)) {
         ecode = tcrdbecode(*rdb);
         fprintf(stderr, "open error(%s:%d): %s\n", addr, port, tcrdberrmsg(ecode));
         *rdb = NULL;
@@ -121,7 +121,9 @@ int open_db(char *addr, int port, TCRDB **rdb)
         tcrdbtblsetindex(*rdb, "x", RDBITDECIMAL);
         tcrdbtblsetindex(*rdb, "y", RDBITDECIMAL);
         printf("%s---------------------\n", status);
-        if (status) free(status);
+        if (status) {
+            free(status);
+        }
     }
     return ecode;
 }
@@ -129,7 +131,7 @@ int open_db(char *addr, int port, TCRDB **rdb)
 void db_reconnect(int fd, short what, void *ctx)
 {
     int i, s;
-
+    
     s = db_status;
     if (s != TTESUCCESS && s != TTEINVALID && s != TTEKEEP && s != TTENOREC) {
         db_status = open_db(db_host, db_port, &rdb);
@@ -145,7 +147,7 @@ void db_error_to_json(int code, struct json_object *jsobj)
     json_object_object_add(jsobj, "status", json_object_new_string("error"));
     json_object_object_add(jsobj, "code", json_object_new_int(code));
     json_object_object_add(jsobj, "message",
-                            json_object_new_string((char *)tcrdberrmsg(code)));
+                           json_object_new_string((char *)tcrdberrmsg(code)));
 }
 
 void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -160,7 +162,7 @@ void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     lat = get_double_argument(&args, "lat", 0);
     lng = get_double_argument(&args, "lng", 0);
     miles = get_double_argument(&args, "miles", 0);
-
+    
     geo_box(lat, lng, miles, &ulat, &ulng, &llat, &llng);
     
     jsobj = json_object_new_object();
@@ -168,7 +170,7 @@ void box_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     json_object_object_add(jsobj, "ulng", json_object_new_double(ulng));
     json_object_object_add(jsobj, "llat", json_object_new_double(llat));
     json_object_object_add(jsobj, "llng", json_object_new_double(llng));
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -185,10 +187,10 @@ void distance_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     lat1 = get_double_argument(&args, "lng1", 0);
     lat2 = get_double_argument(&args, "lat2", 0);
     lat2 = get_double_argument(&args, "lng2", 0);
-
+    
     jsobj = json_object_new_object();
     json_object_object_add(jsobj, "distance", json_object_new_double(geo_distance(lat1, lng1, lat2, lng2)));
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -197,13 +199,13 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char *json, *id;
     struct evkeyvalq args;
     struct json_object *jsobj;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     evhttp_parse_query(req->uri, &args);
-
+    
     id = (char *)evhttp_find_header(&args, "id");
     if (id == NULL) {
         evhttp_send_error(req, 400, "id is required");
@@ -218,14 +220,14 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         db_status = tcrdbecode(rdb);
         db_error_to_json(db_status, jsobj);
     }
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     const char *value, *name;
-    char *json, *hash, *key; 
+    char *json, *hash, *key;
     struct evkeyvalq args;
     struct json_object *jsobj, *jsobj2, *jsobj3;
     TCMAP *cols;
@@ -234,9 +236,9 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     hash = (char *)evhttp_find_header(&args, "hash");
     key = (char *)evhttp_find_header(&args, "key");
     
@@ -257,7 +259,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         if (key) {
             value = tcmapget2(cols, key);
-
+            
             if (!value) {
                 value = "";
             }
@@ -268,7 +270,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                 json_object_object_add(jsobj2, name, json_object_new_string(tcmapget2(cols, name)));
             }
         }
-     
+        
         json_object_object_add(jsobj, "status", json_object_new_string("ok"));
         json_object_object_add(jsobj, "results", jsobj2);
         
@@ -276,7 +278,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         json_object_object_add(jsobj, "status", json_object_new_string("error"));
     }
-   
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -289,13 +291,13 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct evkeyvalq args;
     struct json_object *jsobj;
     TCMAP *cols;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
     evhttp_parse_query(req->uri, &args);
-
+    
     lat = get_double_argument(&args, "lat", 0);
     lng = get_double_argument(&args, "lng", 0);
     id = (char *)evhttp_find_header(&args, "id");
@@ -309,7 +311,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     x = (lat * 10000) + 1800000;
     y = (lng * 10000) + 1800000;
-      
+    
     cols = tcmapnew();
     tcmapput2(cols, "data", data);
     sprintf(buf, "%d", x);
@@ -330,7 +332,7 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     tcmapdel(cols);
-
+    
     finalize_json(req, evb, &args, jsobj);
 }
 
@@ -353,14 +355,14 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     TCMAP *cols;
     Geo_Result *georesultPtr, **georesults;
     struct json_object *jsobj, *jsobj2, *jsarr;
-
+    
     if (rdb == NULL) {
         evhttp_send_error(req, 503, "database not connected");
         return;
     }
-
+    
     evhttp_parse_query(req->uri, &args);
-
+    
     lat = get_int_argument(&args, "lat", 0);
     lng = get_int_argument(&args, "lng", 0);
     miles = get_int_argument(&args, "miles", 0);
@@ -377,7 +379,7 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     sprintf(miny, "%d", y1);
     sprintf(maxx, "%d", x2);
     sprintf(maxy, "%d", y2);
-        
+    
     query = tcrdbqrynew(rdb);
     tcrdbqryaddcond(query, "x", RDBQCNUMGT, minx);
     tcrdbqryaddcond(query, "x", RDBQCNUMLT, maxx);
@@ -391,7 +393,7 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     georesults = malloc(sizeof(Geo_Result *) * total);
     
-    for(i = 0; i < total; i++){
+    for (i = 0; i < total; i++) {
         rbuf = tclistval(result, i, &rsiz);
         cols = tcrdbtblget(rdb, rbuf, rsiz);
         
@@ -423,9 +425,9 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     jsobj = json_object_new_object();
     jsarr = json_object_new_array();
     
-    for(i = 0; i < total; i++){
+    for (i = 0; i < total; i++) {
         georesultPtr = georesults[i];
-
+        
         if (i < max) {
             jsobj2 = json_object_new_object();
             json_object_object_add(jsobj2, "id", json_object_new_int(georesultPtr->id));
@@ -447,8 +449,7 @@ void search_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     finalize_json(req, evb, &args, jsobj);
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     int i, errCode;
     double magic, rlat, s, c;
@@ -457,17 +458,17 @@ main(int argc, char **argv)
     define_simplehttp_options();
     option_define_str("ttserver_host", OPT_OPTIONAL, "127.0.0.1", &db_host, NULL, NULL);
     option_define_int("ttserver_port", OPT_OPTIONAL, 1978, &db_port, NULL, NULL);
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     
-    pi = atan(1.0)*4;
-    magic = cos(pi/180.0);
+    pi = atan(1.0) * 4;
+    magic = cos(pi / 180.0);
     for (lat = 0; lat < 181; ++lat) {
-        rlat = lat*pi/180;
+        rlat = lat * pi / 180;
         s = sin(rlat);
         c = cos(rlat);
-        longDistance[lat] = radius*acos((s*s)+(magic*c*c));
+        longDistance[lat] = radius * acos((s * s) + (magic * c * c));
     }
     
     memset(&db_status, -1, sizeof(db_status));
@@ -487,16 +488,15 @@ main(int argc, char **argv)
     }
     tcrdbdel(rdb);
     free_options();
-
+    
     return 0;
 }
 
-static int
-CmpElem(const void *e1, const void *e2)
+static int CmpElem(const void *e1, const void *e2)
 {
     Geo_Result *s1 = *((Geo_Result **) e1);
     Geo_Result *s2 = *((Geo_Result **) e2);
-        
+    
     if (s1->distance > s2->distance) {
         return 1;
     } else if (s1->distance < s2->distance) {

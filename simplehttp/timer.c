@@ -34,7 +34,7 @@ void simplehttp_ts_get(struct timeval *ts)
 unsigned int simplehttp_ts_diff(struct timeval start, struct timeval end)
 {
     struct timeval temp;
-    
+
     if ((end.tv_usec - start.tv_usec) < 0) {
         temp.tv_sec = end.tv_sec - start.tv_sec - 1;
         temp.tv_usec = 1000000 + end.tv_usec - start.tv_usec;
@@ -42,7 +42,7 @@ unsigned int simplehttp_ts_diff(struct timeval start, struct timeval end)
         temp.tv_sec = end.tv_sec - start.tv_sec;
         temp.tv_usec = end.tv_usec - start.tv_usec;
     }
-    
+
     // return usec as int
     return (temp.tv_sec * 1000000) + temp.tv_usec;
 }

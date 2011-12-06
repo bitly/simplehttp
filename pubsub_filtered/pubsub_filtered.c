@@ -28,7 +28,7 @@ enum kick_client_enum {
 };
 
 struct filter {
-    int ok; 
+    int ok;
     char *subject;
     char *pattern;
     pcre *re;
@@ -73,7 +73,7 @@ static uint64_t msgSent = 0;
 static uint64_t number_reconnects = 0;
 
 static struct event reconnect_ev;
-static struct timeval reconnect_tv = {RECONNECT_SECS,0};
+static struct timeval reconnect_tv = {RECONNECT_SECS, 0};
 static struct evhttp_connection *evhttp_source_connection = NULL;
 static struct evhttp_request *evhttp_source_request = NULL;
 
@@ -82,7 +82,7 @@ static int  num_encrypted_fields = 0;
 static char *blacklisted_fields[64];
 static char *expected_key = NULL;
 static char *expected_value = NULL;
-static int expect_value=0;
+static int expect_value = 0;
 static int  num_blacklisted_fields = 0;
 
 /*
@@ -94,13 +94,13 @@ static int  num_blacklisted_fields = 0;
 int parse_blacklisted_fields(char *str)
 {
     int i;
-
+    
     num_blacklisted_fields = parse_fields(str, blacklisted_fields);
-
-    for (i=0; i < num_blacklisted_fields; i++) {
+    
+    for (i = 0; i < num_blacklisted_fields; i++) {
         fprintf(stdout, "Blacklist field: \"%s\"\n", blacklisted_fields[i]);
     }
-
+    
     return 1;
 }
 
@@ -115,11 +115,11 @@ int parse_encrypted_fields(char *str)
 {
     int i;
     num_encrypted_fields = parse_fields(str, encrypted_fields);
-
-    for (i=0; i < num_encrypted_fields; i++) {
+    
+    for (i = 0; i < num_encrypted_fields; i++) {
         fprintf(stdout, "Encrypted field: \"%s\"\n", encrypted_fields[i]);
     }
-
+    
     return 1;
 }
 
@@ -133,20 +133,22 @@ int parse_fields(char *str, char **field_array)
     int i;
     const char delim[] = ",";
     char *tok, *str_ptr, *save_ptr;
-
-    if (!str) return;
-
+    
+    if (!str) {
+        return;
+    }
+    
     str_ptr = strdup(str);
-
+    
     tok = strtok_r(str_ptr, delim, &save_ptr);
-
+    
     i = 0;
     while (tok != NULL) {
         field_array[i] = strdup(tok);
         tok = strtok_r(NULL, delim, &save_ptr);
         i++;
     }
-
+    
     return i;
 }
 
@@ -161,9 +163,8 @@ char *md5_hash(const char *string)
     cvs_MD5Init (&context);
     cvs_MD5Update (&context, string, strlen(string));
     cvs_MD5Final (checksum, &context);
-    for (i = 0; i < 16; i++)
-    {
-        sprintf(&output[i*2], "%02x", (unsigned int) checksum[i]);
+    for (i = 0; i < 16; i++) {
+        sprintf(&output[i * 2], "%02x", (unsigned int) checksum[i]);
     }
     output[32] = '\0';
     return output;
@@ -186,7 +187,7 @@ void process_message_cb(char *source, void *arg)
     char *subject;
     int subject_length;
     int ovector[OVECCOUNT];
-    int rc, i=0;
+    int rc, i = 0;
     
     msgRecv++;
     
@@ -215,7 +216,7 @@ void process_message_cb(char *source, void *arg)
     }
     
     // loop through the fields we need to encrypt
-    for (i=0; i < num_encrypted_fields; i++){
+    for (i = 0; i < num_encrypted_fields; i++) {
         field_key = encrypted_fields[i];
         element = json_object_object_get(json_in, field_key);
         if (element) {
@@ -229,7 +230,7 @@ void process_message_cb(char *source, void *arg)
         free(encrypted_string);
     }
     // loop through and remove the blacklisted fields
-    for (i=0; i < num_blacklisted_fields; i++){
+    for (i = 0; i < num_blacklisted_fields; i++) {
         field_key = blacklisted_fields[i];
         //if (DEBUG)fprintf(stdout, "removing %s\n", field_key);
         json_object_object_del(json_in, field_key);
@@ -262,19 +263,21 @@ void process_message_cb(char *source, void *arg)
             }
             subject_length = strlen(subject);
             rc = pcre_exec(
-                fltr->re,             /* the compiled pattern */
-                NULL,                 /* no extra data - we didn't study the pattern */
-                subject,              /* the subject string */
-                subject_length,       /* the length of the subject */
-                0,                    /* start at offset 0 in the subject */
-                0,                    /* default options */
-                ovector,              /* output vector for substring information */
-                OVECCOUNT);           /* number of elements in the output vector */
-            if (rc < 0) continue;
+                     fltr->re,             /* the compiled pattern */
+                     NULL,                 /* no extra data - we didn't study the pattern */
+                     subject,              /* the subject string */
+                     subject_length,       /* the length of the subject */
+                     0,                    /* start at offset 0 in the subject */
+                     0,                    /* default options */
+                     ovector,              /* output vector for substring information */
+                     OVECCOUNT);           /* number of elements in the output vector */
+            if (rc < 0) {
+                continue;
+            }
         }
         if (client->multipart) {
             /* chunked */
-            evbuffer_add_printf(client->buf, 
+            evbuffer_add_printf(client->buf,
                                 "content-type: %s\r\ncontent-length: %d\r\n\r\n",
                                 "*/*",
                                 (int)strlen(json_out));
@@ -292,19 +295,21 @@ void process_message_cb(char *source, void *arg)
 
 int is_slow(struct cli *client)
 {
-    if (client->kick_client == KICK_CLIENT) { return 1; }
+    if (client->kick_client == KICK_CLIENT) {
+        return 1;
+    }
     struct evhttp_connection *evcon;
     unsigned long output_buffer_length;
     
     evcon = (struct evhttp_connection *)client->req->evcon;
     output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
     if (output_buffer_length > MAX_PENDING_DATA) {
-        kickedClients+=1;
+        kickedClients += 1;
         fprintf(stdout, "%llu >> kicking client with %lu pending data\n", client->connection_id, output_buffer_length);
         client->kick_client = KICK_CLIENT;
         // clear the clients output buffer
         evbuffer_drain(evcon->output_buffer, EVBUFFER_LENGTH(evcon->output_buffer));
-        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %lu pending bytes\n", output_buffer_length); 
+        evbuffer_add_printf(evcon->output_buffer, "ERROR_TOO_SLOW. kicked for having %lu pending bytes\n", output_buffer_length);
         return 1;
     }
     return 0;
@@ -312,12 +317,14 @@ int is_slow(struct cli *client)
 
 int can_kick(struct cli *client)
 {
-    if (client->kick_client == CLIENT_OK){return 0;}
+    if (client->kick_client == CLIENT_OK) {
+        return 0;
+    }
     // if the buffer length is back to zero, we can kick now
     // our error notice has been pushed to the client
     struct evhttp_connection *evcon;
     evcon = (struct evhttp_connection *)client->req->evcon;
-    if (EVBUFFER_LENGTH(evcon->output_buffer) == 0){
+    if (EVBUFFER_LENGTH(evcon->output_buffer) == 0) {
         return 1;
     }
     return 0;
@@ -340,12 +347,12 @@ void clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         time_struct = gmtime(&client->connect_time);
         strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
         output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
-        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n", 
-            client->req->remote_host, 
-            client->req->remote_port, 
-            buf, 
-            output_buffer_length,
-            (int)evcon->state);
+        evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n",
+                            client->req->remote_host,
+                            client->req->remote_port,
+                            buf,
+                            output_buffer_length,
+                            (int)evcon->state);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -397,21 +404,26 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void on_close(struct evhttp_connection *evcon, void *ctx)
 {
     struct cli *client = (struct cli *)ctx;
-
+    
     if (client) {
         fprintf(stdout, "%llu >> close from  %s:%d\n", client->connection_id, evcon->address, evcon->port);
         currentConns--;
         TAILQ_REMOVE(&clients, client, entries);
         evbuffer_free(client->buf);
-        if (client->fltr.subject) free(client->fltr.subject);
-        if (client->fltr.pattern) free(client->fltr.pattern);
-        if (client->fltr.re) pcre_free(client->fltr.re);
+        if (client->fltr.subject) {
+            free(client->fltr.subject);
+        }
+        if (client->fltr.pattern) {
+            free(client->fltr.pattern);
+        }
+        if (client->fltr.re) {
+            pcre_free(client->fltr.re);
+        }
         free(client);
     } else {
         fprintf(stdout, "[unknown] >> close from  %s:%d\n", evcon->address, evcon->port);
     }
 }
-
 
 void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
@@ -421,11 +433,11 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char buf[248];
     struct filter *fltr;
     struct tm *time_struct;
-
+    
     currentConns++;
     totalConns++;
     evhttp_parse_query(req->uri, &args);
-
+    
     client = calloc(1, sizeof(*client));
     client->multipart = 0;
     client->req = req;
@@ -434,36 +446,37 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     time_struct = gmtime(&client->connect_time);
     client->buf = evbuffer_new();
     client->kick_client = CLIENT_OK;
-
+    
     fltr = &client->fltr;
     fltr->subject = STRDUP((char *)evhttp_find_header(&args, "filter_subject"));
     fltr->pattern = STRDUP((char *)evhttp_find_header(&args, "filter_pattern"));
     if (fltr->subject && fltr->pattern) {
         fltr->re = pcre_compile(
-            fltr->pattern,
-            0,
-            &fltr->error,
-            &fltr->erroroffset,
-            NULL);
-        if (fltr->re) fltr->ok = 1;
+                       fltr->pattern,
+                       0,
+                       &fltr->error,
+                       &fltr->erroroffset,
+                       NULL);
+        if (fltr->re) {
+            fltr->ok = 1;
+        }
     }
-
+    
     strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
-
+    
     // print out info about this connection
     fprintf(stdout, "%llu >> /sub connection from %s:%d %s\n", client->connection_id, req->remote_host, req->remote_port, buf);
-
+    
     evhttp_add_header(client->req->output_headers, "content-type",
-        "application/json");
+                      "application/json");
     evbuffer_add_printf(client->buf, "\r\n");
     evhttp_send_reply_start(client->req, HTTP_OK, "OK");
-
+    
     evhttp_send_reply_chunk(client->req, client->buf);
     TAILQ_INSERT_TAIL(&clients, client, entries);
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
     evhttp_clear_headers(&args);
 }
-
 
 /*
  * Callback for timer-driven reconnect.
@@ -520,7 +533,7 @@ void reconnect_to_source(int retryNow)
         evtimer_set(&reconnect_ev, source_reconnect_cb, NULL);
         evtimer_add(&reconnect_ev, &reconnect_tv);
     }
-
+    
     return;
 }
 
@@ -545,7 +558,7 @@ int main(int argc, char **argv)
     option_define_str("expected_key", OPT_OPTIONAL, NULL, &expected_key, NULL, "key to expect in messages before echoing to clients");
     option_define_str("expected_value", OPT_OPTIONAL, NULL, &expected_value, NULL, "value to expect in --expected-key field in messages before echoing to clients");
     
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     
