@@ -14,7 +14,6 @@ struct queue_entry {
     size_t bytes;
     char data[1];
 };
-
 TAILQ_HEAD(, queue_entry) queues;
 
 char *progname = "simplequeue";
@@ -32,8 +31,7 @@ uint64_t n_gets = 0;
 uint64_t n_overflow = 0;
 size_t   n_bytes = 0;
 
-void
-hup_handler(int signum)
+void hup_handler(int signum)
 {
     signal(SIGHUP, hup_handler);
     if (overflow_log_fp) {
@@ -49,11 +47,10 @@ hup_handler(int signum)
     }
 }
 
-void
-overflow_one()
+void overflow_one()
 {
     struct queue_entry *entry;
-
+    
     entry = TAILQ_FIRST(&queues);
     if (entry != NULL) {
         TAILQ_REMOVE(&queues, entry, entries);
@@ -66,8 +63,7 @@ overflow_one()
     }
 }
 
-void
-stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *reset;
@@ -105,9 +101,7 @@ stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
-struct queue_entry*
-get_queue_entry() 
-{
+struct queue_entry *get_queue_entry() {
     struct queue_entry *entry;
     entry = TAILQ_FIRST(&queues);
     if (entry != NULL) {
@@ -117,13 +111,12 @@ get_queue_entry()
     return entry;
 }
 
-void
-get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    struct queue_entry *entry;    
+    struct queue_entry *entry;
     n_gets++;
     
-    entry = get_queue_entry();    
+    entry = get_queue_entry();
     if (entry != NULL) {
         evbuffer_add_printf(evb, "%s", entry->data);
         free(entry);
@@ -132,16 +125,15 @@ get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
-void
-mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *items_arg;
     const char *separator;
-    struct queue_entry *entry;    
+    struct queue_entry *entry;
     int num_items = 1;
-    int i = 0;    
-   
+    int i = 0;
+    
     // parse the number of items to return, defaults to 1
     evhttp_parse_query(req->uri, &args);
     items_arg = evhttp_find_header(&args, "items");
@@ -150,12 +142,12 @@ mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     if (items_arg != NULL) {
         num_items = atoi(items_arg);
         if (num_items <= 0) {
-          evbuffer_add_printf(evb, "%s\n", "number of items must be > 0");
-          evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
-          evhttp_clear_headers(&args);   
-          return;     
-        } 
-    }  
+            evbuffer_add_printf(evb, "%s\n", "number of items must be > 0");
+            evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
+            evhttp_clear_headers(&args);
+            return;
+        }
+    }
     if (max_mget > 0 && num_items > max_mget) {
         num_items = max_mget;
     }
@@ -169,24 +161,22 @@ mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     // get n number of items from the queue to return
     for (i = 0; i < num_items && (entry = get_queue_entry()); n_gets++, i++) {
         evbuffer_add_printf(evb, "%s", entry->data);
-        if (i < (num_items - 1)) {              
+        if (i < (num_items - 1)) {
             evbuffer_add_printf(evb, "%s", separator);
         }
-        free(entry);            
+        free(entry);
     }
     
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
 }
 
-void
-put_queue_entry(const char *data, size_t record_size) 
+void put_queue_entry(const char *data, size_t record_size) 
 {
     struct queue_entry *entry;
-
+    
     // don't put empty records on the queue
     if (record_size > 0) {
-    
         // copy the record
         entry = malloc(sizeof(*entry) + record_size + 1);
         strncpy(entry->data, data, record_size);
@@ -207,39 +197,35 @@ put_queue_entry(const char *data, size_t record_size)
     }
 }
 
-void
-put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *data;
     size_t data_size = 0;
-
+    
     n_puts++;
-
+    
     // try to get the data from get first, then from post
     evhttp_parse_query(req->uri, &args);    
     if ((data = evhttp_find_header(&args, "data")) != NULL) {
         data_size = strlen(data);
-    }
-    else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
+    } else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
         data = (char *)EVBUFFER_DATA(req->input_buffer);
     }
-
+    
     // no data, ignore the call
     if (data) {
         put_queue_entry(data, data_size);
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    }
-    else {
+    } else {
         evbuffer_add_printf(evb, "%s\n", "missing data");
         evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
-    }    
-
+    }
+    
     evhttp_clear_headers(&args);
 }
 
-void
-mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     const char *data = NULL;
@@ -259,10 +245,9 @@ mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
         data = (char *)EVBUFFER_DATA(req->input_buffer);
     }
-
+    
     // no data, ignore the call
     if (data) {
-    
         // allow dynamically setting separator for items, defaults to newline
         sep = evhttp_find_header(&args, "separator");
         if (sep == NULL) {
@@ -271,12 +256,11 @@ mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         sep_size = strlen(sep);
         record_start = data;
         data_left = data_size;
-
+        
         // loop through to find the next record but only up to the size of the 
         // post, the request input buffer can hold much more data, we only want
         // the post part of it
         while ((sep_start = simplehttp_strnstr(record_start, sep, data_left)) != NULL) {
-
             // put each record on the queue
             record_size = sep_start - record_start;
             if (record_size > 0) {        
@@ -297,20 +281,18 @@ mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
         
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
-    }
-    else {
+    } else {
         evbuffer_add_printf(evb, "%s\n", "missing data");
         evhttp_send_reply(req, HTTP_BADREQUEST, "ERROR", evb);
     }
-
+    
     evhttp_clear_headers(&args);
 }
 
-void
-dump(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+void dump(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct queue_entry *entry;
-
+    
     TAILQ_FOREACH(entry, &queues, entries) {
         evbuffer_add_printf(evb, "%s\n", entry->data);
     }
@@ -319,23 +301,23 @@ dump(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 }
 
 void usage()
-{   
+{
     fprintf(stderr, "%s: A simple http buffer queue.\n", progname);
     fprintf(stderr, "Version %s, http://code.google.com/p/simplehttp/\n", VERSION);
     option_help();
     exit(1);
-}   
+}
 
-int version_cb(int value) {
+int version_cb(int value)
+{
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     TAILQ_INIT(&queues);
-
+    
     define_simplehttp_options();
     option_define_str("overflow_log", OPT_OPTIONAL, NULL, &overflow_log, NULL, "file to write data beyond --max-depth or --max-bytes");
     option_define_str("mget_item_sep", OPT_OPTIONAL, "\n", &mget_item_sep, NULL, "separator between items in mget, defaults to newline");
@@ -345,13 +327,13 @@ main(int argc, char **argv)
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     option_define_int("max_mget", OPT_OPTIONAL, 0, NULL, NULL, "maximum items to return in a single mget");
     
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     max_bytes = (size_t)option_get_int("max_bytes");
     max_depth = (uint64_t)option_get_int("max_depth");
     max_mget = (int)option_get_int("max_mget");
-
+    
     if (overflow_log) {
         overflow_log_fp = fopen(overflow_log, "a");
         if (!overflow_log_fp) {
@@ -360,7 +342,7 @@ main(int argc, char **argv)
         }
         fprintf(stdout, "opened --overflow-log: %s\n", overflow_log);
     }
-
+    
     fprintf(stderr, "Version: %s, http://code.google.com/p/simplehttp/\n", VERSION);
     fprintf(stderr, "use --help for options\n");
     simplehttp_init();

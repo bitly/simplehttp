@@ -28,7 +28,7 @@ static const char uri_chars[256] = {
     0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-int int_cmp(const void *a, const void *b) 
+int int_cmp(const void *a, const void *b)
 {
     const uint64_t *ia = (const uint64_t *)a;
     const uint64_t *ib = (const uint64_t *)b;
@@ -103,7 +103,6 @@ int simplehttp_parse_url(char *endpoint, size_t endpoint_len, char **address, in
     
     return 1;
 }
-
 
 // libevent's built in encoder does not encode spaces, this does
 char *simplehttp_encode_uri(const char *uri)

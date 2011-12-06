@@ -9,7 +9,7 @@
 
 enum option_type {
     OPT_BOOL = 1,
-    OPT_STR = 2,    
+    OPT_STR = 2,
     OPT_INT = 3,
     OPT_FLOAT = 4,
     OPT_CHAR = 5,
@@ -47,7 +47,8 @@ int option_sort(struct Option *a, struct Option *b)
     return strcmp(a->option_name, b->option_name);
 }
 
-int help_cb(int value) {
+int help_cb(int value)
+{
     option_help();
     free_options();
     return 0;
@@ -62,7 +63,8 @@ handle the following option formats
 
 @return 1 when parsing was successful. 0 when not
 */
-int option_parse_command_line(int argc, char **argv) {
+int option_parse_command_line(int argc, char **argv)
+{
     int i;
     char *option_str;
     char *option_name;
@@ -76,8 +78,8 @@ int option_parse_command_line(int argc, char **argv) {
         option_define_bool("help", OPT_OPTIONAL, 0, NULL, help_cb, "list usage");
     }
     
-    option_process_name=basename(argv[0]);
-    for (i=1; i < argc; i++) {
+    option_process_name = basename(argv[0]);
+    for (i = 1; i < argc; i++) {
         // fprintf(stdout, "DEBUG: option %d : %s\n", i, argv[i]);
         option_str = argv[i];
         // find the option_name
@@ -112,64 +114,64 @@ int option_parse_command_line(int argc, char **argv) {
         
         // TODO: strip quotes from value
         
-        switch(option->option_type) {
-        case OPT_CHAR:
-            if (strlen(value) != 1) {
-                fprintf(stderr, "ERROR: argument for --%s must be a single character (got %s)\n", option_name, value);
-                return 0;
-            }
-            option->value_char = value[0];
-            if (option->cb_char) {
-                if (!option->cb_char(option->value_char)) {
+        switch (option->option_type) {
+            case OPT_CHAR:
+                if (strlen(value) != 1) {
+                    fprintf(stderr, "ERROR: argument for --%s must be a single character (got %s)\n", option_name, value);
                     return 0;
                 }
-            }
-            if (option->dest_char) {
-                *(option->dest_char) = option->value_char;
-            }
-            break;
-        case OPT_STR:
-            option->value_str = value;
-            if (option->cb_str) {
-                if(!option->cb_str(value)){
+                option->value_char = value[0];
+                if (option->cb_char) {
+                    if (!option->cb_char(option->value_char)) {
+                        return 0;
+                    }
+                }
+                if (option->dest_char) {
+                    *(option->dest_char) = option->value_char;
+                }
+                break;
+            case OPT_STR:
+                option->value_str = value;
+                if (option->cb_str) {
+                    if (!option->cb_str(value)) {
+                        return 0;
+                    }
+                }
+                if (option->dest_str) {
+                    *(option->dest_str) = strdup(value);
+                }
+                break;
+            case OPT_BOOL:
+                if (value == NULL) {
+                    option->value_int = 1;
+                } else if (strcasecmp(value, "false") == 0) {
+                    option->value_int = 0;
+                } else if (strcasecmp(value, "true") == 0) {
+                    option->value_int = 1;
+                } else {
+                    fprintf(stderr, "ERROR: unknown value for --%s (%s). should be \"true\" or \"false\"\n", option->option_name, value);
                     return 0;
                 }
-            }
-            if (option->dest_str) {
-                *(option->dest_str) = strdup(value);
-            }
-            break;
-        case OPT_BOOL:
-            if (value == NULL) {
-                option->value_int = 1;
-            } else if (strcasecmp(value, "false") == 0) {
-                option->value_int = 0;
-            } else if (strcasecmp(value, "true") == 0) {
-                option->value_int = 1;
-            } else {
-                fprintf(stderr, "ERROR: unknown value for --%s (%s). should be \"true\" or \"false\"\n", option->option_name, value);
-                return 0;
-            }
-            if (option->cb_int) {
-                if(!option->cb_int(option->value_int)) {
-                    return 0;
-                };
-            }
-            if (option->dest_int) {
-                *(option->dest_int) = option->value_int;
-            }
-            break;
-        case OPT_INT:
-            option->value_int = atoi(value);
-            if (option->cb_int) {
-                if(!option->cb_int(option->value_int)) {
-                    return 0;
+                if (option->cb_int) {
+                    if (!option->cb_int(option->value_int)) {
+                        return 0;
+                    };
                 }
-            }
-            if (option->dest_int) {
-                *(option->dest_int) = option->value_int;
-            }
-            break;
+                if (option->dest_int) {
+                    *(option->dest_int) = option->value_int;
+                }
+                break;
+            case OPT_INT:
+                option->value_int = atoi(value);
+                if (option->cb_int) {
+                    if (!option->cb_int(option->value_int)) {
+                        return 0;
+                    }
+                }
+                if (option->dest_int) {
+                    *(option->dest_int) = option->value_int;
+                }
+                break;
         }
         option->found++;
     }
@@ -185,10 +187,11 @@ int option_parse_command_line(int argc, char **argv) {
     return 1;
 }
 
-/* 
+/*
 @returns -1 if option not found or not defined
 */
-int option_get_int(const char *option_name) {
+int option_get_int(const char *option_name)
+{
     struct Option *option;
     char *tmp_option_name = strdup(option_name);
     if (format_option_name(tmp_option_name)) {
@@ -200,14 +203,17 @@ int option_get_int(const char *option_name) {
     if (!option) {
         return -1;
     }
-    if (option->option_type != OPT_INT && option->option_type != OPT_BOOL) {return -1;}
+    if (option->option_type != OPT_INT && option->option_type != OPT_BOOL) {
+        return -1;
+    }
     if (option->found) {
         return option->value_int;
     }
     return option->default_int;
 }
 
-char *option_get_str(const char *option_name) {
+char *option_get_str(const char *option_name)
+{
     struct Option *option;
     char *tmp_option_name = strdup(option_name);
     if (format_option_name(tmp_option_name)) {
@@ -216,15 +222,20 @@ char *option_get_str(const char *option_name) {
     }
     HASH_FIND_STR(option_list, tmp_option_name, option);
     free(tmp_option_name);
-    if (!option) {return NULL;}
-    if (option->option_type != OPT_STR) {return NULL;}
+    if (!option) {
+        return NULL;
+    }
+    if (option->option_type != OPT_STR) {
+        return NULL;
+    }
     if (option->found) {
         return option->value_str;
     }
     return option->default_str;
 }
 
-char option_get_char(const char *option_name) {
+char option_get_char(const char *option_name)
+{
     struct Option *option;
     char *tmp_option_name = strdup(option_name);
     if (format_option_name(tmp_option_name)) {
@@ -233,15 +244,19 @@ char option_get_char(const char *option_name) {
     }
     HASH_FIND_STR(option_list, tmp_option_name, option);
     free(tmp_option_name);
-    if (!option) {return '\0';}
-    if (option->option_type != OPT_CHAR) {return '\0';}
+    if (!option) {
+        return '\0';
+    }
+    if (option->option_type != OPT_CHAR) {
+        return '\0';
+    }
     if (option->found) {
         return option->value_char;
     }
     return option->default_char;
 }
 
-struct Option *new_option(const char *option_name, int required, const char *help){
+struct Option *new_option(const char *option_name, int required, const char *help) {
     struct Option *option;
     char *tmp_option_name = strdup(option_name);
     if (format_option_name(tmp_option_name)) {
@@ -249,9 +264,9 @@ struct Option *new_option(const char *option_name, int required, const char *hel
         free(tmp_option_name);
         return NULL;
     }
-
+    
     HASH_FIND_STR(option_list, tmp_option_name, option);
-    if (option){
+    if (option) {
         fprintf(stderr, "ERROR: option %s is already defined\n", tmp_option_name);
         return NULL;
     }
@@ -280,9 +295,12 @@ struct Option *new_option(const char *option_name, int required, const char *hel
     return option;
 }
 
-int option_define_int(const char *option_name, int required, int default_val, int *dest, int(*cb)(int value), const char *help) {
+int option_define_int(const char *option_name, int required, int default_val, int *dest, int(*cb)(int value), const char *help)
+{
     struct Option *option = new_option(option_name, required, help);
-    if (!option) {return -1;}
+    if (!option) {
+        return -1;
+    }
     option->option_type = OPT_INT;
     option->default_int = default_val;
     option->dest_int = dest;
@@ -290,9 +308,12 @@ int option_define_int(const char *option_name, int required, int default_val, in
     return 1;
 }
 
-int option_define_str(const char *option_name, int required, char *default_val, char **dest, int(*cb)(char *value), const char *help) {
+int option_define_str(const char *option_name, int required, char *default_val, char **dest, int(*cb)(char *value), const char *help)
+{
     struct Option *option = new_option(option_name, required, help);
-    if (!option) {return -1;}
+    if (!option) {
+        return -1;
+    }
     option->option_type = OPT_STR;
     if (default_val) {
         option->default_str = strdup(default_val);
@@ -302,9 +323,12 @@ int option_define_str(const char *option_name, int required, char *default_val, 
     return 1;
 }
 
-int option_define_bool(const char *option_name, int required, int default_val, int *dest, int(*cb)(int value), const char *help) {
+int option_define_bool(const char *option_name, int required, int default_val, int *dest, int(*cb)(int value), const char *help)
+{
     struct Option *option = new_option(option_name, required, help);
-    if (!option) {return -1;}
+    if (!option) {
+        return -1;
+    }
     option->option_type = OPT_BOOL;
     option->default_int = default_val;
     option->dest_int = dest;
@@ -312,9 +336,12 @@ int option_define_bool(const char *option_name, int required, int default_val, i
     return 1;
 }
 
-int option_define_char(const char *option_name, int required, char default_val, char *dest, int(*cb)(char value), const char *help) {
+int option_define_char(const char *option_name, int required, char default_val, char *dest, int(*cb)(char value), const char *help)
+{
     struct Option *option = new_option(option_name, required, help);
-    if (!option) {return -1;}
+    if (!option) {
+        return -1;
+    }
     option->option_type = OPT_CHAR;
     option->default_char = default_val;
     option->dest_char = dest;
@@ -322,7 +349,8 @@ int option_define_char(const char *option_name, int required, char default_val, 
     return 1;
 }
 
-void option_help() {
+void option_help()
+{
     struct Option *option, *tmp_option;
     char buffer[1024] = {'\0'};
     
@@ -338,57 +366,58 @@ void option_help() {
     
     HASH_SORT(option_list, option_sort);
     HASH_ITER(hh, option_list, option, tmp_option) {
-        switch(option->option_type) {
-        case OPT_STR:
-            sprintf(buffer, "--%s=<str>", option->option_name);
-            break;
-        case OPT_CHAR:
-            sprintf(buffer, "--%s=<char>", option->option_name);
-            break;
-        case OPT_INT:
-            sprintf(buffer, "--%s=<int>", option->option_name);
-            break;
-        case OPT_BOOL:
-            if (option->default_int != 0) {
-                sprintf(buffer, "--%s=True|False", option->option_name);
-            } else {
-                sprintf(buffer, "--%s", option->option_name);
-            }
-            break;
+        switch (option->option_type) {
+            case OPT_STR:
+                sprintf(buffer, "--%s=<str>", option->option_name);
+                break;
+            case OPT_CHAR:
+                sprintf(buffer, "--%s=<char>", option->option_name);
+                break;
+            case OPT_INT:
+                sprintf(buffer, "--%s=<int>", option->option_name);
+                break;
+            case OPT_BOOL:
+                if (option->default_int != 0) {
+                    sprintf(buffer, "--%s=True|False", option->option_name);
+                } else {
+                    sprintf(buffer, "--%s", option->option_name);
+                }
+                break;
         }
         fprintf(stdout, "  %-22s", buffer);
         if (option->help) {
             fprintf(stdout, " %s", option->help);
         }
         fprintf(stdout, "\n");
-        switch(option->option_type) {
-        case OPT_CHAR:
-            if (option->default_char) {
-                fprintf(stdout, "%25sdefault:%c\n", "", option->default_char);
-            }
-            break;
-        case OPT_STR:
-            if (option->default_str) {
-                if (isatty(fileno(stdout))) {
-                    fprintf(stdout, "%25sdefault: %c[1m%s%c[0m\n", "", 27, option->default_str, 27);
-                } else {
-                    fprintf(stdout, "%25sdefault: %s\n", "", option->default_str);
+        switch (option->option_type) {
+            case OPT_CHAR:
+                if (option->default_char) {
+                    fprintf(stdout, "%25sdefault:%c\n", "", option->default_char);
                 }
-            }
-            break;
-        case OPT_INT:
-            if (option->default_int) {
-                fprintf(stdout, "%25sdefault: %d\n", "", option->default_int);
-            }
-            break;
-        default:
-            break;
+                break;
+            case OPT_STR:
+                if (option->default_str) {
+                    if (isatty(fileno(stdout))) {
+                        fprintf(stdout, "%25sdefault: %c[1m%s%c[0m\n", "", 27, option->default_str, 27);
+                    } else {
+                        fprintf(stdout, "%25sdefault: %s\n", "", option->default_str);
+                    }
+                }
+                break;
+            case OPT_INT:
+                if (option->default_int) {
+                    fprintf(stdout, "%25sdefault: %d\n", "", option->default_int);
+                }
+                break;
+            default:
+                break;
         }
     }
     fprintf(stdout, "\n");
 }
 
-void free_options() {
+void free_options()
+{
     struct Option *option, *tmp_option;
     HASH_ITER(hh, option_list, option, tmp_option) {
         HASH_DELETE(hh, option_list, option);
@@ -399,15 +428,16 @@ void free_options() {
     }
 }
 
-int format_option_name(char *option_name) {
+int format_option_name(char *option_name)
+{
     char *ptr = option_name;
     char *end = ptr + strlen(option_name);
-    while(ptr <= end && *ptr != '\0') {
+    while (ptr <= end && *ptr != '\0') {
         if (*ptr >= 'A' && *ptr <= 'Z') {
             *ptr += 32;
         } else if (*ptr == '_') {
             *ptr = '-';
-        } else if (*ptr < 48 && *ptr != 45){
+        } else if (*ptr < 48 && *ptr != 45) {
             fprintf(stderr, "invalid char %c\n", *ptr);
             return 1;
         }

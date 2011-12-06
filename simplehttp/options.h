@@ -2,8 +2,8 @@
 #define _SIMPLEHTTP_OPTIONS_H
 
 enum required_option {
-	OPT_REQUIRED = 1,
-	OPT_OPTIONAL = 0
+    OPT_REQUIRED = 1,
+    OPT_OPTIONAL = 0
 };
 
 int option_parse_command_line(int argc, char **argv);

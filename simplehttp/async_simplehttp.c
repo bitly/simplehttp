@@ -23,7 +23,7 @@ void free_async_connection_pool()
     
     while ((conn = TAILQ_FIRST(&connection_pool))) {
         TAILQ_REMOVE(&connection_pool, conn, next);
-        for (i=0; i< ASYNC_PER_HOST_CONNECTION_LIMIT; i++) {
+        for (i = 0; i < ASYNC_PER_HOST_CONNECTION_LIMIT; i++) {
             evhttp_connection_free(conn->evcon[i]);
         }
         free(conn->address);
@@ -49,8 +49,7 @@ static void async_simplehttp_log(struct evhttp_request *req, struct AsyncCallbac
     }
 }
 
-struct evhttp_connection *get_connection(char *address, int port, struct Connection **store_conn)
-{
+struct evhttp_connection *get_connection(char *address, int port, struct Connection **store_conn) {
     struct Connection *conn;
     int i;
     
@@ -64,7 +63,7 @@ struct evhttp_connection *get_connection(char *address, int port, struct Connect
     conn->address = strdup(address);
     conn->port = port;
     conn->next_evcon = 0;
-    for (i=0; i< ASYNC_PER_HOST_CONNECTION_LIMIT; i++){
+    for (i = 0; i < ASYNC_PER_HOST_CONNECTION_LIMIT; i++) {
         conn->evcon[i] = evhttp_connection_new(address, port);
         evhttp_connection_set_retries(conn->evcon[i], 0);
     }
@@ -74,9 +73,8 @@ struct evhttp_connection *get_connection(char *address, int port, struct Connect
     return conn->evcon[conn->next_evcon % ASYNC_PER_HOST_CONNECTION_LIMIT];
 }
 
-struct AsyncCallbackGroup *new_async_callback_group(struct evhttp_request *req, 
-                                void (*finished_cb)(struct evhttp_request *, void *), void *finished_cb_arg)
-{
+struct AsyncCallbackGroup *new_async_callback_group(struct evhttp_request *req,
+        void (*finished_cb)(struct evhttp_request *, void *), void *finished_cb_arg) {
     struct AsyncCallbackGroup *callback_group = NULL;
     
     callback_group = malloc(sizeof(*callback_group));
@@ -102,13 +100,11 @@ void free_async_callback_group(struct AsyncCallbackGroup *callback_group)
     }
 }
 
-struct AsyncCallback *new_async_request(char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
-{
+struct AsyncCallback *new_async_request(char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg) {
     return new_async_request_with_body(address, port, path, NULL, cb, cb_arg);
 }
 
-struct AsyncCallback *new_async_request_with_body(char *address, int port, char *path, char *body, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
-{
+struct AsyncCallback *new_async_request_with_body(char *address, int port, char *path, char *body, void (*cb)(struct evhttp_request *, void *), void *cb_arg) {
     static uint64_t counter = 0;
     // create new connection to endpoint
     struct AsyncCallback *callback = NULL;
@@ -158,8 +154,8 @@ struct AsyncCallback *new_async_request_with_body(char *address, int port, char 
     return callback;
 }
 
-int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, 
-                                void (*cb)(struct evhttp_request *, void *), void *cb_arg)
+int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path,
+                       void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
     struct AsyncCallback *callback = NULL;
     
@@ -190,7 +186,7 @@ void finish_async_request(struct evhttp_request *req, void *cb_arg)
     
 #ifdef ASYNC_DEBUG
     if (req) {
-        char *temp_body = malloc(EVBUFFER_LENGTH(req->input_buffer)+1);
+        char *temp_body = malloc(EVBUFFER_LENGTH(req->input_buffer) + 1);
         memcpy(temp_body, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
         temp_body[EVBUFFER_LENGTH(req->input_buffer)] = '\0';
         AS_DEBUG("HTTP %d %s\n", req->response_code, req->uri);

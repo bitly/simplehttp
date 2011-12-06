@@ -20,7 +20,7 @@
 
 typedef struct cb_entry {
     char *path;
-    void (*cb)(struct evhttp_request *, struct evbuffer *,void *);
+    void (*cb)(struct evhttp_request *, struct evbuffer *, void *);
     void *ctx;
     TAILQ_ENTRY(cb_entry) entries;
 } cb_entry;
@@ -184,7 +184,8 @@ void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct ev
     printf("registering callback for path \"%s\"\n", path);
 }
 
-void define_simplehttp_options() {
+void define_simplehttp_options()
+{
     option_define_str("address", OPT_OPTIONAL, "0.0.0.0", NULL, NULL, "address to listen on");
     option_define_int("port", OPT_OPTIONAL, 8080, NULL, NULL, "port to listen on");
     option_define_bool("enable_logging", OPT_OPTIONAL, 0, NULL, NULL, "request logging");
@@ -203,7 +204,7 @@ int simplehttp_listen()
     
     char *address = option_get_str("address");
     int port = option_get_int("port");
-
+    
     int daemon = option_get_int("daemon");
     char *root = option_get_str("root");
     char *user = option_get_str("user");
