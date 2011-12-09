@@ -61,6 +61,11 @@ char **simplehttp_callback_names();
 
 struct AsyncCallbackGroup;
 struct AsyncCallback;
+struct RequestHeader {
+    char *name;
+    char *value;
+    struct RequestHeader *next;
+};
 
 /* start a new callback_group. memory will be freed after a call to
     release_callback_group or when all the callbacks have been run */
@@ -68,8 +73,11 @@ struct AsyncCallbackGroup *new_async_callback_group(struct evhttp_request *req, 
 /* create a new AsyncCallback. delegation of memory for this callback
     will be passed to callback_group */
 int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg);
-struct AsyncCallback *new_async_request(char *address, int port, char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg);
-struct AsyncCallback *new_async_request_with_body(char *address, int port, char *path, char *body, void (*cb)(struct evhttp_request *, void *), void *cb_arg);
+struct AsyncCallback *new_async_request(char *address, int port, char *path, 
+                                        void (*cb)(struct evhttp_request *, void *), void *cb_arg);
+struct AsyncCallback *new_async_request_with_body(int request_method, char *address, int port, char *path, 
+                                                  struct RequestHeader *header_list, char *body, 
+                                                  void (*cb)(struct evhttp_request *, void *), void *cb_arg);
 void free_async_callback_group(struct AsyncCallbackGroup *callback_group);
 void init_async_connection_pool(int enable_request_logging);
 void free_async_connection_pool();

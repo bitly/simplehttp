@@ -84,12 +84,14 @@ void process_message_cb(char *message, void *cb_arg)
             encoded_message = simplehttp_encode_uri(message);
             evbuffer_add_printf(evb, destination->path, encoded_message);
             //_DEBUG("process_message_cb(GET %s)\n", (char *)EVBUFFER_DATA(evb));
-            new_async_request(destination->address, destination->port, (char *)EVBUFFER_DATA(evb), finish_destination_cb, NULL);
+            new_async_request(destination->address, destination->port, (char *)EVBUFFER_DATA(evb), 
+                              finish_destination_cb, NULL);
             evbuffer_free(evb);
             free(encoded_message);
         } else {
             //_DEBUG("process_message_cb(POST %s:%d%s)\n", destination->address, destination->port, destination->path);
-            new_async_request_with_body(destination->address, destination->port, destination->path, message, finish_destination_cb, NULL);
+            new_async_request_with_body(EVHTTP_REQ_POST, destination->address, destination->port, destination->path, 
+                                        NULL, message, finish_destination_cb, NULL);
         }
         
         if (round_robin) {
