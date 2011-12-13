@@ -5,3 +5,6 @@
 build
 dist
 sortdb/sortdb
+simplequeue/simplequeue
+simpleleveldb/simpleleveldb
+test_output
