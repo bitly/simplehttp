@@ -1,20 +1,26 @@
 simplehttp
 ==========
 
-simplehttp is a library built upon libevent that makes high performance http based servers simple to write.
+`simplehttp` is a family of libraries and daemons built upon libevent that make high performance HTTP servers 
+simple and straightforward to write.
 
-The following daemons are built on simplehttp and included
+The following libraries and daemons are included:
 
- * `pubsub` - a daemon that receives data via HTTP POST events and writes to all subscribed long-lived HTTP connections
- * `pubsubclient` - a library for writing clients that read from a pubsub
  * `ps_to_http` - a daemon built on top of pubsubclient to write messages from a source pubsub to destination simplequeue or pubsub server
  * `ps_to_file` - a daemon built on top of pubsubclient to write messages from a source pubsub to time rolled output files
+ * `pubsub` - a daemon that receives data via HTTP POST events and writes to all subscribed long-lived HTTP connections
+ * `pubsub_filtered` - a pubsub daemon with the ability to filter/obfuscate fields of a JSON message
+ * `pubsubclient` - a library for writing clients that read from a pubsub
+ * `pysimplehttp` - a python library for working with pubsub and simplequeue
+ * `qrencode`
+ * `queuereader` - a library for writing clients that read from a simplequeue and do work
+ * `simpleattributes`
+ * `simplegeo`
+ * `simplehttp`
+ * `simplememdb` - an in-memory version of simpletokyo
  * `simplequeue` - an in memory queue with HTTP /put and /get endpoints to push and pop data
  * `simpletokyo` - a HTTP CRUD interface to front tokyo cabinet's ttserver
  * `sortdb` - sorted database server
- * `simplegeo`
- * `simplememdb` - an in-memory version of simpletokyo
- * `qrencode`
 
 simplehttp Install Instructions
 ===============================
