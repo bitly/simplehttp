@@ -5,7 +5,6 @@
 #include <inttypes.h>
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
-#include "simplehttp/util.h"
 
 #define VERSION "1.3"
 
