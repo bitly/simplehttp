@@ -112,6 +112,7 @@ void queuereader_finish_message(int return_code)
 
 void queuereader_requeue_message_cb(struct evhttp_request *req, void *cbarg)
 {
+    // TODO: this should limit (and perhaps backoff) failed requeue requests
     queuereader_finish_message((req && req->response_code == 200) ? 
         QR_CONT_SOURCE_REQUEST : QR_REQUEUE_WITHOUT_BACKOFF);
 }
@@ -212,7 +213,7 @@ int queuereader_main(const char *source_address, int source_port, const char *pa
                       void *cbarg)
 {
     queuereader_init(source_address, source_port, path, message_cb, error_cb, cbarg);
-    event_dispatch();
+    queuereader_run();
     queuereader_free();
     return 0;
 }

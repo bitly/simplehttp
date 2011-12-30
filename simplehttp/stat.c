@@ -3,7 +3,6 @@
 #include <inttypes.h>
 #include "stat.h"
 #include "simplehttp.h"
-#include "util.h"
 
 static int64_t *stats = NULL;
 static int *stats_idx = NULL;

@@ -53,6 +53,8 @@ void simplehttp_async_finish(struct evhttp_request *req);
 
 void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_time, const char *id, int display_post);
 
+char *simplehttp_strnstr(const char *s, const char *find, size_t slen);
+uint64_t ninety_five_percent(int64_t *int_array, int length);
 struct simplehttp_stats *simplehttp_stats_new();
 void simplehttp_stats_get(struct simplehttp_stats *st);
 void simplehttp_stats_free(struct simplehttp_stats *st);
