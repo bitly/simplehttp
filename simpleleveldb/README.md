@@ -22,6 +22,8 @@ then in simpleleveldb
 
 OPTIONS
 -------
+
+```
   --address=<str>        address to listen on
                          default: 0.0.0.0
   --block-size=<int>     block size
@@ -44,6 +46,7 @@ OPTIONS
   --version              0.1
   --write-buffer-size=<int> write buffer size
                          default: 4194304
+```
 
 API endpoints:
 
