@@ -17,6 +17,7 @@ The following libraries and daemons are included:
  * `simpleattributes`
  * `simplegeo`
  * `simplehttp`
+ * `simpleleveldb` - a HTTP CRUD interface to leveldb
  * `simplememdb` - an in-memory version of simpletokyo
  * `simplequeue` - an in memory queue with HTTP /put and /get endpoints to push and pop data
  * `simpletokyo` - a HTTP CRUD interface to front tokyo cabinet's ttserver
@@ -43,6 +44,7 @@ this will compile 'simplequeue' and place it in /usr/local/bin
 Some modules have additional dependencies:
 
 * [json-c](http://oss.metaparadigm.com/json-c/)
+* [leveldb](http://code.google.com/p/leveldb/)
 * [tokyocabinet](http://fallabs.com/tokyocabinet/) / [tokyotyrant](http://fallabs.com/tokyotyrant/)
 * [qrencode](http://fukuchi.org/works/qrencode/index.en.html)
 * [pcre](http://www.pcre.org/)
