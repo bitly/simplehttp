@@ -6,6 +6,10 @@
 #include <simplehttp/simplehttp.h>
 #include "http-internal.h"
 
+#include <openssl/sha.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
+
 #define BOUNDARY "xXPubSubXx"
 #define MAX_PENDING_DATA 1024*1024*50
 #define VERSION "1.1"
@@ -34,6 +38,27 @@ uint64_t currentConns = 0;
 uint64_t kickedClients = 0;
 uint64_t msgRecv = 0;
 uint64_t msgSent = 0;
+
+char *base64(const unsigned char *input, int length)
+{
+    BIO *bmem, *b64;
+    BUF_MEM *bptr;
+    
+    b64 = BIO_new(BIO_f_base64());
+    bmem = BIO_new(BIO_s_mem());
+    b64 = BIO_push(b64, bmem);
+    BIO_write(b64, input, length);
+    BIO_flush(b64);
+    BIO_get_mem_ptr(b64, &bptr);
+    
+    char *buff = (char *)malloc(bptr->length);
+    memcpy(buff, bptr->data, bptr->length-1);
+    buff[bptr->length-1] = 0;
+    
+    BIO_free_all(b64);
+    
+    return buff;
+}
 
 int is_slow(struct cli *client)
 {
@@ -183,10 +208,24 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         if (client->websocket) {
             // set to non-chunked so that send_reply_chunked doesn't add \r\n before/after this block
             client->req->chunked = 0;
-            // write the frame. a websocket frame is \x00 + msg + \xFF
-            evbuffer_add(client->buf, "\0", 1);
-            evbuffer_add(client->buf, EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer));
-            evbuffer_add(client->buf, "\xFF", 1);
+            int m = 0;
+            int message_length = EVBUFFER_LENGTH(req->input_buffer);
+            int frame_size = 64;  // Size for data fragmentation for websocket
+            while (m < message_length) {
+                int cur_size = (message_length - m > frame_size ? frame_size : message_length - m);
+
+                int code = 0;
+                if (m == 0)
+                    code += 0x01;
+                if (m + cur_size >= message_length)
+                    code += 0x80;
+                evbuffer_add_printf(client->buf, "%c", code);
+
+                evbuffer_add_printf(client->buf, "%c", cur_size);
+                evbuffer_add(client->buf, EVBUFFER_DATA(req->input_buffer)+m, cur_size);
+                m += cur_size;
+            }
+
         } else if (client->multipart) {
             /* chunked */
             evbuffer_add_printf(client->buf,
@@ -215,6 +254,8 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char *uri;
     char *ws_origin;
     char *ws_upgrade;
+    char *ws_key;
+    char *ws_response;
     char *host;
     char buf[248];
     struct tm *time_struct;
@@ -240,6 +281,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     // Upgrade: WebSocket
     ws_upgrade = (char *) evhttp_find_header(req->input_headers, "Upgrade");
     ws_origin = (char *) evhttp_find_header(req->input_headers, "Origin");
+    ws_key = (char *) evhttp_find_header(req->input_headers, "Sec-WebSocket-Key");
     host = (char *) evhttp_find_header(req->input_headers, "Host");
     
     if (ps_debug && ws_upgrade) {
@@ -247,10 +289,12 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         fprintf(stderr, "%llu >> multipart is %d\n", client->connection_id, client->multipart);
     }
     
-    if (ws_upgrade && strstr(ws_upgrade, "WebSocket") != NULL) {
+    if (ws_upgrade && strcasestr(ws_upgrade, "WebSocket")) {
         if (ps_debug) {
             fprintf(stderr, "%llu >> upgrading connection to a websocket\n", client->connection_id);
         }
+        client->req->chunked = 0;
+        client->multipart = 0;
         client->websocket = 1;
         client->req->major = 1;
         client->req->minor = 1;
@@ -267,6 +311,17 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             }
             evhttp_add_header(client->req->output_headers, "WebSocket-Location", buf);
         }
+        if (ws_key != NULL) {
+            char ws_response_tmp[SHA_DIGEST_LENGTH];
+            char ws_buf[128];
+
+            sprintf(ws_buf, "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", ws_key);
+            SHA1(ws_buf, strlen(ws_buf), ws_response_tmp);
+
+            ws_response = base64(ws_response_tmp, SHA_DIGEST_LENGTH);
+            evhttp_add_header(client->req->output_headers, "Sec-WebSocket-Accept", ws_response);
+        }
+
         // evbuffer_add_printf(client->buf, "\r\n");
     } else if (client->multipart) {
         evhttp_add_header(client->req->output_headers, "content-type",
@@ -278,11 +333,13 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(client->buf, "\r\n");
     }
     if (client->websocket) {
-        evhttp_send_reply_start(client->req, 101, "Web Socket Protocol Handshake");
+        evhttp_send_reply_start(client->req, 101, "Switching Protocols");
     } else {
         evhttp_send_reply_start(client->req, HTTP_OK, "OK");
     }
-    evhttp_send_reply_chunk(client->req, client->buf);
+    if (!client->websocket)
+        evhttp_send_reply_chunk(client->req, client->buf);
+
     TAILQ_INSERT_TAIL(&clients, client, entries);
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
     evhttp_clear_headers(&args);
