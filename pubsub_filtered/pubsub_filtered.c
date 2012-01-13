@@ -61,6 +61,8 @@ void source_reconnect_cb(int fd, short what, void *ctx);
 void reconnect_to_source(int retryNow);
 void process_message_cb(char *source, void *arg);
 
+int filter_message(char *subject, pcre *filter, struct json_object *json_in);
+
 int parse_encrypted_fields(char *str);
 int parse_blacklisted_fields(char *str);
 int parse_fields(char *str, char **field_array);
@@ -88,7 +90,7 @@ static int  num_encrypted_fields = 0;
 static char *blacklisted_fields[64];
 static char *expected_key = NULL;
 static char *expected_value = NULL;
-static int expect_value = 0;
+static pcre *expected_value_regex = NULL;
 static int  num_blacklisted_fields = 0;
 
 
@@ -198,6 +200,41 @@ char *md5_hash(const char *string)
     return output;
 }
 
+/*
+ * Filters a JSON object
+ */
+int filter_message(char *subject, pcre *filter, struct json_object *json_in)
+{
+    struct json_object *element;
+    int subject_length;
+    int rc;
+    int ovector[OVECCOUNT];
+    char *obj_subject;
+
+    if (filter != NULL && subject != NULL) {
+        element = json_object_object_get(json_in, subject);
+        if (element) {
+            obj_subject = (char *)json_object_get_string(element);
+        } else {
+            obj_subject = "";
+        }
+        subject_length = strlen(obj_subject);
+        rc = pcre_exec(
+                filter,               /* the compiled pattern */
+                NULL,                 /* no extra data - we didn't study the pattern */
+                obj_subject,          /* the subject string */
+                subject_length,       /* the length of the subject */
+                0,                    /* start at offset 0 in the subject */
+                0,                    /* default options */
+                ovector,              /* output vector for substring information */
+                OVECCOUNT);           /* number of elements in the output vector */
+        if (rc < 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 
 /*
  * Callback for each fetched pubsub message.
@@ -226,7 +263,7 @@ void process_message_cb(char *source, void *arg)
         return;
     }
 
-    if (expect_value) {
+    if (expected_value != NULL) {
         element = json_object_object_get(json_in, expected_key);
         if (element == NULL) {
             json_object_put(json_in);
@@ -241,6 +278,11 @@ void process_message_cb(char *source, void *arg)
             json_object_put(json_in);
             return;
         }
+    }
+
+    // filter
+    if (expected_value_regex && !filter_message(expected_key, expected_value_regex, json_in)) {
+        return;
     }
 
     // loop through the fields we need to encrypt
@@ -281,28 +323,8 @@ void process_message_cb(char *source, void *arg)
             continue;
         }
         // filter
-        if (client->fltr.ok) {
-            fltr = &client->fltr;
-            element = json_object_object_get(json_in, fltr->subject);
-            if (element) {
-                subject = (char *)json_object_get_string(element);
-            } else {
-                subject = "";
-            }
-            subject_length = strlen(subject);
-            rc = pcre_exec(
-                    fltr->re,             /* the compiled pattern */
-                    NULL,                 /* no extra data - we didn't study the pattern */
-                    subject,              /* the subject string */
-                    subject_length,       /* the length of the subject */
-                    0,                    /* start at offset 0 in the subject */
-                    0,                    /* default options */
-                    ovector,              /* output vector for substring information */
-                    OVECCOUNT);           /* number of elements in the output vector */
-            if (rc < 0) {
-                continue;
-            }
-        }
+        if (client->fltr.ok && !filter_message(client->fltr.subject, client->fltr.re, json_in))
+            continue;
         if (client->websocket) {
             // set to non-chunked so that send_reply_chunked doesn't add \r\n before/after this block
             client->req->chunked = 0;
@@ -644,6 +666,7 @@ int main(int argc, char **argv)
     char *pubsub_url;
     char *source_address;
     char *source_path;
+    char *expected_value_regex_raw = NULL;
     int source_port;
 
     define_simplehttp_options();
@@ -653,16 +676,31 @@ int main(int argc, char **argv)
     option_define_str("encrypted_fields", OPT_OPTIONAL, NULL, NULL, parse_encrypted_fields, "comma separated list of fields to encrypt");
     option_define_str("expected_key", OPT_OPTIONAL, NULL, &expected_key, NULL, "key to expect in messages before echoing to clients");
     option_define_str("expected_value", OPT_OPTIONAL, NULL, &expected_value, NULL, "value to expect in --expected-key field in messages before echoing to clients");
+    option_define_str("expected_value_regex", OPT_OPTIONAL, NULL, &expected_value_regex_raw, NULL, "regular expression matching expected value in --expected-key field before echoing to clients");
 
     if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
 
-    if ((expected_value && !expected_key) || (expected_key && !expected_value)) {
+    if (expected_value_regex_raw) {
+        const char *tmp_err_s;
+        int tmp_err_i;
+        expected_value_regex = pcre_compile(
+                expected_value_regex_raw,
+                0,
+                &tmp_err_s,
+                &tmp_err_i,
+                NULL);
+        if (!expected_value_regex) {
+            fprintf(stderr, "Invalid regular expression in --expected-value-regex");
+            exit(1);
+        }
+    }
+
+    if ( !!expected_key ^ !!( expected_key || expected_value_regex ) ) {
         fprintf(stderr, "--expected-key and --expected-value must be used together\n");
         exit(1);
     }
-
     if (!simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &source_address, &source_port, &source_path)) {
         fprintf(stderr, "ERROR: failed to parse pubsub-url\n");
         exit(1);
