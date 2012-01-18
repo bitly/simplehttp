@@ -69,3 +69,10 @@ API endpoints:
  * /stats
  
  * /exit (cause the current process to exit)
+
+
+Utilities
+---------
+
+* `leveldb_to_csv` is a utility to dump a leveldb database into csv format. It takes the same parameters as simpleleveldb plus an optional `--output-file` and `--output_deliminator`  (or run `--help` for more info)
+* `csv_to_leveldb` loads from a csv into a leveldb database. It takes the same parameters as simpleleveldb plus an optional `--input-file` and `--input_deliminator`  (or run `--help` for more info)

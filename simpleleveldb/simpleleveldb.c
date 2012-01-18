@@ -11,7 +11,7 @@
 #include <leveldb/c.h>
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.1"
+#define VERSION         "0.1.1"
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
@@ -57,7 +57,7 @@ void finalize_request(int response_code, char *error, struct evhttp_request *req
         }
         response_code = HTTP_OK;
     }
-
+    
     if (jsobj && format == json_format) {
         jsonp = (char *)evhttp_find_header(args, "jsonp");
         json = (char *)json_object_to_json_string(jsobj);
@@ -70,7 +70,7 @@ void finalize_request(int response_code, char *error, struct evhttp_request *req
     if (jsobj) {
         json_object_put(jsobj); // Odd free function
     }
-
+    
     // don't send the request if it was already sent
     if (!req->response_code) {
         evhttp_send_reply(req, response_code, (response_code == HTTP_OK) ? "OK" : "ERROR", evb);
@@ -93,13 +93,13 @@ int db_open()
     char *filename = option_get_str("db_file");
     
     ldb_options = leveldb_options_create();
-    ldb_cache = leveldb_cache_create_lru(option_get_int("block_size"));
+    ldb_cache = leveldb_cache_create_lru(option_get_int("cache_size"));
     
     leveldb_options_set_create_if_missing(ldb_options, option_get_int("create_db_if_missing"));
     leveldb_options_set_error_if_exists(ldb_options, option_get_int("error_if_db_exists"));
     leveldb_options_set_paranoid_checks(ldb_options, option_get_int("paranoid_checks"));
     leveldb_options_set_write_buffer_size(ldb_options, option_get_int("write_buffer_size"));
-    leveldb_options_set_block_size(ldb_options, option_get_int("write_buffer_size"));
+    leveldb_options_set_block_size(ldb_options, option_get_int("block_size"));
     leveldb_options_set_cache(ldb_options, ldb_cache);
     leveldb_options_set_max_open_files(ldb_options, option_get_int("leveldb_max_open_files"));
     leveldb_options_set_block_restart_interval(ldb_options, 8);
@@ -107,7 +107,7 @@ int db_open()
     
     // leveldb_options_set_env(options, self->_env);
     leveldb_options_set_info_log(ldb_options, NULL);
-
+    
     ldb = leveldb_open(ldb_options, filename, &error);
     if (error) {
         fprintf(stderr, "ERROR opening db:%s\n", error);
@@ -129,7 +129,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_parse_query(req->uri, &args);
     
     jsobj = json_object_new_object();
-
+    
     key = (char *)evhttp_find_header(&args, "key");
     if (key == NULL) {
         finalize_request(400, "MISSING_ARG_KEY", req, evb, &args, jsobj);
@@ -139,7 +139,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     write_options = leveldb_writeoptions_create();
     leveldb_delete(ldb, write_options, key, strlen(key), &error);
     leveldb_writeoptions_destroy(write_options);
-
+    
     finalize_request(response_code, error, req, evb, &args, jsobj);
     free(error);
 }
@@ -203,9 +203,10 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     read_options = leveldb_readoptions_create();
+    leveldb_readoptions_set_verify_checksums(read_options, option_get_int("verify_checksums"));
     value = leveldb_get(ldb, read_options, key, strlen(key), &vallen, &error);
     leveldb_readoptions_destroy(read_options);
-
+    
     if (value) {
         terminated_value = value;
         DUPE_N_TERMINATE(terminated_value, vallen, tmp);
@@ -215,7 +216,7 @@ void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             json_object_object_add(jsobj, "data", json_object_new_string(terminated_value));
         }
         free(terminated_value);
-
+        
         finalize_request(response_code, error, req, evb, &args, jsobj);
     } else {
         finalize_request(404, "NOT_FOUND", req, evb, &args, jsobj);
@@ -247,12 +248,15 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     read_options = leveldb_readoptions_create();
-
+    leveldb_readoptions_set_verify_checksums(read_options, option_get_int("verify_checksums"));
+    
     TAILQ_FOREACH(pair, &args, next) {
-        if (pair->key[0] != 'k') continue;
+        if (pair->key[0] != 'k') {
+            continue;
+        }
         key = (char *)pair->value;
         nkeys++;
-
+        
         value = leveldb_get(ldb, read_options, key, strlen(key), &vallen, &error);
         if (error) {
             break;
@@ -270,7 +274,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         }
         free(value);
     }
-
+    
     leveldb_readoptions_destroy(read_options);
     
     if (!nkeys) {
@@ -295,7 +299,7 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     int format;
     leveldb_readoptions_t *read_options;
     leveldb_writeoptions_t *write_options;
-
+    
     evhttp_parse_query(req->uri, &args);
     format = get_argument_format(&args);
     
@@ -314,6 +318,7 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     read_options = leveldb_readoptions_create();
+    leveldb_readoptions_set_verify_checksums(read_options, option_get_int("verify_checksums"));
     orig_value = leveldb_get(ldb, read_options, key, strlen(key), &orig_valuelen, &error);
     leveldb_readoptions_destroy(read_options);
     
@@ -325,7 +330,7 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         orig_value = terminated_value;
     }
     
-
+    
     if (orig_value) {
         new_value = calloc(orig_valuelen + 1 + strlen(append_value) + 1, sizeof(char *));
         sprintf(new_value, "%s,%s", orig_value, append_value);
@@ -333,19 +338,19 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         new_value = calloc(strlen(append_value) + 1, sizeof(char *));
         sprintf(new_value, "%s", append_value);
     }
-
+    
     free(error);
-
+    
     write_options = leveldb_writeoptions_create();
     leveldb_put(ldb, write_options, key, strlen(key), new_value, strlen(new_value), &error);
     leveldb_writeoptions_destroy(write_options);
-
+    
     if (format == json_format) {
         json_object_object_add(jsobj, "data", json_object_new_string(new_value));
     } else {
         evbuffer_add_printf(evb, "%s,%s\n", key, new_value);
     }
-
+    
     finalize_request(response_code, error, req, evb, &args, jsobj);
     free(new_value);
     free(orig_value);
@@ -404,7 +409,8 @@ void info()
     fprintf(stdout, "Version: %s, https://github.com/bitly/simplehttp/tree/master/simpleleveldb\n", VERSION);
 }
 
-int version_cb(int value) {
+int version_cb(int value)
+{
     fprintf(stdout, "Version: %s\n", VERSION);
     return 0;
 }
@@ -417,12 +423,14 @@ int main(int argc, char **argv)
     option_define_bool("create_db_if_missing", OPT_OPTIONAL, 1, NULL, NULL, "Create leveldb file if missing");
     option_define_bool("error_if_db_exists", OPT_OPTIONAL, 0, NULL, NULL, "Error out if leveldb file exists");
     option_define_bool("paranoid_checks", OPT_OPTIONAL, 1, NULL, NULL, "leveldb paranoid checks");
-    option_define_int("write_buffer_size", OPT_OPTIONAL, 4<<20, NULL, NULL, "write buffer size");
+    option_define_int("write_buffer_size", OPT_OPTIONAL, 4 << 20, NULL, NULL, "write buffer size");
+    option_define_int("cache_size", OPT_OPTIONAL, 4 << 20, NULL, NULL, "cache size (frequently used blocks)");
     option_define_int("block_size", OPT_OPTIONAL, 4096, NULL, NULL, "block size");
     option_define_bool("compression", OPT_OPTIONAL, 1, NULL, NULL, "snappy compression");
+    option_define_bool("verify_checksums", OPT_OPTIONAL, 1, NULL, NULL, "verify checksums at read time");
     option_define_int("leveldb_max_open_files", OPT_OPTIONAL, 4096, NULL, NULL, "leveldb max open files");
     
-    if (!option_parse_command_line(argc, argv)){
+    if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     
