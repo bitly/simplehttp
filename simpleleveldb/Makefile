@@ -6,7 +6,7 @@ LIBSIMPLEHTTP_LIB ?= $(LIBSIMPLEHTTP)
 LIBLEVELDB ?= /usr/local
 
 CFLAGS = -I. -I$(LIBSIMPLEHTTP_INC) -I$(LIBEVENT)/include -I$(LIBLEVELDB)/include -Wall -g -O2
-LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -L/usr/local/lib -L$(LIBLEVELDB)/lib -levent -ljson -lsimplehttp -lleveldb -lm -lstdc++
+LIBS = -L. -L$(LIBSIMPLEHTTP_LIB) -L$(LIBEVENT)/lib -L/usr/local/lib -L$(LIBLEVELDB)/lib -levent -ljson -lsimplehttp -lleveldb -lm -lstdc++ -lsnappy
 AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
