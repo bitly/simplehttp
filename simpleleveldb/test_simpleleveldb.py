@@ -6,20 +6,21 @@ from test_shunt import valgrind_cmd, SubprocessTest
 import tornado.httpclient
 import time
 
-def http_fetch_json(endpoint, params, status_code=200, status_txt="OK"):
-    body = http_fetch(endpoint, params, 200)
+def http_fetch_json(endpoint, params, status_code=200, status_txt="OK", body=None):
+    body = http_fetch(endpoint, params, 200, body)
     data = json.loads(body)
     assert data['status_code'] == status_code
     assert data['status_txt'] == status_txt
     return data['data']
 
-def http_fetch(endpoint, params, response_code=200):
+def http_fetch(endpoint, params, response_code=200, body=None):
     http_client = tornado.httpclient.HTTPClient()
     url = 'http://127.0.0.1:8080' + endpoint
     if params:
         url += '?' + urllib.urlencode(params, doseq=1)
+    method = "POST" if body else "GET"
     try:
-        res = http_client.fetch(url)
+        res = http_client.fetch(url, method=method, body=body)
     except tornado.httpclient.HTTPError, e:
         logging.info(e)
         res = e.response
@@ -51,6 +52,7 @@ class SimpleLeveldbTest(SubprocessTest):
         
         http_fetch_json('/put', dict(key='test1', value='asdf1'))
         http_fetch_json('/put', dict(key='test2', value='asdf2'))
+        
         data = http_fetch('/mget', dict(key=['test1', 'test2', 'test3'], format='txt'))
         print data
         assert data == 'test1,asdf1\ntest2,asdf2\n'
@@ -58,12 +60,24 @@ class SimpleLeveldbTest(SubprocessTest):
         
         # test list stuff
         http_fetch_json('/get', dict(key='list_test'), 404, 'NOT_FOUND')
-        data = http_fetch_json('/list_append', dict(key='list_test', value='testvalue1'))
+        data = http_fetch_json('/list_append', dict(key='list_test', value='testvalue1', echo_data='1'))
         assert data == 'testvalue1'
         data = http_fetch_json('/list_append', dict(key='list_test', value='testvalue2'))
-        assert data == 'testvalue1,testvalue2'
+        assert data == ''
         data = http_fetch_json('/get', dict(key='list_test'))
         assert data == 'testvalue1,testvalue2'
+        data = http_fetch_json('/list_append', dict(key='list_test', value='testvalue3'))
+        data = http_fetch_json('/list_remove', dict(key='list_test', value='testvalue2'))
+        data = http_fetch_json('/get', dict(key='list_test'))
+        assert data == 'testvalue1,testvalue3'
+        data = http_fetch_json('/list_remove', dict(key='list_test', value='testvalue1'))
+        data = http_fetch_json('/get', dict(key='list_test'))
+        assert data == 'testvalue3'
         
+        # try a /put with a POST body
+        http_fetch_json('/put', dict(key='testpost'), body='asdfpost')
+        data = http_fetch_json('/get', dict(key='testpost'))
+        assert data == 'asdfpost'
+        data = http_fetch_json('/del', dict(key='testpost'))
 
         
