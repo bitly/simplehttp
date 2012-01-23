@@ -11,7 +11,7 @@
 #include <leveldb/c.h>
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.1.1"
+#define VERSION         "0.1.3"
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
@@ -23,6 +23,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 leveldb_t *ldb;
 leveldb_options_t *ldb_options;
@@ -151,12 +152,13 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     struct json_object  *jsobj;
     int response_code = HTTP_OK;
     char *error = NULL;
+    size_t value_len;
     leveldb_writeoptions_t *write_options;
     
     evhttp_parse_query(req->uri, &args);
     
     key = (char *)evhttp_find_header(&args, "key");
-    value = (char *)evhttp_find_header(&args, "value");
+    
     
     jsobj = json_object_new_object();
     if (key == NULL) {
@@ -164,18 +166,19 @@ void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         return;
     }
     
-    if (value == NULL) {
+    if ((value = (char *)evhttp_find_header(&args, "value")) != NULL) {
+        value_len = strlen(value);
+    } else if (req->type == EVHTTP_REQ_POST && (value_len = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
+        value = (char *)EVBUFFER_DATA(req->input_buffer);
+    } else {
         finalize_request(400, "MISSING_ARG_VALUE", req, evb, &args, jsobj);
         return;
     }
     
     write_options = leveldb_writeoptions_create();
-    leveldb_put(ldb, write_options, key, strlen(key), value, strlen(value), &error);
+    leveldb_put(ldb, write_options, key, strlen(key), value, value_len, &error);
     leveldb_writeoptions_destroy(write_options);
     
-    if (!error) {
-        json_object_object_add(jsobj, "data", json_object_new_string(value));
-    }
     finalize_request(response_code, error, req, evb, &args, jsobj);
     free(error);
 }
@@ -297,11 +300,13 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     size_t orig_valuelen;
     char *tmp;
     int format;
+    int echo_data;
     leveldb_readoptions_t *read_options;
     leveldb_writeoptions_t *write_options;
     
     evhttp_parse_query(req->uri, &args);
     format = get_argument_format(&args);
+    echo_data = get_int_argument(&args, "echo_data", 0);
     
     key = (char *)evhttp_find_header(&args, "key");
     append_value = (char *)evhttp_find_header(&args, "value");
@@ -345,10 +350,12 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     leveldb_put(ldb, write_options, key, strlen(key), new_value, strlen(new_value), &error);
     leveldb_writeoptions_destroy(write_options);
     
-    if (format == json_format) {
-        json_object_object_add(jsobj, "data", json_object_new_string(new_value));
-    } else {
-        evbuffer_add_printf(evb, "%s,%s\n", key, new_value);
+    if (echo_data) {
+        if (format == json_format) {
+            json_object_object_add(jsobj, "data", json_object_new_string(new_value));
+        } else {
+            evbuffer_add_printf(evb, "%s,%s\n", key, new_value);
+        }
     }
     
     finalize_request(response_code, error, req, evb, &args, jsobj);
@@ -358,6 +365,107 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
 }
 
+/* remove a `value` from string */
+void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char                *key, *remove_value, *orig_value, *terminated_value;
+    struct evkeyvalq    args;
+    struct json_object  *jsobj;
+    int response_code = HTTP_OK;
+    char *error = NULL;
+    size_t orig_valuelen;
+    char *tmp;
+    int i;
+    int updated = 0;
+    char *token;
+    struct evbuffer *new_value;
+    int format;
+    int echo_data;
+    leveldb_readoptions_t *read_options;
+    leveldb_writeoptions_t *write_options;
+    
+    evhttp_parse_query(req->uri, &args);
+    format = get_argument_format(&args);
+    echo_data = get_int_argument(&args, "echo_data", 0);
+    
+    key = (char *)evhttp_find_header(&args, "key");
+    remove_value = (char *)evhttp_find_header(&args, "value");
+    // separator = (char *)evhttp_find_header(&args, "separator");
+    
+    jsobj = json_object_new_object();
+    if (key == NULL) {
+        finalize_request(400, "MISSING_ARG_KEY", req, evb, &args, jsobj);
+        return;
+    }
+    if (remove_value == NULL) {
+        finalize_request(400, "MISSING_ARG_VALUE", req, evb, &args, jsobj);
+        return;
+    }
+    
+    read_options = leveldb_readoptions_create();
+    leveldb_readoptions_set_verify_checksums(read_options, option_get_int("verify_checksums"));
+    orig_value = leveldb_get(ldb, read_options, key, strlen(key), &orig_valuelen, &error);
+    leveldb_readoptions_destroy(read_options);
+    
+    // null terminate orig_value
+    if (orig_value) {
+        terminated_value = orig_value;
+        DUPE_N_TERMINATE(terminated_value, orig_valuelen, tmp);
+        free(orig_value);
+        orig_value = terminated_value;
+    }
+
+    if (orig_value) {
+        new_value = evbuffer_new();
+        token = strtok(orig_value, ",");
+        i = 0;
+        while (token) {
+            if (strcmp(token, remove_value) == 0) {
+                // we found the token
+                updated = 1;
+            } else {
+                if (i == 0) {
+                    evbuffer_add_printf(new_value, "%s", token);
+                } else {
+                    evbuffer_add_printf(new_value, ",%s", token);
+                }
+                i++;
+            }
+            token = strtok(NULL, ",");
+        }
+        if (updated == 1) {
+            write_options = leveldb_writeoptions_create();
+            leveldb_put(ldb, write_options, key, strlen(key), (char *)EVBUFFER_DATA(new_value), EVBUFFER_LENGTH(new_value), &error);
+            leveldb_writeoptions_destroy(write_options);
+        }
+        
+        if (echo_data) {
+            if (format == json_format) {
+                json_object_object_add(jsobj, "data", json_object_new_string(new_value));
+            } else {
+                evbuffer_add_printf(evb, "%s,%s\n", key, new_value);
+            }
+        }
+
+        evbuffer_free(new_value);
+    
+    } else {
+        if (echo_data) {
+            if (format == json_format) {
+                json_object_object_add(jsobj, "data", json_object_new_string(""));
+            } else {
+                evbuffer_add_printf(evb, "%s,\n", key);
+            }
+        }
+    }
+    
+    free(error);
+    
+    finalize_request(response_code, error, req, evb, &args, jsobj);
+    free(orig_value);
+    free(error);
+    
+}
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
@@ -442,6 +550,7 @@ int main(int argc, char **argv)
     
     simplehttp_init();
     simplehttp_set_cb("/list_append*", list_append_cb, NULL);
+    simplehttp_set_cb("/list_remove*", list_remove_cb, NULL);
     simplehttp_set_cb("/get*", get_cb, NULL);
     simplehttp_set_cb("/mget*", mget_cb, NULL);
     simplehttp_set_cb("/put*", put_cb, NULL);
