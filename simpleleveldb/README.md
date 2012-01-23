@@ -61,6 +61,8 @@ API endpoints:
  * /put
 
     parameters: `key`, `value`, `format`
+    
+    Note: `value` can also be specified as the raw POST body content
 
  * /del
 
