@@ -12,7 +12,7 @@
 
 #define BOUNDARY "xXPubSubXx"
 #define MAX_PENDING_DATA 1024*1024*50
-#define VERSION "1.1"
+#define VERSION "1.2"
 
 int ps_debug = 0;
 
@@ -43,20 +43,20 @@ char *base64(const unsigned char *input, int length)
 {
     BIO *bmem, *b64;
     BUF_MEM *bptr;
-
+    
     b64 = BIO_new(BIO_f_base64());
     bmem = BIO_new(BIO_s_mem());
     b64 = BIO_push(b64, bmem);
     BIO_write(b64, input, length);
     BIO_flush(b64);
     BIO_get_mem_ptr(b64, &bptr);
-
+    
     char *buff = (char *)malloc(bptr->length);
-    memcpy(buff, bptr->data, bptr->length-1);
-    buff[bptr->length-1] = 0;
-
+    memcpy(buff, bptr->data, bptr->length - 1);
+    buff[bptr->length - 1] = 0;
+    
     BIO_free_all(b64);
-
+    
     return buff;
 }
 
@@ -67,7 +67,7 @@ int is_slow(struct cli *client)
     }
     struct evhttp_connection *evcon;
     unsigned long output_buffer_length;
-
+    
     evcon = (struct evhttp_connection *)client->req->evcon;
     output_buffer_length = evcon->output_buffer ? (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer) : 0;
     if (output_buffer_length > MAX_PENDING_DATA) {
@@ -104,24 +104,24 @@ void clients_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char buf[248];
     unsigned long output_buffer_length;
     struct evhttp_connection *evcon;
-
+    
     if (TAILQ_EMPTY(&clients)) {
         evbuffer_add_printf(evb, "no /sub connections\n");
     }
     TAILQ_FOREACH(client, &clients, entries) {
         evcon = (struct evhttp_connection *)client->req->evcon;
-
+        
         time_struct = gmtime(&client->connect_time);
         strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
         output_buffer_length = (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer);
         evbuffer_add_printf(evb, "%s:%d connected at %s. output buffer size:%lu state:%d\n",
-                client->req->remote_host,
-                client->req->remote_port,
-                buf,
-                output_buffer_length,
-                (int)evcon->state);
+                            client->req->remote_host,
+                            client->req->remote_port,
+                            buf,
+                            output_buffer_length,
+                            (int)evcon->state);
     }
-
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
 
@@ -131,7 +131,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char buf[33];
     const char *reset;
     const char *format;
-
+    
     sprintf(buf, "%llu", totalConns);
     evhttp_add_header(req->output_headers, "X-PUBSUB-TOTAL-CONNECTIONS", buf);
     sprintf(buf, "%llu", currentConns);
@@ -142,10 +142,10 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_add_header(req->output_headers, "X-PUBSUB-MESSAGES-SENT", buf);
     sprintf(buf, "%llu", kickedClients);
     evhttp_add_header(req->output_headers, "X-PUBSUB-KICKED-CLIENTS", buf);
-
+    
     evhttp_parse_query(req->uri, &args);
     format = (char *)evhttp_find_header(&args, "format");
-
+    
     if ((format != NULL) && (strcmp(format, "json") == 0)) {
         evbuffer_add_printf(evb, "{");
         evbuffer_add_printf(evb, "\"current_connections\": %llu,", currentConns);
@@ -161,13 +161,13 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         evbuffer_add_printf(evb, "Messages sent: %llu\n", msgSent);
         evbuffer_add_printf(evb, "Kicked clients: %llu\n", kickedClients);
     }
-
+    
     reset = (char *)evhttp_find_header(&args, "reset");
     if (reset) {
         msgRecv = 0;
         msgSent = 0;
     }
-
+    
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
     evhttp_clear_headers(&args);
 }
@@ -175,7 +175,7 @@ void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void on_close(struct evhttp_connection *evcon, void *ctx)
 {
     struct cli *client = (struct cli *)ctx;
-
+    
     if (client) {
         fprintf(stdout, "%llu >> close from  %s:%d\n", client->connection_id, evcon->address, evcon->port);
         currentConns--;
@@ -205,10 +205,10 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         {
             message_length = j - message_offset ;
             current_message = EVBUFFER_DATA(req->input_buffer) + message_offset;
-
+            
             msgRecv++;
             totalConns++;
-
+            
             i = 0;
             TAILQ_FOREACH(client, &clients, entries) {
                 msgSent++;
@@ -228,25 +228,27 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                     int ws_frame_size = 64;  // Size for data fragmentation for websocket
                     while (ws_m < ws_message_length) {
                         int ws_cur_size = (ws_message_length - ws_m > ws_frame_size ? ws_frame_size : ws_message_length - ws_m);
-
+                        
                         int ws_code = 0;
-                        if (ws_m == 0)
+                        if (ws_m == 0) {
                             ws_code += 0x01;
-                        if (ws_m + ws_cur_size >= ws_message_length)
+                        }
+                        if (ws_m + ws_cur_size >= ws_message_length) {
                             ws_code += 0x80;
+                        }
                         evbuffer_add_printf(client->buf, "%c", ws_code);
-
+                        
                         evbuffer_add_printf(client->buf, "%c", ws_cur_size);
                         evbuffer_add(client->buf, current_message + ws_m, ws_cur_size);
                         ws_m += ws_cur_size;
                     }
-
+                    
                 } else if (client->multipart) {
                     /* chunked */
                     evbuffer_add_printf(client->buf,
-                            "content-type: %s\r\ncontent-length: %d\r\n\r\n",
-                            "*/*",
-                            (int)message_length);
+                                        "content-type: %s\r\ncontent-length: %d\r\n\r\n",
+                                        "*/*",
+                                        (int)message_length);
                     evbuffer_add(client->buf, current_message, message_length);
                     evbuffer_add_printf(client->buf, "\r\n--%s\r\n", BOUNDARY);
                 } else {
@@ -257,12 +259,12 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                 evhttp_send_reply_chunk(client->req, client->buf);
                 i++;
             }
-
+            
             message_offset = j + 1;
             num_messages ++;
         }
     }
-
+    
     evbuffer_add_printf(evb, "Published %d messages to %d clients.\n", num_messages, i);
     evhttp_send_reply(req, HTTP_OK, "OK", evb);
 }
@@ -279,7 +281,7 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char *host;
     char buf[248];
     struct tm *time_struct;
-
+    
     currentConns++;
     totalConns++;
     evhttp_parse_query(req->uri, &args);
@@ -291,24 +293,24 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     time_struct = gmtime(&client->connect_time);
     client->buf = evbuffer_new();
     client->kick_client = CLIENT_OK;
-
+    
     strftime(buf, 248, "%Y-%m-%d %H:%M:%S", time_struct);
-
+    
     // print out info about this connection
     fprintf(stdout, "%llu >> /sub connection from %s:%d %s\n", client->connection_id, req->remote_host, req->remote_port, buf);
-
+    
     // Connection: Upgrade
     // Upgrade: WebSocket
     ws_upgrade = (char *) evhttp_find_header(req->input_headers, "Upgrade");
     ws_origin = (char *) evhttp_find_header(req->input_headers, "Origin");
     ws_key = (char *) evhttp_find_header(req->input_headers, "Sec-WebSocket-Key");
     host = (char *) evhttp_find_header(req->input_headers, "Host");
-
+    
     if (ps_debug && ws_upgrade) {
         fprintf(stderr, "%llu >> upgrade header is %s\n", client->connection_id, ws_upgrade);
         fprintf(stderr, "%llu >> multipart is %d\n", client->connection_id, client->multipart);
     }
-
+    
     if (ws_upgrade && strcasestr(ws_upgrade, "WebSocket")) {
         if (ps_debug) {
             fprintf(stderr, "%llu >> upgrading connection to a websocket\n", client->connection_id);
@@ -334,22 +336,22 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         if (ws_key != NULL) {
             char ws_response_tmp[SHA_DIGEST_LENGTH];
             char ws_buf[128];
-
+            
             sprintf(ws_buf, "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", ws_key);
             SHA1(ws_buf, strlen(ws_buf), ws_response_tmp);
-
+            
             ws_response = base64(ws_response_tmp, SHA_DIGEST_LENGTH);
             evhttp_add_header(client->req->output_headers, "Sec-WebSocket-Accept", ws_response);
         }
-
+        
         // evbuffer_add_printf(client->buf, "\r\n");
     } else if (client->multipart) {
         evhttp_add_header(client->req->output_headers, "content-type",
-                "multipart/x-mixed-replace; boundary=" BOUNDARY);
+                          "multipart/x-mixed-replace; boundary=" BOUNDARY);
         evbuffer_add_printf(client->buf, "--%s\r\n", BOUNDARY);
     } else {
         evhttp_add_header(client->req->output_headers, "content-type",
-                "application/json");
+                          "application/json");
         evbuffer_add_printf(client->buf, "\r\n");
     }
     if (client->websocket) {
@@ -357,9 +359,10 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     } else {
         evhttp_send_reply_start(client->req, HTTP_OK, "OK");
     }
-    if (!client->websocket)
+    if (!client->websocket) {
         evhttp_send_reply_chunk(client->req, client->buf);
-
+    }
+    
     TAILQ_INSERT_TAIL(&clients, client, entries);
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
     evhttp_clear_headers(&args);
@@ -376,11 +379,11 @@ int main(int argc, char **argv)
 
     define_simplehttp_options();
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-
+    
     if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
-
+    
     TAILQ_INIT(&clients);
     simplehttp_init();
     simplehttp_set_cb("/pub*", pub_cb, NULL);
@@ -389,6 +392,6 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/clients", clients_cb, NULL);
     simplehttp_main();
     free_options();
-
+    
     return 0;
 }
