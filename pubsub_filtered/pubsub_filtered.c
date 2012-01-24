@@ -11,10 +11,15 @@
 #include "md5.h"
 #include "pcre.h"
 
+#include <openssl/sha.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
+
+
 #define DEBUG 1
 #define SUCCESS 0
 #define FAILURE 1
-#define VERSION "1.1"
+#define VERSION "1.2"
 #define RECONNECT_SECS 5
 #define ADDR_BUFSZ 256
 #define BOUNDARY "xXPubSubXx"
@@ -38,6 +43,7 @@ struct filter {
 
 typedef struct cli {
     int multipart;
+    int websocket;
     enum kick_client_enum kick_client;
     uint64_t connection_id;
     time_t connect_time;
@@ -54,6 +60,8 @@ void error_cb(int status_code, void *arg);
 void source_reconnect_cb(int fd, short what, void *ctx);
 void reconnect_to_source(int retryNow);
 void process_message_cb(char *source, void *arg);
+
+int filter_message(char *subject, pcre *filter, struct json_object *json_in);
 
 int parse_encrypted_fields(char *str);
 int parse_blacklisted_fields(char *str);
@@ -82,8 +90,30 @@ static int  num_encrypted_fields = 0;
 static char *blacklisted_fields[64];
 static char *expected_key = NULL;
 static char *expected_value = NULL;
-static int expect_value = 0;
+static pcre *expected_value_regex = NULL;
 static int  num_blacklisted_fields = 0;
+
+
+char *base64(const unsigned char *input, int length)
+{
+    BIO *bmem, *b64;
+    BUF_MEM *bptr;
+    
+    b64 = BIO_new(BIO_f_base64());
+    bmem = BIO_new(BIO_s_mem());
+    b64 = BIO_push(b64, bmem);
+    BIO_write(b64, input, length);
+    BIO_flush(b64);
+    BIO_get_mem_ptr(b64, &bptr);
+    
+    char *buff = (char *)malloc(bptr->length);
+    memcpy(buff, bptr->data, bptr->length - 1);
+    buff[bptr->length - 1] = 0;
+    
+    BIO_free_all(b64);
+    
+    return buff;
+}
 
 /*
  * Parse a comma-delimited  string and populate
@@ -170,6 +200,41 @@ char *md5_hash(const char *string)
     return output;
 }
 
+/*
+ * Filters a JSON object
+ */
+int filter_message(char *subject, pcre *filter, struct json_object *json_in)
+{
+    struct json_object *element;
+    int subject_length;
+    int rc;
+    int ovector[OVECCOUNT];
+    char *obj_subject;
+    
+    if (filter != NULL && subject != NULL) {
+        element = json_object_object_get(json_in, subject);
+        if (element) {
+            obj_subject = (char *)json_object_get_string(element);
+        } else {
+            obj_subject = "";
+        }
+        subject_length = strlen(obj_subject);
+        rc = pcre_exec(
+                 filter,               /* the compiled pattern */
+                 NULL,                 /* no extra data - we didn't study the pattern */
+                 obj_subject,          /* the subject string */
+                 subject_length,       /* the length of the subject */
+                 0,                    /* start at offset 0 in the subject */
+                 0,                    /* default options */
+                 ovector,              /* output vector for substring information */
+                 OVECCOUNT);           /* number of elements in the output vector */
+        if (rc < 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 
 /*
  * Callback for each fetched pubsub message.
@@ -198,7 +263,7 @@ void process_message_cb(char *source, void *arg)
         return;
     }
     
-    if (expect_value) {
+    if (expected_value != NULL) {
         element = json_object_object_get(json_in, expected_key);
         if (element == NULL) {
             json_object_put(json_in);
@@ -213,6 +278,11 @@ void process_message_cb(char *source, void *arg)
             json_object_put(json_in);
             return;
         }
+    }
+    
+    // filter
+    if (expected_value_regex && !filter_message(expected_key, expected_value_regex, json_in)) {
+        return;
     }
     
     // loop through the fields we need to encrypt
@@ -253,29 +323,32 @@ void process_message_cb(char *source, void *arg)
             continue;
         }
         // filter
-        if (client->fltr.ok) {
-            fltr = &client->fltr;
-            element = json_object_object_get(json_in, fltr->subject);
-            if (element) {
-                subject = (char *)json_object_get_string(element);
-            } else {
-                subject = "";
-            }
-            subject_length = strlen(subject);
-            rc = pcre_exec(
-                     fltr->re,             /* the compiled pattern */
-                     NULL,                 /* no extra data - we didn't study the pattern */
-                     subject,              /* the subject string */
-                     subject_length,       /* the length of the subject */
-                     0,                    /* start at offset 0 in the subject */
-                     0,                    /* default options */
-                     ovector,              /* output vector for substring information */
-                     OVECCOUNT);           /* number of elements in the output vector */
-            if (rc < 0) {
-                continue;
-            }
+        if (client->fltr.ok && !filter_message(client->fltr.subject, client->fltr.re, json_in)) {
+            continue;
         }
-        if (client->multipart) {
+        if (client->websocket) {
+            // set to non-chunked so that send_reply_chunked doesn't add \r\n before/after this block
+            client->req->chunked = 0;
+            int ws_m = 0;
+            int ws_message_length = strlen(json_out);
+            int ws_frame_size = 64;  // Size for data fragmentation for websocket
+            while (ws_m < ws_message_length) {
+                int ws_cur_size = (ws_message_length - ws_m > ws_frame_size ? ws_frame_size : ws_message_length - ws_m);
+                
+                int ws_code = 0;
+                if (ws_m == 0) {
+                    ws_code += 0x01;
+                }
+                if (ws_m + ws_cur_size >= ws_message_length) {
+                    ws_code += 0x80;
+                }
+                evbuffer_add_printf(client->buf, "%c", ws_code);
+                
+                evbuffer_add_printf(client->buf, "%c", ws_cur_size);
+                evbuffer_add(client->buf, json_out + ws_m, ws_cur_size);
+                ws_m += ws_cur_size;
+            }
+        } else if (client->multipart) {
             /* chunked */
             evbuffer_add_printf(client->buf,
                                 "content-type: %s\r\ncontent-length: %d\r\n\r\n",
@@ -433,6 +506,11 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     char buf[248];
     struct filter *fltr;
     struct tm *time_struct;
+    char *ws_origin;
+    char *ws_upgrade;
+    char *ws_key;
+    char *ws_response;
+    char *host;
     
     currentConns++;
     totalConns++;
@@ -467,12 +545,56 @@ void sub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     // print out info about this connection
     fprintf(stdout, "%llu >> /sub connection from %s:%d %s\n", client->connection_id, req->remote_host, req->remote_port, buf);
     
-    evhttp_add_header(client->req->output_headers, "content-type",
-                      "application/json");
-    evbuffer_add_printf(client->buf, "\r\n");
-    evhttp_send_reply_start(client->req, HTTP_OK, "OK");
+    // Connection: Upgrade
+    // Upgrade: WebSocket
+    ws_upgrade = (char *) evhttp_find_header(req->input_headers, "Upgrade");
+    ws_origin = (char *) evhttp_find_header(req->input_headers, "Origin");
+    ws_key = (char *) evhttp_find_header(req->input_headers, "Sec-WebSocket-Key");
+    host = (char *) evhttp_find_header(req->input_headers, "Host");
     
-    evhttp_send_reply_chunk(client->req, client->buf);
+    if (ws_upgrade && strcasestr(ws_upgrade, "WebSocket")) {
+        client->req->chunked = 0;
+        client->multipart = 0;
+        client->websocket = 1;
+        client->req->major = 1;
+        client->req->minor = 1;
+        evhttp_add_header(client->req->output_headers, "Upgrade", "WebSocket");
+        evhttp_add_header(client->req->output_headers, "Connection", "Upgrade");
+        evhttp_add_header(client->req->output_headers, "Server", "simplehttp/pubsub");
+        if (ws_origin) {
+            evhttp_add_header(client->req->output_headers, "WebSocket-Origin", ws_origin);
+        }
+        if (host) {
+            sprintf(buf, "ws://%s%s", host, req->uri);
+            evhttp_add_header(client->req->output_headers, "WebSocket-Location", buf);
+        }
+        if (ws_key != NULL) {
+            char ws_response_tmp[SHA_DIGEST_LENGTH];
+            char ws_buf[128];
+            
+            sprintf(ws_buf, "%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11", ws_key);
+            SHA1(ws_buf, strlen(ws_buf), ws_response_tmp);
+            
+            ws_response = base64(ws_response_tmp, SHA_DIGEST_LENGTH);
+            evhttp_add_header(client->req->output_headers, "Sec-WebSocket-Accept", ws_response);
+        }
+        
+        // evbuffer_add_printf(client->buf, "\r\n");
+    } else {
+        evhttp_add_header(client->req->output_headers, "content-type",
+                          "application/json");
+        evbuffer_add_printf(client->buf, "\r\n");
+    }
+    
+    if (client->websocket) {
+        evhttp_send_reply_start(client->req, 101, "Switching Protocols");
+    } else {
+        evhttp_send_reply_start(client->req, HTTP_OK, "OK");
+    }
+    if (!client->websocket) {
+        evhttp_send_reply_chunk(client->req, client->buf);
+    }
+    
     TAILQ_INSERT_TAIL(&clients, client, entries);
     evhttp_connection_set_closecb(req->evcon, on_close, (void *)client);
     evhttp_clear_headers(&args);
@@ -548,6 +670,7 @@ int main(int argc, char **argv)
     char *pubsub_url;
     char *source_address;
     char *source_path;
+    char *expected_value_regex_raw = NULL;
     int source_port;
     
     define_simplehttp_options();
@@ -557,16 +680,31 @@ int main(int argc, char **argv)
     option_define_str("encrypted_fields", OPT_OPTIONAL, NULL, NULL, parse_encrypted_fields, "comma separated list of fields to encrypt");
     option_define_str("expected_key", OPT_OPTIONAL, NULL, &expected_key, NULL, "key to expect in messages before echoing to clients");
     option_define_str("expected_value", OPT_OPTIONAL, NULL, &expected_value, NULL, "value to expect in --expected-key field in messages before echoing to clients");
+    option_define_str("expected_value_regex", OPT_OPTIONAL, NULL, &expected_value_regex_raw, NULL, "regular expression matching expected value in --expected-key field before echoing to clients");
     
     if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
     
-    if ((expected_value && !expected_key) || (expected_key && !expected_value)) {
+    if (expected_value_regex_raw) {
+        const char *tmp_err_s;
+        int tmp_err_i;
+        expected_value_regex = pcre_compile(
+                                   expected_value_regex_raw,
+                                   0,
+                                   &tmp_err_s,
+                                   &tmp_err_i,
+                                   NULL);
+        if (!expected_value_regex) {
+            fprintf(stderr, "Invalid regular expression in --expected-value-regex");
+            exit(1);
+        }
+    }
+    
+    if ( !!expected_key ^ !!( expected_key || expected_value_regex ) ) {
         fprintf(stderr, "--expected-key and --expected-value must be used together\n");
         exit(1);
     }
-    
     if (!simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &source_address, &source_port, &source_path)) {
         fprintf(stderr, "ERROR: failed to parse pubsub-url\n");
         exit(1);

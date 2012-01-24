@@ -2,8 +2,8 @@ LIBEVENT ?= /usr/local
 TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= /usr/local
 
-CFLAGS = -I. -I$(LIBSIMPLEHTTP)/include -I.. -I$(LIBEVENT)/include -g
-LIBS = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -L$(LIBEVENT)/lib -levent -lsimplehttp -ljson -lpcre -lm -lpubsubclient
+CFLAGS = -I. -I$(LIBSIMPLEHTTP)/include -I.. -I$(LIBEVENT)/include -g 
+LIBS = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -L$(LIBEVENT)/lib -levent -lsimplehttp -ljson -lpcre -lm -lpubsubclient -lcrypto
 
 pubsub_filtered: pubsub_filtered.c md5.c
 	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS)
