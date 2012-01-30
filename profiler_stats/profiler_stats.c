@@ -108,7 +108,7 @@ static uint64_t percentile(float perc, uint64_t *int_array, int length)
     uint64_t *sorted_requests;
     int index_of_perc;
     
-    sorted_requests = calloc(length, sizeof(uint64_t));
+    sorted_requests = calloc(1, length * sizeof(uint64_t));
     memcpy(sorted_requests, int_array, length * sizeof(uint64_t));
     qsort(sorted_requests, length, sizeof(uint64_t), int_cmp);
     index_of_perc = (int)ceil(((perc / 100.0) * length) + 0.5);

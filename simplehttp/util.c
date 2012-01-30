@@ -42,7 +42,7 @@ uint64_t ninety_five_percent(int64_t *int_array, int length)
     int64_t *sorted_requests;
     int index_of_95;
     
-    sorted_requests = calloc(length, sizeof(int64_t));
+    sorted_requests = calloc(1, length * sizeof(int64_t));
     memcpy(sorted_requests, int_array, length * sizeof(int64_t));
     qsort(sorted_requests, length, sizeof(int64_t), int_cmp);
     index_of_95 = (int)ceil(((95.0 / 100.0) * length) + 0.5);

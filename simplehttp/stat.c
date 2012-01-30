@@ -29,8 +29,8 @@ void simplehttp_stats_init()
     for (i = 0; i < (STAT_WINDOW * callback_count); i++) {
         stats[i] = -1;
     }
-    stats_idx = calloc(callback_count, sizeof(int));
-    stats_counts = calloc(callback_count, sizeof(uint64_t));
+    stats_idx = calloc(1, callback_count * sizeof(int));
+    stats_counts = calloc(1, callback_count * sizeof(uint64_t));
 }
 
 void simplehttp_stats_destruct()
@@ -85,8 +85,8 @@ void simplehttp_stats_get(struct simplehttp_stats *st)
     st->callback_count = callback_count;
     st->stats_counts = malloc(callback_count * sizeof(uint64_t));
     memcpy(st->stats_counts, stats_counts, callback_count * sizeof(uint64_t));
-    st->average_requests = calloc(callback_count, sizeof(uint64_t));
-    st->ninety_five_percents = calloc(callback_count, sizeof(uint64_t));
+    st->average_requests = calloc(1, callback_count * sizeof(uint64_t));
+    st->ninety_five_percents = calloc(1, callback_count * sizeof(uint64_t));
     st->stats_labels = simplehttp_callback_names();
     
     for (i = 0; i < callback_count; i++) {

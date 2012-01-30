@@ -337,10 +337,10 @@ void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     
     if (orig_value) {
-        new_value = calloc(orig_valuelen + 1 + strlen(append_value) + 1, sizeof(char *));
+        new_value = calloc(1, (orig_valuelen + 1 + strlen(append_value) + 1) * sizeof(char *));
         sprintf(new_value, "%s,%s", orig_value, append_value);
     } else {
-        new_value = calloc(strlen(append_value) + 1, sizeof(char *));
+        new_value = calloc(1, (strlen(append_value) + 1) * sizeof(char *));
         sprintf(new_value, "%s", append_value);
     }
     
