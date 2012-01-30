@@ -9,10 +9,42 @@
 #include <simplehttp/utlist.h>
 #include "profiler_stats.h"
 
-#define STAT_WINDOW_USEC 300000000
 #define STAT_WINDOW_COUNT 5000
 
+static int stat_window_usec = 300000000;
 static struct ProfilerStat *profiler_stats = NULL;
+
+void profiler_stats_init(int window_usec)
+{
+    stat_window_usec = window_usec;
+}
+
+struct ProfilerStat *profiler_new_stat(const char *name)
+{
+    struct ProfilerStat *pstat;
+    
+    pstat = calloc(1, sizeof(struct ProfilerStat));
+    pstat->name = strdup(name);
+    HASH_ADD_KEYPTR(hh, profiler_stats, name, strlen(pstat->name), pstat);
+    
+    return pstat;
+}
+
+void free_profiler_stats()
+{
+    struct ProfilerStat *pstat, *tmp_pstat;
+    struct ProfilerData *data, *tmp_data;
+    
+    HASH_ITER(hh, profiler_stats, pstat, tmp_pstat) {
+        HASH_DELETE(hh, profiler_stats, pstat);
+        DL_FOREACH_SAFE(pstat->data, data, tmp_data) {
+            DL_DELETE(pstat->data, data);
+            free(data);
+        }
+        free(pstat->name);
+        free(pstat);
+    }
+}
 
 void profiler_stats_reset()
 {
@@ -41,9 +73,7 @@ void profiler_stats_store(const char *name, profiler_ts start_ts)
     
     HASH_FIND_STR(profiler_stats, name, pstat);
     if (!pstat) {
-        pstat = calloc(1, sizeof(struct ProfilerStat));
-        pstat->name = strdup(name);
-        HASH_ADD_KEYPTR(hh, profiler_stats, name, strlen(pstat->name), pstat);
+        pstat = profiler_new_stat(name);
     }
     
     data = malloc(sizeof(struct ProfilerData));
@@ -58,22 +88,6 @@ void profiler_stats_store(const char *name, profiler_ts start_ts)
         // pop the oldest entry off the front
         DL_DELETE(pstat->data, pstat->data);
         pstat->index--;
-    }
-}
-
-void free_profiler_stats()
-{
-    struct ProfilerStat *pstat, *tmp_pstat;
-    struct ProfilerData *data, *tmp_data;
-    
-    HASH_ITER(hh, profiler_stats, pstat, tmp_pstat) {
-        HASH_DELETE(hh, profiler_stats, pstat);
-        DL_FOREACH_SAFE(pstat->data, data, tmp_data) {
-            DL_DELETE(pstat->data, data);
-            free(data);
-        }
-        free(pstat->name);
-        free(pstat);
     }
 }
 
@@ -131,7 +145,7 @@ struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat)
     request_total = 0;
     DL_FOREACH(pstat->data, data) {
         diff = profiler_ts_diff(data->ts, cur_ts);
-        if (diff < STAT_WINDOW_USEC) {
+        if (diff < stat_window_usec) {
             int_array[valid_count++] = data->value;
             request_total += data->value;
         }

@@ -45,11 +45,13 @@ struct ProfilerStat {
     struct ProfilerStat *next;
 };
 
+void profiler_stats_init(int window_usec);
+struct ProfilerStat *profiler_new_stat(const char *name);
+void free_profiler_stats();
 void profiler_stats_reset();
 void profiler_stats_store(const char *name, profiler_ts start_ts);
 struct ProfilerReturn *profiler_get_stats_for_name(const char *name);
 struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat);
 struct ProfilerStat *profiler_stats_get_all();
-void free_profiler_stats();
 
 #endif

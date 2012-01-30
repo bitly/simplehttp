@@ -20,7 +20,7 @@ make install
 usage
 -----
 
-no initialization is required, the general process is as follows (NOTE: client is responsible 
+some initialization is required, the general process is as follows (NOTE: client is responsible 
 for `free()` of all returned structures as well as a final call to `profiler_stats_free()`):
 
 ```
@@ -53,5 +53,19 @@ void my_stats_output()
         fprintf(stdout, "count: %"PRIu64"\n", ret->count);
         free(ret);
     }
+}
+
+int main(int argc, char **argv)
+{
+    // window in usec
+    profiler_stats_init(300000000);
+    profiler_new_stat("stat_name");
+    
+    my_function();
+    my_stats_output();
+    
+    free_profiler_stats();
+    
+    return 0;
 }
 ```
