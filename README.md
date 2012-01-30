@@ -7,6 +7,7 @@ simple and straightforward to write.
 The following libraries and daemons are included:
  
  * `host_pool` - a library for dealing with endpoint selection, pooling, failure, recovery, and backoff
+ * `profiler_stats` - a library to track arbitrary profiler timings for average, 95%, 99%, 100% time
  * `ps_to_http` - a daemon built on top of pubsubclient to write messages from a source pubsub to destination simplequeue or pubsub server
  * `ps_to_file` - a daemon built on top of pubsubclient to write messages from a source pubsub to time rolled output files
  * `pubsub` - a daemon that receives data via HTTP POST events and writes to all subscribed long-lived HTTP connections
