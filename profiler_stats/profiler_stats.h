@@ -42,7 +42,6 @@ struct ProfilerStat {
     uint64_t count;
     int index;
     UT_hash_handle hh;
-    struct ProfilerStat *next;
 };
 
 void profiler_stats_init(int window_usec);

@@ -25,7 +25,7 @@ for `free()` of all returned structures as well as a final call to `profiler_sta
 
 ```
 #include <profiler_stats/profiler_stats.h>
-#include <utlist.h>
+#include <uthash.h>
 
 void my_function()
 {
@@ -40,11 +40,11 @@ void my_function()
 
 void my_stats_output()
 {
-    struct ProfilerStat *pstat;
+    struct ProfilerStat *pstat, *tmp_pstat;
     struct ProfilerReturn *ret;
     
-    // LL_FOREACH() is from utlist.h http://uthash.sourceforge.net/
-    LL_FOREACH(profiler_stats_get_all(), pstat) {
+    // HASH_ITER() is from uthash.h http://uthash.sourceforge.net/
+    HASH_ITER(hh, profiler_stats_get_all(), pstat, tmp_pstat) {
         ret = profiler_get_stats(pstat);
         fprintf(stdout, "100%%: %"PRIu64"\n", ret->hundred_percent);
         fprintf(stdout, "99%%: %"PRIu64"\n", ret->ninety_nine_percent);

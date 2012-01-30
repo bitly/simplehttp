@@ -23,8 +23,11 @@ struct ProfilerStat *profiler_new_stat(const char *name)
 {
     struct ProfilerStat *pstat;
     
-    pstat = calloc(1, sizeof(struct ProfilerStat));
+    pstat = malloc(sizeof(struct ProfilerStat));
     pstat->name = strdup(name);
+    pstat->data = NULL;
+    pstat->count = 0;
+    pstat->index = 0;
     HASH_ADD_KEYPTR(hh, profiler_stats, name, strlen(pstat->name), pstat);
     
     return pstat;
