@@ -66,7 +66,7 @@ void profiler_stats_reset()
 
 void profiler_stats_store(const char *name, profiler_ts start_ts)
 {
-    struct ProfilerData *data;
+    struct ProfilerData *data, *tmp_data;
     struct ProfilerStat *pstat;
     profiler_ts end_ts;
     uint64_t diff;
@@ -89,7 +89,9 @@ void profiler_stats_store(const char *name, profiler_ts start_ts)
     
     if (pstat->index > STAT_WINDOW_COUNT) {
         // pop the oldest entry off the front
-        DL_DELETE(pstat->data, pstat->data);
+        tmp_data = pstat->data;
+        DL_DELETE(pstat->data, tmp_data);
+        free(tmp_data);
         pstat->index--;
     }
 }
