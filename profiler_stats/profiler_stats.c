@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <inttypes.h>
 #include <assert.h>
 #include <time.h>
@@ -9,10 +10,21 @@
 #include <simplehttp/utlist.h>
 #include "profiler_stats.h"
 
+#ifdef DEBUG
+#define _DEBUG(...) fprintf(stdout, __VA_ARGS__)
+#else
+#define _DEBUG(...) do {;} while (0)
+#endif
+
 #define STAT_WINDOW_COUNT 5000
 
+struct ProfilerEntry {
+    struct ProfilerStat *stat;
+    UT_hash_handle hh;
+};
+
 static int stat_window_usec = 300000000;
-static struct ProfilerStat *profiler_stats = NULL;
+static struct ProfilerEntry *profiler_entries = NULL;
 
 void profiler_stats_init(int window_usec)
 {
@@ -22,77 +34,108 @@ void profiler_stats_init(int window_usec)
 struct ProfilerStat *profiler_new_stat(const char *name)
 {
     struct ProfilerStat *pstat;
+    struct ProfilerEntry *entry;
+    static struct ProfilerStat *last = NULL;
+    int i;
     
     pstat = malloc(sizeof(struct ProfilerStat));
     pstat->name = strdup(name);
-    pstat->data = NULL;
+    pstat->data = malloc(STAT_WINDOW_COUNT * sizeof(struct ProfilerData *));
+    for (i = 0; i < STAT_WINDOW_COUNT; i++) {
+        pstat->data[i] = malloc(sizeof(struct ProfilerData));
+        pstat->data[i]->value = -1;
+    }
     pstat->count = 0;
     pstat->index = 0;
-    HASH_ADD_KEYPTR(hh, profiler_stats, name, strlen(pstat->name), pstat);
+    pstat->next = NULL;
+    
+    _DEBUG("%s: new ProfilerStat %p\n", __FUNCTION__, pstat);
+    
+    // build the linked list as we add stats
+    if (last) {
+        last->next = pstat;
+    }
+    last = pstat;
+    
+    entry = malloc(sizeof(struct ProfilerEntry));
+    entry->stat = pstat;
+    
+    _DEBUG("%s: new ProfilerEntry %p\n", __FUNCTION__, entry);
+    
+    HASH_ADD_KEYPTR(hh, profiler_entries, pstat->name, strlen(pstat->name), entry);
     
     return pstat;
 }
 
 void free_profiler_stats()
 {
-    struct ProfilerStat *pstat, *tmp_pstat;
-    struct ProfilerData *data, *tmp_data;
+    int i;
+    struct ProfilerEntry *entry, *tmp_entry;
     
-    HASH_ITER(hh, profiler_stats, pstat, tmp_pstat) {
-        HASH_DELETE(hh, profiler_stats, pstat);
-        DL_FOREACH_SAFE(pstat->data, data, tmp_data) {
-            DL_DELETE(pstat->data, data);
-            free(data);
+    HASH_ITER(hh, profiler_entries, entry, tmp_entry) {
+        HASH_DELETE(hh, profiler_entries, entry);
+        for (i = 0; i < STAT_WINDOW_COUNT; i++) {
+            free(entry->stat->data[i]);
         }
-        free(pstat->name);
-        free(pstat);
+        free(entry->stat->data);
+        free(entry->stat->name);
+        free(entry->stat);
+        free(entry);
     }
 }
 
 void profiler_stats_reset()
 {
-    struct ProfilerStat *pstat, *tmp_pstat;
-    struct ProfilerData *data, *tmp_data;
+    int i;
+    struct ProfilerEntry *entry, *tmp_entry;
+    struct ProfilerData *data;
     
-    HASH_ITER(hh, profiler_stats, pstat, tmp_pstat) {
-        pstat->count = 0;
-        pstat->index = 0;
-        DL_FOREACH_SAFE(pstat->data, data, tmp_data) {
-            DL_DELETE(pstat->data, data);
-            free(data);
+    HASH_ITER(hh, profiler_entries, entry, tmp_entry) {
+        entry->stat->count = 0;
+        entry->stat->index = 0;
+        for (i = 0; i < STAT_WINDOW_COUNT; i++) {
+            data = entry->stat->data[i];
+            data->value = -1;
         }
     }
 }
 
 void profiler_stats_store(const char *name, profiler_ts start_ts)
 {
-    struct ProfilerData *data, *tmp_data;
-    struct ProfilerStat *pstat;
+    
     profiler_ts end_ts;
     uint64_t diff;
     
     profiler_ts_get(&end_ts);
     diff = profiler_ts_diff(start_ts, end_ts);
     
-    HASH_FIND_STR(profiler_stats, name, pstat);
-    if (!pstat) {
+    profiler_stats_store_value(name, diff, end_ts);
+}
+
+void profiler_stats_store_value(const char *name, uint64_t val, profiler_ts ts)
+{
+    struct ProfilerData *data;
+    struct ProfilerEntry *entry;
+    struct ProfilerStat *pstat;
+    
+    HASH_FIND_STR(profiler_entries, name, entry);
+    if (!entry) {
         pstat = profiler_new_stat(name);
+    } else {
+        pstat = entry->stat;
     }
     
-    data = malloc(sizeof(struct ProfilerData));
-    data->value = diff;
-    data->ts = end_ts;
+    data = pstat->data[pstat->index];
+    data->value = val;
+    data->ts = ts;
+    
+    _DEBUG("%s: %p.%p.%p = %"PRIu64"\n", __FUNCTION__, entry, pstat, data, val);
     
     pstat->count++;
     pstat->index++;
-    DL_APPEND(pstat->data, data);
     
-    if (pstat->index > STAT_WINDOW_COUNT) {
-        // pop the oldest entry off the front
-        tmp_data = pstat->data;
-        DL_DELETE(pstat->data, tmp_data);
-        free(tmp_data);
-        pstat->index--;
+    if (pstat->index >= STAT_WINDOW_COUNT) {
+        pstat->index = 0;
     }
 }
 
@@ -107,10 +150,9 @@ static int int_cmp(const void *a, const void *b)
 static uint64_t percentile(float perc, uint64_t *int_array, int length)
 {
     uint64_t value;
-    uint64_t *sorted_requests;
+    uint64_t sorted_requests[STAT_WINDOW_COUNT];
     int index_of_perc;
     
-    sorted_requests = calloc(1, length * sizeof(uint64_t));
     memcpy(sorted_requests, int_array, length * sizeof(uint64_t));
     qsort(sorted_requests, length, sizeof(uint64_t), int_cmp);
     index_of_perc = (int)ceil(((perc / 100.0) * length) + 0.5);
@@ -118,16 +160,15 @@ static uint64_t percentile(float perc, uint64_t *int_array, int length)
         index_of_perc = length - 1;
     }
     value = sorted_requests[index_of_perc];
-    free(sorted_requests);
     
     return value;
 }
 
 struct ProfilerReturn *profiler_get_stats_for_name(const char *name)
 {
-    struct ProfilerStat *pstat;
-    HASH_FIND_STR(profiler_stats, name, pstat);
-    return profiler_get_stats(pstat);
+    struct ProfilerEntry *entry;
+    HASH_FIND_STR(profiler_entries, name, entry);
+    return entry ? profiler_get_stats(entry->stat) : NULL;
 }
 
 struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat)
@@ -139,6 +180,8 @@ struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat)
     uint64_t diff;
     uint64_t int_array[STAT_WINDOW_COUNT];
     int valid_count;
+    int c;
+    int start_index;
     
     if (!pstat) {
         return NULL;
@@ -146,20 +189,34 @@ struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat)
     
     profiler_ts_get(&cur_ts);
     
+    if (pstat->count <= STAT_WINDOW_COUNT) {
+        start_index = 0;
+    } else {
+        start_index = pstat->index;
+    }
+    
+    _DEBUG("%s: start_index = %d\n", __FUNCTION__, start_index);
+    
     valid_count = 0;
     request_total = 0;
-    DL_FOREACH(pstat->data, data) {
-        diff = profiler_ts_diff(data->ts, cur_ts);
-        if (diff < stat_window_usec) {
-            int_array[valid_count++] = data->value;
-            request_total += data->value;
+    for (c = 0; c < STAT_WINDOW_COUNT; c++) {
+        data = pstat->data[(start_index + c) % STAT_WINDOW_COUNT];
+        if (data->value != -1) {
+            diff = profiler_ts_diff(data->ts, cur_ts);
+            if (diff < stat_window_usec) {
+                int_array[valid_count++] = data->value;
+                request_total += data->value;
+            }
         }
     }
+    
+    _DEBUG("%s: valid_count = %d\n", __FUNCTION__, valid_count);
     
     ret = malloc(sizeof(struct ProfilerReturn));
     ret->count = pstat->count;
     if (valid_count) {
         ret->average = request_total / valid_count;
+        // TODO: this can be optimized to calculate all 3 at the same time
         ret->hundred_percent = percentile(100.0, int_array, valid_count);
         ret->ninety_nine_percent = percentile(99.0, int_array, valid_count);
         ret->ninety_five_percent = percentile(95.0, int_array, valid_count);
@@ -175,7 +232,7 @@ struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat)
 
 struct ProfilerStat *profiler_stats_get_all()
 {
-    return profiler_stats;
+    return profiler_entries->stat;
 }
 
 #if _POSIX_TIMERS > 0

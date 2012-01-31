@@ -3,8 +3,9 @@ profiler_stats
 
 a library to track arbitrary profiler timings for average, 95%, 99%, 100% time
 
-the library enforces a rolling window for data collection.  currently it will consider either 5000 entries or the 
-last 5 minutes of entries, whichever is smaller.
+the library enforces a rolling window for data collection.  currently it imposes 
+a hard-coded limit of 5000 data points but allows the client to configure the 
+window of time to consider via `profiler_stats_init(<window_in_usec>);`
 
 compiling
 ---------
@@ -20,8 +21,11 @@ make install
 usage
 -----
 
-some initialization is required, the general process is as follows (NOTE: client is responsible 
-for `free()` of all returned structures as well as a final call to `profiler_stats_free()`):
+some initialization is required and it should be noted that individual stats 
+allocate their data structures up front.
+
+the general process is as follows (NOTE: client is responsible for `free()` of 
+all returned structures as well as a final call to `profiler_stats_free()`):
 
 ```
 #include <profiler_stats/profiler_stats.h>
@@ -40,11 +44,12 @@ void my_function()
 
 void my_stats_output()
 {
-    struct ProfilerStat *pstat, *tmp_pstat;
+    struct ProfilerStat *pstat;
     struct ProfilerReturn *ret;
     
-    // HASH_ITER() is from uthash.h http://uthash.sourceforge.net/
-    HASH_ITER(hh, profiler_stats_get_all(), pstat, tmp_pstat) {
+    // LL_FOREACH() is convenience macro to walk a linked list 
+    // from utlist.h http://uthash.sourceforge.net/
+    LL_FOREACH(profiler_stats_get_all(), pstat) {
         ret = profiler_get_stats(pstat);
         fprintf(stdout, "100%%: %"PRIu64"\n", ret->hundred_percent);
         fprintf(stdout, "99%%: %"PRIu64"\n", ret->ninety_nine_percent);

@@ -1,7 +1,11 @@
 #ifndef __profiler_stats_h
 #define __profiler_stats_h
 
-#define PROFILER_STATS_VERSION "0.1"
+#include <inttypes.h>
+#include <time.h>
+#include <sys/time.h>
+
+#define PROFILER_STATS_VERSION "0.2"
 
 #if _POSIX_TIMERS > 0
 
@@ -19,8 +23,6 @@
 
 #endif
 
-struct UT_hash_handle;
-
 struct ProfilerReturn {
     uint64_t count;
     uint64_t average;
@@ -30,18 +32,16 @@ struct ProfilerReturn {
 };
 
 struct ProfilerData {
-    uint64_t value;
+    int64_t value;
     profiler_ts ts;
-    struct ProfilerData *prev;
-    struct ProfilerData *next;
 };
 
 struct ProfilerStat {
     char *name;
-    struct ProfilerData *data;
+    struct ProfilerData **data;
     uint64_t count;
     int index;
-    UT_hash_handle hh;
+    struct ProfilerStat *next;
 };
 
 void profiler_stats_init(int window_usec);
@@ -49,6 +49,7 @@ struct ProfilerStat *profiler_new_stat(const char *name);
 void free_profiler_stats();
 void profiler_stats_reset();
 void profiler_stats_store(const char *name, profiler_ts start_ts);
+void profiler_stats_store_value(const char *name, uint64_t val, profiler_ts ts);
 struct ProfilerReturn *profiler_get_stats_for_name(const char *name);
 struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat);
 struct ProfilerStat *profiler_stats_get_all();
