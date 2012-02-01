@@ -6,7 +6,7 @@
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
 
-#define VERSION "1.3"
+#define VERSION "1.3.1"
 
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;
