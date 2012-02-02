@@ -6,7 +6,7 @@
 #include "simplehttp/queue.h"
 #include "simplehttp/simplehttp.h"
 
-#define VERSION "1.3"
+#define VERSION "1.3.1"
 
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;
@@ -117,6 +117,7 @@ void get(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     entry = get_queue_entry();
     if (entry != NULL) {
+        n_bytes -= entry->bytes;
         evbuffer_add_printf(evb, "%s", entry->data);
         free(entry);
     }
@@ -159,6 +160,7 @@ void mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     // get n number of items from the queue to return
     for (i = 0; i < num_items && (entry = get_queue_entry()); n_gets++, i++) {
+        n_bytes -= entry->bytes;
         evbuffer_add_printf(evb, "%s", entry->data);
         if (i < (num_items - 1)) {
             evbuffer_add_printf(evb, "%s", separator);
