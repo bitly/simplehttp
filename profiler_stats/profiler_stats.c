@@ -123,7 +123,7 @@ inline void profiler_stats_store_for_name(const char *name, uint64_t val, profil
         pstat = entry->stat;
     }
     
-    profiler_stats_store_value(pstat, val, end_ts);
+    profiler_stats_store_value(pstat, val, ts);
 }
 
 inline void profiler_stats_store_value(struct ProfilerStat *pstat, uint64_t val, profiler_ts ts)
