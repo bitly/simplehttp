@@ -100,21 +100,19 @@ void profiler_stats_reset()
     }
 }
 
-void profiler_stats_store(const char *name, profiler_ts start_ts)
+inline void profiler_stats_store(const char *name, profiler_ts start_ts)
 {
-    
     profiler_ts end_ts;
     uint64_t diff;
     
     profiler_ts_get(&end_ts);
     diff = profiler_ts_diff(start_ts, end_ts);
     
-    profiler_stats_store_value(name, diff, end_ts);
+    profiler_stats_store_for_name(name, diff, end_ts);
 }
 
-void profiler_stats_store_value(const char *name, uint64_t val, profiler_ts ts)
+inline void profiler_stats_store_for_name(const char *name, uint64_t val, profiler_ts ts)
 {
-    struct ProfilerData *data;
     struct ProfilerEntry *entry;
     struct ProfilerStat *pstat;
     
@@ -125,11 +123,16 @@ void profiler_stats_store_value(const char *name, uint64_t val, profiler_ts ts)
         pstat = entry->stat;
     }
     
+    profiler_stats_store_value(pstat, diff, end_ts);
+}
+
+inline void profiler_stats_store_value(struct ProfilerStat *pstat, uint64_t val, profiler_ts ts)
+{
+    struct ProfilerData *data;
+    
     data = pstat->data[pstat->index];
     data->value = val;
     data->ts = ts;
-    
-    _DEBUG("%s: %p.%p.%p = %"PRIu64"\n", __FUNCTION__, entry, pstat, data, val);
     
     pstat->count++;
     pstat->index++;
@@ -147,19 +150,16 @@ static int int_cmp(const void *a, const void *b)
     return *ia  - *ib;
 }
 
-static uint64_t percentile(float perc, uint64_t *int_array, int length)
+static uint64_t percentile(float perc, uint64_t *sorted_array, int length)
 {
     uint64_t value;
-    uint64_t sorted_requests[STAT_WINDOW_COUNT];
     int index_of_perc;
     
-    memcpy(sorted_requests, int_array, length * sizeof(uint64_t));
-    qsort(sorted_requests, length, sizeof(uint64_t), int_cmp);
     index_of_perc = (int)ceil(((perc / 100.0) * length) + 0.5);
     if (index_of_perc >= length) {
         index_of_perc = length - 1;
     }
-    value = sorted_requests[index_of_perc];
+    value = sorted_array[index_of_perc];
     
     return value;
 }
@@ -216,7 +216,7 @@ struct ProfilerReturn *profiler_get_stats(struct ProfilerStat *pstat)
     ret->count = pstat->count;
     if (valid_count) {
         ret->average = request_total / valid_count;
-        // TODO: this can be optimized to calculate all 3 at the same time
+        qsort(int_array, valid_count, sizeof(uint64_t), int_cmp);
         ret->hundred_percent = percentile(100.0, int_array, valid_count);
         ret->ninety_nine_percent = percentile(99.0, int_array, valid_count);
         ret->ninety_five_percent = percentile(95.0, int_array, valid_count);
@@ -237,12 +237,12 @@ struct ProfilerStat *profiler_stats_get_all()
 
 #if _POSIX_TIMERS > 0
 
-    void profiler_ts_get(struct timespec *ts)
+    inline void profiler_ts_get(struct timespec *ts)
     {
         clock_gettime(CLOCK_REALTIME, ts);
     }
     
-    unsigned int profiler_ts_diff(struct timespec start, struct timespec end)
+    inline unsigned int profiler_ts_diff(struct timespec start, struct timespec end)
     {
         struct timespec temp;
         
@@ -260,12 +260,12 @@ struct ProfilerStat *profiler_stats_get_all()
 
 #else
 
-    void profiler_ts_get(struct timeval *ts)
+    inline void profiler_ts_get(struct timeval *ts)
     {
         gettimeofday(ts, NULL);
     }
     
-    unsigned int profiler_ts_diff(struct timeval start, struct timeval end)
+    inline unsigned int profiler_ts_diff(struct timeval start, struct timeval end)
     {
         struct timeval temp;
         

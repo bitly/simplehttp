@@ -14,11 +14,11 @@ int main(int argc, char **argv)
     
     profiler_stats_init(300000000);
     
-    profiler_new_stat("test");
+    pstat = profiler_new_stat("test");
     
     for (i = 0; i < 20000; i++) {
         profiler_ts_get(&ts);
-        profiler_stats_store_value("test", i, ts);
+        profiler_stats_store_value(pstat, i, ts);
     }
     
     LL_FOREACH(profiler_stats_get_all(), pstat) {
