@@ -92,9 +92,5 @@ class SimpleLeveldbTest(SubprocessTest):
         
         data = http_fetch('/dump_csv', dict(key="dump."))
         assert data.count("\n") == 505
-        assert False, data
-        
-        
-        
 
         

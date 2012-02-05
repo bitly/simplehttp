@@ -38,6 +38,7 @@ leveldb_readoptions_t *dump_read_options;
 leveldb_iterator_t *dump_iter;
 struct event dump_ev;
 int is_currently_dumping = 0;
+char *dump_fwmatch_key;
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj)
 {
@@ -484,31 +485,31 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct evkeyvalq args;
     int format;
-    char *fwmatch_key;
     struct json_object  *jsobj;
-
+    
     jsobj = json_object_new_object();
-
+    
     evhttp_parse_query(req->uri, &args);
     format = get_argument_format(&args);
-    fwmatch_key = (char *)evhttp_find_header(&args, "key");
-
+    dump_fwmatch_key = (char *)evhttp_find_header(&args, "key");
+    if (dump_fwmatch_key) {
+        dump_fwmatch_key = strdup(dump_fwmatch_key);
+    }
+    
     if (is_currently_dumping) {
         finalize_request(500, "ALREADY_DUMPING", req, evb, &args, jsobj);
+        free(dump_fwmatch_key);
         return;
     }
     
-
+    /* init the state for dumping data */
     dump_read_options = leveldb_readoptions_create();
     dump_snapshot = leveldb_create_snapshot(ldb);
     leveldb_readoptions_set_snapshot(dump_read_options, dump_snapshot);
     dump_iter = leveldb_create_iterator(ldb, dump_read_options);
     
-    
-    
-
-    if (fwmatch_key) {
-        leveldb_iter_seek(dump_iter, fwmatch_key, strlen(fwmatch_key));
+    if (dump_fwmatch_key) {
+        leveldb_iter_seek(dump_iter, dump_fwmatch_key, strlen(dump_fwmatch_key));
     } else {
         leveldb_iter_seek_to_first(dump_iter);
     }
@@ -516,11 +517,8 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
     evhttp_send_reply_start(req, 200, "OK");
 
-    // build a context to continue work on this request
-    // req
-    
-
-    set_dump_csv_timer(req);
+    /* run the first dump loop */
+    do_dump_csv(0, 0, req);
 }
 
 void do_dump_csv(int fd, short what, void *ctx)
@@ -536,6 +534,13 @@ void do_dump_csv(int fd, short what, void *ctx)
     
     while (leveldb_iter_valid(dump_iter)) {
         key = leveldb_iter_key(dump_iter, &key_len);
+        if (dump_fwmatch_key) {
+            // this is the case where we are only dumping keys of this prefix
+            // so we need to break out of the loop at the last key
+            if (strlen(dump_fwmatch_key) > key_len || strncmp(key, dump_fwmatch_key, strlen(dump_fwmatch_key)) != 0 ) {
+                break;
+            }
+        }
         value = leveldb_iter_value(dump_iter, &value_len);
         evbuffer_add(evb, key, key_len);
         evbuffer_add(evb, ",", 1);
@@ -565,6 +570,7 @@ void do_dump_csv(int fd, short what, void *ctx)
         leveldb_iter_destroy(dump_iter);
         leveldb_readoptions_destroy(dump_read_options);
         leveldb_release_snapshot(ldb, dump_snapshot);
+        free(dump_fwmatch_key);
     }
 }
 
