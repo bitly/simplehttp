@@ -5,6 +5,7 @@ import unittest
 import subprocess
 import signal
 import time
+import tornado.httpclient
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
    format='%(asctime)s %(process)d %(filename)s %(lineno)d %(levelname)s #| %(message)s',
@@ -90,9 +91,21 @@ class SubprocessTest(unittest.TestCase):
             pipe = subprocess.Popen(options)#, stdout=self.stdout, stderr=self.stderr)
             self.processes.append(pipe)
             logging.debug('started process %s' % pipe.pid)
-        sleep_time = .5 + (len(self.processes) * .75)
-        logging.info('waiting for processes to start (sleeping %d seconds)' % sleep_time)
-        time.sleep(sleep_time)
+        
+        self.wait_for('http://127.0.0.1:8080/', 5)
+    
+    def wait_for(self, url, max_time):
+        # check up to 15 times till the endpoint specified is available waiting max_time
+        step = max_time / float(15)
+        http = tornado.httpclient.HTTPClient()
+        for x in range(15):
+            try:
+                logging.info('try number %d for %s' % (x, url))
+                http.fetch(url, connect_timeout=.5, request_timeout=.5)
+                return
+            except:
+                pass
+            time.sleep(step)
     
     def graceful_shutdown(self):
         pass
