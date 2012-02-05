@@ -79,5 +79,22 @@ class SimpleLeveldbTest(SubprocessTest):
         data = http_fetch_json('/get', dict(key='testpost'))
         assert data == 'asdfpost'
         data = http_fetch_json('/del', dict(key='testpost'))
+        
+        # test dump to csv
+        # we need to check more than 500 entries
+        for x in range(505):
+            http_fetch_json('/put', dict(key='dump.%d' % x, value='dump.value.%d' % x))
+        
+        data = http_fetch('/dump_csv', {})
+        assert data.startswith("dump.0,dump.value.0\n")
+        assert data.endswith("test2,asdf2\n")
+        assert data.count("\n") > 505
+        
+        data = http_fetch('/dump_csv', dict(key="dump."))
+        assert data.count("\n") == 505
+        assert False, data
+        
+        
+        
 
         
