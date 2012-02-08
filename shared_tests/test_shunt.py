@@ -5,19 +5,40 @@ import unittest
 import subprocess
 import signal
 import time
+import simplejson as json
+import urllib
 import tornado.httpclient
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
    format='%(asctime)s %(process)d %(filename)s %(lineno)d %(levelname)s #| %(message)s',
    datefmt='%H:%M:%S')
 
+def http_fetch_json(endpoint, params=None, status_code=200, status_txt="OK", body=None):
+    body = http_fetch(endpoint, params, 200, body)
+    data = json.loads(body)
+    assert data['status_code'] == status_code
+    assert data['status_txt'] == status_txt
+    return data['data']
+
+def http_fetch(endpoint, params=None, response_code=200, body=None):
+    http_client = tornado.httpclient.HTTPClient()
+    url = 'http://127.0.0.1:8080' + endpoint
+    if params:
+        url += '?' + urllib.urlencode(params, doseq=1)
+    method = "POST" if body else "GET"
+    try:
+        res = http_client.fetch(url, method=method, body=body)
+    except tornado.httpclient.HTTPError, e:
+        logging.info(e)
+        res = e.response
+    assert res.code == response_code
+    return res.body
+
 
 def valgrind_cmd(cmd, *options):
     assert isinstance(options, (list, tuple))
-    dirname = os.path.dirname(__file__)
-    if not cmd.startswith("/"):
-        cmd = os.path.join(dirname, cmd)
-    test_output_dir = os.path.join(dirname, "test_output")
+    assert cmd.startswith("/"), "valgrind_cmd must take a fully qualified executible path not %s" % cmd
+    test_output_dir = os.path.join(os.path.dirname(cmd), "test_output")
     return [
         'valgrind',
         '-v',
@@ -57,13 +78,16 @@ def check_valgrind_output(filename):
 
 class SubprocessTest(unittest.TestCase):
     process_options = []
+    binary_name = ""
+    working_dir = None
     def setUp(self):
         """setup method that starts up mongod instances using `self.mongo_options`"""
         self.temp_dirs = []
         self.processes = []
-        dirname = os.path.dirname(__file__)
+        assert self.binary_name, "you must override self.binary_name"
+        assert self.working_dir, "set workign dir to os.path.dirname(__file__)"
         
-        exe = os.path.join(dirname, 'simpleleveldb')
+        exe = os.path.join(self.working_dir, self.binary_name)
         if os.path.exists(exe):
             logging.info('removing old %s' % exe)
             os.unlink(exe)
@@ -74,7 +98,7 @@ class SubprocessTest(unittest.TestCase):
         
         assert os.path.exists(exe), "compile failed"
         
-        test_output_dir = os.path.join(dirname, "test_output")
+        test_output_dir = os.path.join(self.working_dir, "test_output")
         if os.path.exists(test_output_dir):
             logging.info('removing %s' % test_output_dir)
             pipe = subprocess.Popen(['rm', '-rf', test_output_dir])
@@ -92,7 +116,7 @@ class SubprocessTest(unittest.TestCase):
             self.processes.append(pipe)
             logging.debug('started process %s' % pipe.pid)
         
-        self.wait_for('http://127.0.0.1:8080/', 5)
+        self.wait_for('http://127.0.0.1:8080/', max_time=5)
     
     def wait_for(self, url, max_time):
         # check up to 15 times till the endpoint specified is available waiting max_time
@@ -108,7 +132,11 @@ class SubprocessTest(unittest.TestCase):
             time.sleep(step)
     
     def graceful_shutdown(self):
-        pass
+        try:
+            http_fetch('/exit', dict())
+        except:
+            # we never get a reply if this works correctly
+            time.sleep(1)
     
     def tearDown(self):
         """teardown method that cleans up child mongod instances, and removes their temporary data files"""

@@ -515,6 +515,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     }
     
     evhttp_clear_headers(&args);
+    json_object_put(jsobj);
     evhttp_send_reply_start(req, 200, "OK");
 
     /* run the first dump loop */
