@@ -11,7 +11,7 @@
 #include <leveldb/c.h>
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.1.3"
+#define VERSION         "0.2"
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
