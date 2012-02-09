@@ -8,6 +8,8 @@
 
 #define VERSION "1.3.1"
 
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+
 struct queue_entry {
     TAILQ_ENTRY(queue_entry) entries;
     size_t bytes;
@@ -290,6 +292,12 @@ void mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
+void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    fprintf(stdout, "/exit request recieved\n");
+    event_loopbreak();
+}
+
 void dump(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
     struct queue_entry *entry;
@@ -354,9 +362,10 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/mput*", mput, NULL);
     simplehttp_set_cb("/dump*", dump, NULL);
     simplehttp_set_cb("/stats*", stats, NULL);
+    simplehttp_set_cb("/exit*", exit_cb, NULL);
     simplehttp_main();
     free_options();
-    
+
     if (overflow_log_fp) {
         while (depth) {
             overflow_one();
