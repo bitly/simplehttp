@@ -1,41 +1,15 @@
 import os
-import simplejson as json
-import urllib
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "../shared_tests"))
+
 import logging
-from test_shunt import valgrind_cmd, SubprocessTest
-import tornado.httpclient
-import time
+from test_shunt import valgrind_cmd, SubprocessTest, http_fetch, http_fetch_json
 
-def http_fetch_json(endpoint, params, status_code=200, status_txt="OK", body=None):
-    body = http_fetch(endpoint, params, 200, body)
-    data = json.loads(body)
-    assert data['status_code'] == status_code
-    assert data['status_txt'] == status_txt
-    return data['data']
-
-def http_fetch(endpoint, params, response_code=200, body=None):
-    http_client = tornado.httpclient.HTTPClient()
-    url = 'http://127.0.0.1:8080' + endpoint
-    if params:
-        url += '?' + urllib.urlencode(params, doseq=1)
-    method = "POST" if body else "GET"
-    try:
-        res = http_client.fetch(url, method=method, body=body)
-    except tornado.httpclient.HTTPError, e:
-        logging.info(e)
-        res = e.response
-    assert res.code == response_code
-    return res.body
 
 class SimpleLeveldbTest(SubprocessTest):
-    process_options = [valgrind_cmd('simpleleveldb', '--db-file=%s/db' % os.path.join(os.path.dirname(__file__), "test_output"), '--enable-logging')]
-
-    def graceful_shutdown(self):
-        try:
-            http_fetch('/exit', dict())
-        except:
-            # we never get a reply if this works correctly
-            time.sleep(1)
+    binary_name = "simpleleveldb"
+    process_options = [valgrind_cmd(os.path.abspath('simpleleveldb'), '--db-file=%s/db' % os.path.join(os.path.dirname(__file__), "test_output"), '--enable-logging')]
+    working_dir = os.path.dirname(__file__)
     
     def test_basic(self):
         data = http_fetch_json('/put', dict(key='test', value='12345'))
@@ -79,5 +53,18 @@ class SimpleLeveldbTest(SubprocessTest):
         data = http_fetch_json('/get', dict(key='testpost'))
         assert data == 'asdfpost'
         data = http_fetch_json('/del', dict(key='testpost'))
+        
+        # test dump to csv
+        # we need to check more than 500 entries
+        for x in range(505):
+            http_fetch_json('/put', dict(key='dump.%d' % x, value='dump.value.%d' % x))
+        
+        data = http_fetch('/dump_csv')
+        assert data.startswith("dump.0,dump.value.0\n")
+        assert data.endswith("test2,asdf2\n")
+        assert data.count("\n") > 505
+        
+        data = http_fetch('/dump_csv', dict(key="dump."))
+        assert data.count("\n") == 505
 
         
