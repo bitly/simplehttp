@@ -11,7 +11,7 @@
 #include <leveldb/c.h>
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.2"
+#define VERSION         "0.3"
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
@@ -20,6 +20,7 @@ void del_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void put_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void get_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
+void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void exit_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void list_append_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -297,6 +298,73 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     finalize_request(response_code, error, req, evb, &args, jsobj);
     free(error);
+}
+
+void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char *fw_key, *key_clean, *value_clean, *tmp;
+    const char *key, *value;
+    size_t key_len, value_len;
+    struct evkeyvalq args;
+    struct json_object *jsobj, *tmp_obj, *result_array;
+    const leveldb_snapshot_t *fw_snapshot;
+    leveldb_readoptions_t *fw_read_options;
+    leveldb_iterator_t *fw_iter;
+    int result_count = 0, result_limit = 0;
+
+    evhttp_parse_query(req->uri, &args);
+    fw_key = (char *)evhttp_find_header(&args, "key");
+    result_limit = get_int_argument(&args, "limit", 500);
+
+    jsobj = json_object_new_object();
+    result_array = json_object_new_array();
+    tmp_obj = NULL;
+    
+    if (fw_key == NULL) {
+        finalize_request(400, "MISSING_ARG_KEY", req, evb, &args, jsobj);
+        return;
+    }
+
+    fw_read_options = leveldb_readoptions_create();
+    fw_snapshot = leveldb_create_snapshot(ldb);
+    leveldb_readoptions_set_snapshot(fw_read_options, fw_snapshot);
+    fw_iter = leveldb_create_iterator(ldb, fw_read_options);
+
+    leveldb_iter_seek(fw_iter, fw_key, strlen(fw_key));
+
+    while (leveldb_iter_valid(fw_iter) && (result_limit == 0 || result_count < result_limit)) {
+        key = leveldb_iter_key(fw_iter, &key_len);
+        key_clean = (char*)key;
+        DUPE_N_TERMINATE(key_clean, key_len, tmp);
+
+        // this is the case where we are only fwing keys of this prefix
+        // so we need to break out of the loop at the last key
+        if (strlen(fw_key) > key_len || strncmp(key_clean, fw_key, strlen(fw_key)) != 0 ) {
+            free(key_clean);
+            break;
+        }
+        value = leveldb_iter_value(fw_iter, &value_len);
+        value_clean = (char*)value;
+        DUPE_N_TERMINATE(value_clean, value_len, tmp);
+        
+        tmp_obj = json_object_new_object();
+        json_object_object_add(tmp_obj, key_clean, json_object_new_string(value_clean));
+        json_object_array_add(result_array, tmp_obj);
+
+        leveldb_iter_next(fw_iter);
+        result_count ++;
+
+        free(key_clean);
+        free(value_clean);
+    }
+    json_object_object_add(jsobj, "data", result_array);
+    json_object_object_add(jsobj, "status", json_object_new_string(result_count ? "ok" : "no results"));
+
+    finalize_request(200, NULL, req, evb, &args, jsobj);
+    
+    leveldb_iter_destroy(fw_iter);
+    leveldb_readoptions_destroy(fw_read_options);
+    leveldb_release_snapshot(ldb, fw_snapshot);
 }
 
 /* append a `value` string on to the end of a string value */
@@ -672,6 +740,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/list_remove*", list_remove_cb, NULL);
     simplehttp_set_cb("/get*", get_cb, NULL);
     simplehttp_set_cb("/mget*", mget_cb, NULL);
+    simplehttp_set_cb("/fwmatch*", fwmatch_cb, NULL);
     simplehttp_set_cb("/put*", put_cb, NULL);
     simplehttp_set_cb("/del*", del_cb, NULL);
     simplehttp_set_cb("/stats*", stats_cb, NULL);
