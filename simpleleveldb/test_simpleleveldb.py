@@ -23,6 +23,8 @@ class SimpleLeveldbTest(SubprocessTest):
         http_fetch_json("/put", dict(), 400, 'MISSING_ARG_KEY')
         http_fetch_json("/put", dict(key='test'), 400, 'MISSING_ARG_VALUE')
         http_fetch_json("/get", dict(), 400, 'MISSING_ARG_KEY')
+
+        http_fetch_json("/fwmatch", dict(), 400, 'MISSING_ARG_KEY')
         
         http_fetch_json('/put', dict(key='test1', value='asdf1'))
         http_fetch_json('/put', dict(key='test2', value='asdf2'))
@@ -30,6 +32,10 @@ class SimpleLeveldbTest(SubprocessTest):
         data = http_fetch('/mget', dict(key=['test1', 'test2', 'test3'], format='txt'))
         print data
         assert data == 'test1,asdf1\ntest2,asdf2\n'
+
+        data = http_fetch_json("/fwmatch", dict(key="test"))
+        print data
+        assert data == [{'test1': 'asdf1'}, {'test2': 'asdf2'}]
         
         
         # test list stuff
