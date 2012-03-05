@@ -13,7 +13,7 @@
 #define _DEBUG(...) do {;} while (0)
 #endif
 
-#define VERSION "0.5"
+#define VERSION "0.5.1"
 
 struct destination_url {
     char *address;
@@ -194,15 +194,18 @@ int main(int argc, char **argv)
     }
     init_async_connection_pool(1);
 
-    if (option_get_int("max_silence") > 0) {
-        _DEBUG("Registering timer.\n");
-        max_silence_time.tv_sec = option_get_int("max_silence");
-        evtimer_set(&silence_ev, silence_cb, NULL);
-        evtimer_add(&silence_ev, &max_silence_time);
-    }
-
     if (simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &address, &port, &path)) {
-        pubsubclient_main(address, port, path, process_message_cb, error_cb, NULL);
+        pubsubclient_init(address, port, path, process_message_cb, error_cb, NULL);
+
+        if (option_get_int("max_silence") > 0) {
+            _DEBUG("Registering timer.\n");
+            max_silence_time.tv_sec = option_get_int("max_silence");
+            evtimer_set(&silence_ev, silence_cb, NULL);
+            evtimer_add(&silence_ev, &max_silence_time);
+        }
+
+        pubsubclient_run();
+        pubsubclient_free();
 
         free(address);
         free(path);
