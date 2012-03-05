@@ -21,4 +21,6 @@ OPTIONS
   --pubsub-url=<str>     url of pubsub to read from
                          default: http://127.0.0.1:80/sub?multipart=0
   --round-robin          write round-robin to destination urls
+  --max-silence          Maximum amount of time (in seconds) between messages from
+                         the source pubsub before quitting.
 ```
