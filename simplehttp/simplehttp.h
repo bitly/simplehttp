@@ -2,9 +2,12 @@
 #define _SIMPLEHTTP_H
 
 #include "queue.h"
+#include <event2/event.h>
+#include <event2/buffer.h>
+#include <event2/http.h>
+#include <event2/http_compat.h>
+#include <event2/event_struct.h>
 #include "options.h"
-#include <event.h>
-#include <evhttp.h>
 
 #define SIMPLEHTTP_VERSION "0.1.2"
 #ifndef DUPE_N_TERMINATE
@@ -43,6 +46,7 @@ struct simplehttp_stats {
 void simplehttp_init();
 int simplehttp_main();
 int simplehttp_listen();
+void simplehttp_loopbreak();
 void simplehttp_run();
 void simplehttp_free();
 void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx);

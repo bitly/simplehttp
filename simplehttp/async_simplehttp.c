@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <time.h>
 #include "async_simplehttp.h"
+#include <event2/http_struct.h>
 
 // this is set as a parameter to init_async_connection_pool()
 static int request_logging = 0;

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include "simplehttp.h"
+#include <event2/http_struct.h>
 
 const char *simplehttp_method(struct evhttp_request *req)
 {
