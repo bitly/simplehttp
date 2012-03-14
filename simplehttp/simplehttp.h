@@ -5,8 +5,6 @@
 #include <event2/event.h>
 #include <event2/buffer.h>
 #include <event2/http.h>
-#include <event2/http_compat.h>
-#include <event2/event_struct.h>
 #include "options.h"
 
 #define SIMPLEHTTP_VERSION "0.1.2"
@@ -42,6 +40,8 @@ struct simplehttp_stats {
     char **stats_labels;
     int callback_count;
 };
+
+extern struct event_base *simplehttp_event_base;
 
 void simplehttp_init();
 int simplehttp_main();
