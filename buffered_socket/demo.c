@@ -54,10 +54,11 @@ static void close_cb(struct BufferedSocket *buffsock, void *arg)
     set_reconnect_timer();
 }
 
-static void read_cb(struct BufferedSocket *buffsock, uint8_t *data, size_t len, void *arg)
+static void read_cb(struct BufferedSocket *buffsock, struct evbuffer *evb, void *arg)
 {
-    fprintf(stdout, "%s: read %lu bytes\n", __FUNCTION__, len);
-    fwrite(data, len, 1, stdout);
+    fprintf(stdout, "%s: read %lu bytes\n", __FUNCTION__, EVBUFFER_LENGTH(evb));
+    fwrite(EVBUFFER_DATA(evb), EVBUFFER_LENGTH(evb), 1, stdout);
+    evbuffer_drain(evb, EVBUFFER_LENGTH(evb));
 }
 
 static void write_cb(struct BufferedSocket *buffsock, void *arg)

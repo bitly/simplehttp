@@ -22,7 +22,7 @@ static void buffered_socket_connectcb(int fd, short what, void *arg);
 struct BufferedSocket *new_buffered_socket(const char *address, int port, 
     void (*connect_callback)(struct BufferedSocket *buffsock, void *arg), 
     void (*close_callback)(struct BufferedSocket *buffsock, void *arg), 
-    void (*read_callback)(struct BufferedSocket *buffsock, uint8_t *data, size_t len, void *arg), 
+    void (*read_callback)(struct BufferedSocket *buffsock, struct evbuffer *evb, void *arg), 
     void (*write_callback)(struct BufferedSocket *buffsock, void *arg), 
     void (*error_callback)(struct BufferedSocket *buffsock, void *arg),
     void *cbarg)
@@ -190,20 +190,14 @@ void buffered_socket_readcb(struct bufferevent *bev, void *arg)
 {
     struct BufferedSocket *buffsock = (struct BufferedSocket *)arg;
     struct evbuffer *evb;
-    uint8_t *data;
-    size_t len;
-    
-    evb = EVBUFFER_INPUT(bev);
-    data = EVBUFFER_DATA(evb);
-    len = EVBUFFER_LENGTH(evb);
     
     _DEBUG("%s: %lu bytes read\n", __FUNCTION__, len);
     
+    // client's responsibility to drain the buffer
+    evb = EVBUFFER_INPUT(bev);
     if (buffsock->read_callback) {
-        (*buffsock->read_callback)(buffsock, data, len, buffsock->cbarg);
+        (*buffsock->read_callback)(buffsock, evb, buffsock->cbarg);
     }
-    
-    evbuffer_drain(evb, len);
 }
 
 void buffered_socket_writecb(struct bufferevent *bev, void *arg)

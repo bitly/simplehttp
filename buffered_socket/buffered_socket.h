@@ -1,6 +1,8 @@
 #ifndef __buffered_socket_h
 #define __buffered_socket_h
 
+#define BUFFERED_SOCKET_VERSION "0.1"
+
 enum BufferedSocketStates {
     BS_INIT,
     BS_CONNECTING, 
@@ -17,7 +19,7 @@ struct BufferedSocket {
     struct bufferevent *bev;
     void (*connect_callback)(struct BufferedSocket *buffsock, void *arg);
     void (*close_callback)(struct BufferedSocket *buffsock, void *arg);
-    void (*read_callback)(struct BufferedSocket *buffsock, uint8_t *data, size_t len, void *arg);
+    void (*read_callback)(struct BufferedSocket *buffsock, struct evbuffer *evb, void *arg);
     void (*write_callback)(struct BufferedSocket *buffsock, void *arg); 
     void (*error_callback)(struct BufferedSocket *buffsock, void *arg);
     void *cbarg;
@@ -26,7 +28,7 @@ struct BufferedSocket {
 struct BufferedSocket *new_buffered_socket(const char *address, int port, 
     void (*connect_callback)(struct BufferedSocket *buffsock, void *arg), 
     void (*close_callback)(struct BufferedSocket *buffsock, void *arg), 
-    void (*read_callback)(struct BufferedSocket *buffsock, uint8_t *data, size_t len, void *arg), 
+    void (*read_callback)(struct BufferedSocket *buffsock, struct evbuffer *evb, void *arg), 
     void (*write_callback)(struct BufferedSocket *buffsock, void *arg), 
     void (*error_callback)(struct BufferedSocket *buffsock, void *arg),
     void *cbarg);
