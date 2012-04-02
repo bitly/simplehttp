@@ -1,3 +1,4 @@
+# requires libevent-1.4 right now, will not work with libevent-2.X
 LIBEVENT ?= /usr/local
 TARGET ?= /usr/local
 LIBSIMPLEHTTP ?= ../simplehttp
