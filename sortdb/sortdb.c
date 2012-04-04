@@ -328,6 +328,10 @@ void hup_handler(int signum)
 void close_dbfile()
 {
     fprintf(stdout, "closing %s\n", db_filename);
+    if (option_get_int("memory_lock") && munlock(map_base, st.st_size)) {
+        fprintf(stderr, "munlock(%s) failed: %s\n", db_filename, strerror(errno));
+        exit(errno);
+    }
     if (munmap(map_base, st.st_size) != 0) {
         fprintf(stderr, "failed munmap\n");
         exit(1);
@@ -356,6 +360,10 @@ void open_dbfile()
         fprintf(stderr, "mmap(%s) failed: %s\n", db_filename, strerror(errno));
         exit(errno);
     }
+    if (option_get_int("memory_lock") && mlock(map_base, st.st_size)) {
+        fprintf(stderr, "mlock(%s) failed: %s\n", db_filename, strerror(errno));
+        exit(errno);
+    }
 }
 
 int version_cb(int value)
@@ -368,9 +376,9 @@ int main(int argc, char **argv)
 {
     define_simplehttp_options();
     option_define_str("db_file", OPT_REQUIRED, NULL, &db_filename, NULL, NULL);
+    option_define_bool("memory_lock", OPT_OPTIONAL, 0, NULL, NULL, "lock data file pages into memory");
     option_define_char("field_separator", OPT_OPTIONAL, '\0', &deliminator, NULL, "field separator (eg: comma, tab, pipe). default: TAB");
-    option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-    
+
     if (!option_parse_command_line(argc, argv)) {
         return 1;
     }
