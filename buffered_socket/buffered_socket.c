@@ -19,13 +19,13 @@ static void buffered_socket_writecb(struct bufferevent *bev, void *arg);
 static void buffered_socket_errorcb(struct bufferevent *bev, short what, void *arg);
 static void buffered_socket_connectcb(int fd, short what, void *arg);
 
-struct BufferedSocket *new_buffered_socket(const char *address, int port, 
-    void (*connect_callback)(struct BufferedSocket *buffsock, void *arg), 
-    void (*close_callback)(struct BufferedSocket *buffsock, void *arg), 
-    void (*read_callback)(struct BufferedSocket *buffsock, struct evbuffer *evb, void *arg), 
-    void (*write_callback)(struct BufferedSocket *buffsock, void *arg), 
-    void (*error_callback)(struct BufferedSocket *buffsock, void *arg),
-    void *cbarg)
+struct BufferedSocket *new_buffered_socket(const char *address, int port,
+        void (*connect_callback)(struct BufferedSocket *buffsock, void *arg),
+        void (*close_callback)(struct BufferedSocket *buffsock, void *arg),
+        void (*read_callback)(struct BufferedSocket *buffsock, struct evbuffer *evb, void *arg),
+        void (*write_callback)(struct BufferedSocket *buffsock, void *arg),
+        void (*error_callback)(struct BufferedSocket *buffsock, void *arg),
+        void *cbarg)
 {
     struct BufferedSocket *buffsock;
     
@@ -119,7 +119,7 @@ static void buffered_socket_connectcb(int fd, short what, void *arg)
         return;
     }
     
-    if (getsockopt(buffsock->fd, SOL_SOCKET, SO_ERROR, (void*)&error, &errsz) == -1) {
+    if (getsockopt(buffsock->fd, SOL_SOCKET, SO_ERROR, (void *)&error, &errsz) == -1) {
         _DEBUG("%s: getsockopt failed for \"%s:%d\" on %d\n",
                __FUNCTION__, buffsock->address, buffsock->port, buffsock->fd);
         buffered_socket_close(buffsock);
@@ -133,13 +133,13 @@ static void buffered_socket_connectcb(int fd, short what, void *arg)
         return;
     }
     
-    _DEBUG("%s: connected to \"%s:%d\" on %d\n", 
+    _DEBUG("%s: connected to \"%s:%d\" on %d\n",
            __FUNCTION__, buffsock->address, buffsock->port, buffsock->fd);
-    
+           
     buffsock->state = BS_CONNECTED;
-    buffsock->bev = bufferevent_new(buffsock->fd, 
-        buffered_socket_readcb, buffered_socket_writecb, buffered_socket_errorcb, 
-        (void *)buffsock);
+    buffsock->bev = bufferevent_new(buffsock->fd,
+                                    buffered_socket_readcb, buffered_socket_writecb, buffered_socket_errorcb,
+                                    (void *)buffsock);
     bufferevent_enable(buffsock->bev, EV_READ);
     
     if (buffsock->connect_callback) {
@@ -149,9 +149,9 @@ static void buffered_socket_connectcb(int fd, short what, void *arg)
 
 void buffered_socket_close(struct BufferedSocket *buffsock)
 {
-    _DEBUG("%s: closing \"%s:%d\" on %d\n", 
+    _DEBUG("%s: closing \"%s:%d\" on %d\n",
            __FUNCTION__, buffsock->address, buffsock->port, buffsock->fd);
-    
+           
     buffsock->state = BS_DISCONNECTED;
     
     if (event_initialized(&buffsock->conn_ev)) {

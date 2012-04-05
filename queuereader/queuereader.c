@@ -80,8 +80,8 @@ void queuereader_decrement_backoff()
 void queuereader_increment_backoff()
 {
     // bounded increment of backoff counter
-    backoff_counter = ((backoff_counter + 1) > MAX_BACKOFF_COUNTER) ? 
-        MAX_BACKOFF_COUNTER : (backoff_counter + 1);
+    backoff_counter = ((backoff_counter + 1) > MAX_BACKOFF_COUNTER) ?
+                      MAX_BACKOFF_COUNTER : (backoff_counter + 1);
 }
 
 void queuereader_finish_message(int return_code)
@@ -113,8 +113,8 @@ void queuereader_finish_message(int return_code)
 void queuereader_requeue_message_cb(struct evhttp_request *req, void *cbarg)
 {
     // TODO: this should limit (and perhaps backoff) failed requeue requests
-    queuereader_finish_message((req && req->response_code == 200) ? 
-        QR_CONT_SOURCE_REQUEST : QR_REQUEUE_WITHOUT_BACKOFF);
+    queuereader_finish_message((req && req->response_code == 200) ?
+                               QR_CONT_SOURCE_REQUEST : QR_REQUEUE_WITHOUT_BACKOFF);
 }
 
 void queuereader_requeue_message_request()
@@ -126,8 +126,8 @@ void queuereader_requeue_message_request()
     evb = evbuffer_new();
     encoded_message = simplehttp_encode_uri(message);
     evbuffer_add_printf(evb, "/put?data=%s", encoded_message);
-    new_async_request((char *)data->source_address, data->source_port, 
-        (char *)EVBUFFER_DATA(evb), queuereader_requeue_message_cb, (void *)NULL);
+    new_async_request((char *)data->source_address, data->source_port,
+                      (char *)EVBUFFER_DATA(evb), queuereader_requeue_message_cb, (void *)NULL);
     evbuffer_free(evb);
     free(encoded_message);
 }
@@ -166,8 +166,8 @@ void queuereader_source_request(int fd, short what, void *cbarg)
     
     evb = evbuffer_new();
     evbuffer_add_printf(evb, client_data->path);
-    new_async_request((char *)client_data->source_address, client_data->source_port, 
-        (char *)EVBUFFER_DATA(evb), queuereader_source_cb, cbarg);
+    new_async_request((char *)client_data->source_address, client_data->source_port,
+                      (char *)EVBUFFER_DATA(evb), queuereader_source_cb, cbarg);
     evbuffer_free(evb);
 }
 
@@ -177,9 +177,9 @@ void queuereader_set_sleeptime_queue_empty_ms(int milliseconds)
 }
 
 void queuereader_init(const char *source_address, int source_port, const char *path,
-                       int (*message_cb)(char *data, void *arg),
-                       void (*error_cb)(int status_code, void *arg),
-                       void *cbarg)
+                      int (*message_cb)(char *data, void *arg),
+                      void (*error_cb)(int status_code, void *arg),
+                      void *cbarg)
 {
     int timeout_seconds = floor((sleeptime_queue_empty_ms * 1000) / 1000000);
     int timeout_microseconds = (sleeptime_queue_empty_ms * 1000) - (timeout_seconds * 1000000);
@@ -208,9 +208,9 @@ void queuereader_init(const char *source_address, int source_port, const char *p
 }
 
 int queuereader_main(const char *source_address, int source_port, const char *path,
-                      int (*message_cb)(char *data, void *arg),
-                      void (*error_cb)(int status_code, void *arg),
-                      void *cbarg)
+                     int (*message_cb)(char *data, void *arg),
+                     void (*error_cb)(int status_code, void *arg),
+                     void *cbarg)
 {
     queuereader_init(source_address, source_port, path, message_cb, error_cb, cbarg);
     queuereader_run();

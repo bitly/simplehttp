@@ -76,8 +76,8 @@ int main(int argc, char **argv)
     event_init();
     
     buffsock = new_buffered_socket("127.0.0.1", 5150,
-        connect_cb, close_cb, read_cb, write_cb, error_cb, "hello world\n");
-    
+                                   connect_cb, close_cb, read_cb, write_cb, error_cb, "hello world\n");
+                                   
     signal(SIGINT, termination_handler);
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
