@@ -9,15 +9,15 @@
 #define QR_REQUEUE_WITHOUT_BACKOFF  5
 
 int queuereader_main(const char *source_address, int source_port, const char *path,
-                      int (*message_cb)(char *data, void *arg),
-                      void (*error_cb)(int status_code, void *arg),
-                      void *cbarg);
+                     int (*message_cb)(char *data, void *arg),
+                     void (*error_cb)(int status_code, void *arg),
+                     void *cbarg);
 void queuereader_run();
 void queuereader_free();
 void queuereader_init(const char *source_address, int source_port, const char *path,
-                       int (*message_cb)(char *data, void *arg),
-                       void (*error_cb)(int status_code, void *arg),
-                       void *cbarg);
+                      int (*message_cb)(char *data, void *arg),
+                      void (*error_cb)(int status_code, void *arg),
+                      void *cbarg);
 void queuereader_finish_message(int return_code);
 void queuereader_set_sleeptime_queue_empty_ms(int milliseconds);
 

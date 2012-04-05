@@ -17,15 +17,15 @@
 #endif
 
 static struct DSClient *new_domain_socket_client(struct DomainSocket *uds,
-    int client_fd, struct sockaddr *sa, socklen_t salen);
+        int client_fd, struct sockaddr *sa, socklen_t salen);
 static void free_domain_socket_client(struct DSClient *client);
 static void accept_socket(int fd, short what, void *arg);
 
-struct DomainSocket *new_domain_socket(const char *path, int access_mask, 
-    void (*read_callback)(struct DSClient *client), 
-    void (*write_callback)(struct DSClient *client), 
-    void (*error_callback)(struct DSClient *client),
-    int listen_backlog)
+struct DomainSocket *new_domain_socket(const char *path, int access_mask,
+                                       void (*read_callback)(struct DSClient *client),
+                                       void (*write_callback)(struct DSClient *client),
+                                       void (*error_callback)(struct DSClient *client),
+                                       int listen_backlog)
 {
     struct linger ling = {0, 0};
     struct sockaddr_un addr;
@@ -50,7 +50,7 @@ struct DomainSocket *new_domain_socket(const char *path, int access_mask,
     }
     
     // clean up a previous socket file if we left it around
-    if (lstat(path, &tstat) == 0) { 
+    if (lstat(path, &tstat) == 0) {
         if (S_ISSOCK(tstat.st_mode)) {
             unlink(path);
         }
@@ -110,7 +110,7 @@ void free_domain_socket(struct DomainSocket *uds)
             close(uds->fd);
         }
         
-        if (lstat(uds->path, &tstat) == 0) { 
+        if (lstat(uds->path, &tstat) == 0) {
             if (S_ISSOCK(tstat.st_mode)) {
                 unlink(uds->path);
             }
@@ -198,7 +198,7 @@ void domain_socket_client_write(struct DSClient *client, void *data, size_t len)
 }
 
 static struct DSClient *new_domain_socket_client(struct DomainSocket *uds,
-    int client_fd, struct sockaddr *sa, socklen_t salen)
+        int client_fd, struct sockaddr *sa, socklen_t salen)
 {
     struct DSClient *client;
     

@@ -132,39 +132,39 @@ char *simplehttp_encode_uri(const char *uri)
  */
 char *simplehttp_strnstr(const char *s, const char *find, size_t slen)
 {
-	char c, sc;
-	size_t len;
-  
-  // exit if the end of the strung
-	if ((c = *find++) != '\0') {
-	
-	    // get the length of the string to find, shortens as we loop
-		  len = strlen(find);
-		  
-		  // compare the passed and find string at the current position.  we would
-		  // have iterated up to and including the first char of the find string in
-		  // the search string, now compare from there, if no match loop again
-		  do {
-		  
-		      // go until we get the starting char of the find string or until
-		      // we run out of chars to search either by count or end of string
-			    do {
-				      if (slen-- < 1 || (sc = *s++) == '\0') {
-					      return NULL;
-					    }
-			    } while (sc != c);
-			    
-			    // no more chars to search then exit
-			    if (len > slen) {
-				      return NULL;
-			    }
-			    
-		  } while (strncmp(s, find, len) != 0);
-		  
-		  // when find string matches go one position back to be at start index
-		  s--;
-	}
-	
-	// return pointer to start pos of found string
-	return (char *)s;
+    char c, sc;
+    size_t len;
+    
+    // exit if the end of the strung
+    if ((c = *find++) != '\0') {
+    
+        // get the length of the string to find, shortens as we loop
+        len = strlen(find);
+        
+        // compare the passed and find string at the current position.  we would
+        // have iterated up to and including the first char of the find string in
+        // the search string, now compare from there, if no match loop again
+        do {
+        
+            // go until we get the starting char of the find string or until
+            // we run out of chars to search either by count or end of string
+            do {
+                if (slen-- < 1 || (sc = *s++) == '\0') {
+                    return NULL;
+                }
+            } while (sc != c);
+            
+            // no more chars to search then exit
+            if (len > slen) {
+                return NULL;
+            }
+            
+        } while (strncmp(s, find, len) != 0);
+        
+        // when find string matches go one position back to be at start index
+        s--;
+    }
+    
+    // return pointer to start pos of found string
+    return (char *)s;
 }

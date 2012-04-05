@@ -311,11 +311,11 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     leveldb_readoptions_t *fw_read_options;
     leveldb_iterator_t *fw_iter;
     int result_count = 0, result_limit = 0;
-
+    
     evhttp_parse_query(req->uri, &args);
     fw_key = (char *)evhttp_find_header(&args, "key");
     result_limit = get_int_argument(&args, "limit", 500);
-
+    
     jsobj = json_object_new_object();
     result_array = json_object_new_array();
     tmp_obj = NULL;
@@ -324,19 +324,19 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         finalize_request(400, "MISSING_ARG_KEY", req, evb, &args, jsobj);
         return;
     }
-
+    
     fw_read_options = leveldb_readoptions_create();
     fw_snapshot = leveldb_create_snapshot(ldb);
     leveldb_readoptions_set_snapshot(fw_read_options, fw_snapshot);
     fw_iter = leveldb_create_iterator(ldb, fw_read_options);
-
+    
     leveldb_iter_seek(fw_iter, fw_key, strlen(fw_key));
-
+    
     while (leveldb_iter_valid(fw_iter) && (result_limit == 0 || result_count < result_limit)) {
         key = leveldb_iter_key(fw_iter, &key_len);
-        key_clean = (char*)key;
+        key_clean = (char *)key;
         DUPE_N_TERMINATE(key_clean, key_len, tmp);
-
+        
         // this is the case where we are only fwing keys of this prefix
         // so we need to break out of the loop at the last key
         if (strlen(fw_key) > key_len || strncmp(key_clean, fw_key, strlen(fw_key)) != 0 ) {
@@ -344,22 +344,22 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
             break;
         }
         value = leveldb_iter_value(fw_iter, &value_len);
-        value_clean = (char*)value;
+        value_clean = (char *)value;
         DUPE_N_TERMINATE(value_clean, value_len, tmp);
         
         tmp_obj = json_object_new_object();
         json_object_object_add(tmp_obj, key_clean, json_object_new_string(value_clean));
         json_object_array_add(result_array, tmp_obj);
-
+        
         leveldb_iter_next(fw_iter);
         result_count ++;
-
+        
         free(key_clean);
         free(value_clean);
     }
     json_object_object_add(jsobj, "data", result_array);
     json_object_object_add(jsobj, "status", json_object_new_string(result_count ? "ok" : "no results"));
-
+    
     finalize_request(200, NULL, req, evb, &args, jsobj);
     
     leveldb_iter_destroy(fw_iter);
@@ -492,7 +492,7 @@ void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         free(orig_value);
         orig_value = terminated_value;
     }
-
+    
     if (orig_value) {
         new_value = evbuffer_new();
         token = strtok(orig_value, ",");
@@ -524,9 +524,9 @@ void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
                 evbuffer_add_printf(evb, "%s,%s\n", key, (char *)EVBUFFER_DATA(new_value));
             }
         }
-
+        
         evbuffer_free(new_value);
-    
+        
     } else {
         if (echo_data) {
             if (format == json_format) {
@@ -545,8 +545,8 @@ void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
 }
 
-/* 
-return a txt format'd csv (key,value\n) reponse based on a forward match of the keys 
+/*
+return a txt format'd csv (key,value\n) reponse based on a forward match of the keys
 note: this makes a snapshot of the database and may return after other data has been added
 */
 void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
@@ -585,7 +585,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
     json_object_put(jsobj);
     evhttp_send_reply_start(req, 200, "OK");
-
+    
     /* run the first dump loop */
     do_dump_csv(0, 0, req);
 }
@@ -624,7 +624,7 @@ void do_dump_csv(int fd, short what, void *ctx)
             break;
         }
     }
-
+    
     // leveldb_iter_get_error(dump_iter, &err);
     
     if (send_reply) {

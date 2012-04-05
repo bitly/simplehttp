@@ -19,8 +19,8 @@
  * max_retry_interval - the maximum seconds to wait between retries
  * reset_on_all_failed - reset all hosts to alive when all are marked as failed.
  */
-struct HostPool *new_host_pool(int retry_failed_hosts, int retry_interval, 
-    int max_retry_interval, int reset_on_all_failed)
+struct HostPool *new_host_pool(int retry_failed_hosts, int retry_interval,
+                               int max_retry_interval, int reset_on_all_failed)
 {
     struct HostPool *host_pool;
     
@@ -51,8 +51,8 @@ void free_host_pool(struct HostPool *host_pool)
     }
 }
 
-struct HostPoolEndpoint *new_host_pool_endpoint(struct HostPool *host_pool, 
-    char *address, int port, char *path)
+struct HostPoolEndpoint *new_host_pool_endpoint(struct HostPool *host_pool,
+        char *address, int port, char *path)
 {
     struct HostPoolEndpoint *host_pool_endpoint;
     
@@ -100,8 +100,8 @@ void host_pool_from_json(struct HostPool *host_pool, json_object *host_pool_endp
     }
 }
 
-struct HostPoolEndpoint *host_pool_get_endpoint(struct HostPool *host_pool, 
-    enum HostPoolEndpointSelectionMode mode, int64_t state)
+struct HostPoolEndpoint *host_pool_get_endpoint(struct HostPool *host_pool,
+        enum HostPoolEndpointSelectionMode mode, int64_t state)
 {
     struct HostPoolEndpoint *endpoint;
     int c;
@@ -117,8 +117,8 @@ struct HostPoolEndpoint *host_pool_get_endpoint(struct HostPool *host_pool,
             return endpoint;
         }
         
-        if ((host_pool->retry_failed_hosts == -1) || 
-            (endpoint->retry_count <= host_pool->retry_failed_hosts)) {
+        if ((host_pool->retry_failed_hosts == -1) ||
+                (endpoint->retry_count <= host_pool->retry_failed_hosts)) {
             time(&now);
             if (endpoint->next_retry < now) {
                 endpoint->retry_count++;
@@ -140,8 +140,8 @@ struct HostPoolEndpoint *host_pool_get_endpoint(struct HostPool *host_pool,
         //
         // this ensures we always try each endpoint in the host pool
         //
-        // however, if we were asked to find a random endpoint, randomize once 
-        // more so that the endpoint following the failed endpoint won't get a 
+        // however, if we were asked to find a random endpoint, randomize once
+        // more so that the endpoint following the failed endpoint won't get a
         // disproportionate number of additional requests
         if (mode == HOST_POOL_RANDOM) {
             host_pool_next_endpoint(host_pool, mode, state);
@@ -157,8 +157,8 @@ struct HostPoolEndpoint *host_pool_get_endpoint(struct HostPool *host_pool,
     return NULL;
 }
 
-struct HostPoolEndpoint *host_pool_next_endpoint(struct HostPool *host_pool, 
-    enum HostPoolEndpointSelectionMode mode, int64_t state)
+struct HostPoolEndpoint *host_pool_next_endpoint(struct HostPool *host_pool,
+        enum HostPoolEndpointSelectionMode mode, int64_t state)
 {
     int index;
     
@@ -171,17 +171,17 @@ struct HostPoolEndpoint *host_pool_next_endpoint(struct HostPool *host_pool,
             break;
         case HOST_POOL_ROUND_ROBIN:
             // round-robin through the endpoints for each request
-            host_pool->current_endpoint = host_pool->current_endpoint ? 
-                (host_pool->current_endpoint->hh.next ? host_pool->current_endpoint->hh.next : 
-                    host_pool->endpoints) : host_pool->endpoints;
+            host_pool->current_endpoint = host_pool->current_endpoint ?
+                                          (host_pool->current_endpoint->hh.next ? host_pool->current_endpoint->hh.next :
+                                           host_pool->endpoints) : host_pool->endpoints;
             break;
         case HOST_POOL_SINGLE:
             // choose the same endpoint for all requests for this message
             if (state != host_pool->checkpoint) {
                 host_pool->checkpoint = state;
-                host_pool->current_endpoint = host_pool->current_endpoint ? 
-                    (host_pool->current_endpoint->hh.next ? host_pool->current_endpoint->hh.next : 
-                        host_pool->endpoints) : host_pool->endpoints;
+                host_pool->current_endpoint = host_pool->current_endpoint ?
+                                              (host_pool->current_endpoint->hh.next ? host_pool->current_endpoint->hh.next :
+                                               host_pool->endpoints) : host_pool->endpoints;
             }
             break;
     }
@@ -198,9 +198,9 @@ void host_pool_mark_success(struct HostPool *host_pool, int id)
     HASH_FIND_INT(host_pool->endpoints, &id, endpoint);
     assert(endpoint != NULL);
     
-    _DEBUG("HOST_POOL: marking endpoint #%d (%s:%d%s) as SUCCESS\n", 
-        endpoint->id, endpoint->address, endpoint->port, endpoint->path);
-    
+    _DEBUG("HOST_POOL: marking endpoint #%d (%s:%d%s) as SUCCESS\n",
+           endpoint->id, endpoint->address, endpoint->port, endpoint->path);
+           
     endpoint->alive = 1;
 }
 
@@ -212,9 +212,9 @@ void host_pool_mark_failed(struct HostPool *host_pool, int id)
     HASH_FIND_INT(host_pool->endpoints, &id, endpoint);
     assert(endpoint != NULL);
     
-    _DEBUG("HOST_POOL: marking endpoint #%d (%s:%d%s) as FAILED\n", 
-        endpoint->id, endpoint->address, endpoint->port, endpoint->path);
-    
+    _DEBUG("HOST_POOL: marking endpoint #%d (%s:%d%s) as FAILED\n",
+           endpoint->id, endpoint->address, endpoint->port, endpoint->path);
+           
     if (endpoint->alive) {
         endpoint->alive = 0;
         endpoint->retry_count = 0;

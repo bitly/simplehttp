@@ -379,7 +379,7 @@ int main(int argc, char **argv)
     option_define_bool("memory_lock", OPT_OPTIONAL, 0, NULL, NULL, "lock data file pages into memory");
     option_define_char("field_separator", OPT_OPTIONAL, '\0', &deliminator, NULL, "field separator (eg: comma, tab, pipe). default: TAB");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
-
+    
     if (!option_parse_command_line(argc, argv)) {
         return 1;
     }

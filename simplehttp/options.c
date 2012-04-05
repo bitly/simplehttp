@@ -256,7 +256,8 @@ char option_get_char(const char *option_name)
     return option->default_char;
 }
 
-struct Option *new_option(const char *option_name, int required, const char *help) {
+struct Option *new_option(const char *option_name, int required, const char *help)
+{
     struct Option *option;
     char *tmp_option_name = strdup(option_name);
     if (format_option_name(tmp_option_name)) {

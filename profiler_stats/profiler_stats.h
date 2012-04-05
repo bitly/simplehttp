@@ -9,17 +9,17 @@
 
 #if _POSIX_TIMERS > 0
 
-    typedef struct timespec profiler_ts;
-    
-    inline void profiler_ts_get(struct timespec *ts);
-    inline unsigned int profiler_ts_diff(struct timespec start, struct timespec end);
+typedef struct timespec profiler_ts;
+
+inline void profiler_ts_get(struct timespec *ts);
+inline unsigned int profiler_ts_diff(struct timespec start, struct timespec end);
 
 #else
 
-    typedef struct timeval profiler_ts;
-    
-    inline void profiler_ts_get(struct timeval *ts);
-    inline unsigned int profiler_ts_diff(struct timeval start, struct timeval end);
+typedef struct timeval profiler_ts;
+
+inline void profiler_ts_get(struct timeval *ts);
+inline unsigned int profiler_ts_diff(struct timeval start, struct timeval end);
 
 #endif
 

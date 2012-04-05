@@ -196,13 +196,11 @@ void pub_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     int message_offset = 0;
     int num_messages = 0;
     char *current_message;
-
+    
     evhttp_parse_query(req->uri, &args);
-
-    for (j=0; j<=EVBUFFER_LENGTH(req->input_buffer); j++)
-    {
-        if (j == EVBUFFER_LENGTH(req->input_buffer) || *(EVBUFFER_DATA(req->input_buffer) + j) ==  '\n')
-        {
+    
+    for (j = 0; j <= EVBUFFER_LENGTH(req->input_buffer); j++) {
+        if (j == EVBUFFER_LENGTH(req->input_buffer) || *(EVBUFFER_DATA(req->input_buffer) + j) ==  '\n') {
             message_length = j - message_offset ;
             current_message = EVBUFFER_DATA(req->input_buffer) + message_offset;
             
