@@ -178,10 +178,21 @@ int option_parse_command_line(int argc, char **argv)
     
     // check for not found entries
     HASH_ITER(hh, option_list, option, tmp_option) {
-        if (option->required == OPT_REQUIRED && option->found == 0) {
-            fprintf(stderr, "ERROR: required option --%s not present\n", option->option_name);
-            fprintf(stderr, "       for a complete list of options use --help\n");
-            return 0;
+        if (option->found == 0) {
+            if (option->required == OPT_REQUIRED) {
+                fprintf(stderr, "ERROR: required option --%s not present\n", option->option_name);
+                fprintf(stderr, "       for a complete list of options use --help\n");
+                return 0;
+            }
+            if (option->dest_int) {
+                *(option->dest_int) = option->default_int;
+            } else if (option->dest_str) {
+                if (option->default_str) {
+                    *(option->dest_str) = strdup(option->default_str);
+                }
+            } else if (option->dest_char) {
+                *(option->dest_char) = option->default_char;
+            }
         }
     }
     return 1;

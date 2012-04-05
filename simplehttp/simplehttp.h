@@ -6,7 +6,7 @@
 #include <event.h>
 #include <evhttp.h>
 
-#define SIMPLEHTTP_VERSION "0.1.2"
+#define SIMPLEHTTP_VERSION "0.1.3"
 #ifndef DUPE_N_TERMINATE
 #define DUPE_N_TERMINATE(buf, len, tmp) \
             tmp = malloc((len) + 1); \
