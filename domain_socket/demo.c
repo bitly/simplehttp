@@ -59,9 +59,9 @@ int main(int argc, char **argv)
 {
     event_init();
     
-    if (!(uds = new_domain_socket("/tmp/domain_socket_test", 
-            S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH, 
-            uds_on_read, uds_on_write, uds_on_error, 64))) {
+    if (!(uds = new_domain_socket("/tmp/domain_socket_test",
+                                  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH,
+                                  uds_on_read, uds_on_write, uds_on_error, 64))) {
         fprintf(stdout, "ERROR: new_domain_socket() failed\n");
         exit(1);
     }

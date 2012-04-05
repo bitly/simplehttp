@@ -102,7 +102,8 @@ void stats(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
-struct queue_entry *get_queue_entry() {
+struct queue_entry *get_queue_entry()
+{
     struct queue_entry *entry;
     entry = TAILQ_FIRST(&queues);
     if (entry != NULL) {
@@ -174,7 +175,7 @@ void mget(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
 }
 
-void put_queue_entry(const char *data, size_t record_size) 
+void put_queue_entry(const char *data, size_t record_size)
 {
     struct queue_entry *entry;
     
@@ -193,8 +194,8 @@ void put_queue_entry(const char *data, size_t record_size)
         if (depth > depth_high_water) {
             depth_high_water = depth;
         }
-        while ((max_depth > 0 && depth > max_depth) 
-               || (max_bytes > 0 && n_bytes > max_bytes)) {
+        while ((max_depth > 0 && depth > max_depth)
+                || (max_bytes > 0 && n_bytes > max_bytes)) {
             overflow_one();
         }
     }
@@ -209,7 +210,7 @@ void put(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     n_puts++;
     
     // try to get the data from get first, then from post
-    evhttp_parse_query(req->uri, &args);    
+    evhttp_parse_query(req->uri, &args);
     if ((data = evhttp_find_header(&args, "data")) != NULL) {
         data_size = strlen(data);
     } else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
@@ -241,11 +242,10 @@ void mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     size_t record_size = 0;
     
     // try to get the data from get first, then from post
-    evhttp_parse_query(req->uri, &args);    
+    evhttp_parse_query(req->uri, &args);
     if ((data = evhttp_find_header(&args, "data")) != NULL) {
         data_size = strlen(data);
-    }
-    else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
+    } else if ((data_size = EVBUFFER_LENGTH(req->input_buffer)) > 0) {
         data = (char *)EVBUFFER_DATA(req->input_buffer);
     }
     
@@ -255,32 +255,32 @@ void mput(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         sep = evhttp_find_header(&args, "separator");
         if (sep == NULL) {
             sep = mput_item_sep;
-        }    
+        }
         sep_size = strlen(sep);
         record_start = data;
         data_left = data_size;
         
-        // loop through to find the next record but only up to the size of the 
+        // loop through to find the next record but only up to the size of the
         // post, the request input buffer can hold much more data, we only want
         // the post part of it
         while ((sep_start = simplehttp_strnstr(record_start, sep, data_left)) != NULL) {
             // put each record on the queue
             record_size = sep_start - record_start;
-            if (record_size > 0) {        
+            if (record_size > 0) {
                 if (record_size > data_left) {
-                  record_size = data_left;
-                }            
+                    record_size = data_left;
+                }
                 put_queue_entry(record_start, record_size);
                 record_start = sep_start + sep_size;
                 data_left -= (record_size + sep_size);
-                n_puts++;                          
+                n_puts++;
             }
         }
         
         // any ending record
         if (data_left > 0) {
             put_queue_entry(record_start, data_left);
-            n_puts++;                          
+            n_puts++;
         }
         
         evhttp_send_reply(req, HTTP_OK, "OK", evb);
@@ -365,7 +365,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/exit*", exit_cb, NULL);
     simplehttp_main();
     free_options();
-
+    
     if (overflow_log_fp) {
         while (depth) {
             overflow_one();

@@ -10,7 +10,8 @@
 
 extern int simplehttp_logging;
 
-struct simplehttp_request *simplehttp_request_new(struct evhttp_request *req, uint64_t id) {
+struct simplehttp_request *simplehttp_request_new(struct evhttp_request *req, uint64_t id)
+{
     struct simplehttp_request *s_req;
     simplehttp_ts start_ts;
     
@@ -28,7 +29,8 @@ struct simplehttp_request *simplehttp_request_new(struct evhttp_request *req, ui
     return s_req;
 }
 
-struct simplehttp_request *simplehttp_request_get(struct evhttp_request *req) {
+struct simplehttp_request *simplehttp_request_get(struct evhttp_request *req)
+{
     struct simplehttp_request *entry;
     
     TAILQ_FOREACH(entry, &simplehttp_reqs, entries) {
@@ -49,7 +51,8 @@ uint64_t simplehttp_request_id(struct evhttp_request *req)
     return entry ? entry->id : 0;
 }
 
-struct simplehttp_request *simplehttp_async_check(struct evhttp_request *req) {
+struct simplehttp_request *simplehttp_async_check(struct evhttp_request *req)
+{
     struct simplehttp_request *entry;
     
     entry = simplehttp_request_get(req);

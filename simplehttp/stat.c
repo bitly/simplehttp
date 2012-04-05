@@ -40,7 +40,8 @@ void simplehttp_stats_destruct()
     free(stats_counts);
 }
 
-struct simplehttp_stats *simplehttp_stats_new() {
+struct simplehttp_stats *simplehttp_stats_new()
+{
     struct simplehttp_stats *st;
     
     st = malloc(sizeof(struct simplehttp_stats));
