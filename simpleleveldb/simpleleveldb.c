@@ -11,7 +11,11 @@
 #include <leveldb/c.h>
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.3"
+#define VERSION         "0.4"
+
+#define DUMP_CSV_ITERS_CHECK       10
+#define DUMP_CSV_MSECS_WORK        10
+#define DUMP_CSV_MSECS_SLEEP      100
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
@@ -595,10 +599,11 @@ void do_dump_csv(int fd, short what, void *ctx)
     struct evhttp_request *req = (struct evhttp_request *)ctx;
     struct evbuffer *evb;
     int c = 0, set_timer = 0, send_reply = 0;
-    int limit = 500; // dump 500 at a time
     const char *key, *value;
     size_t key_len, value_len;
+    struct timeval time_start, time_now;
     
+    gettimeofday(&time_start, NULL);
     evb = req->output_buffer;
     
     while (leveldb_iter_valid(dump_iter)) {
@@ -619,9 +624,16 @@ void do_dump_csv(int fd, short what, void *ctx)
         
         send_reply = 1;
         c++;
-        if (c == limit) {
-            set_timer = 1;
-            break;
+        if (c == DUMP_CSV_ITERS_CHECK) {
+            int64_t usecs;
+            gettimeofday(&time_now, NULL);
+            usecs = ((int64_t)time_now.tv_sec    * 1000000 + time_now.tv_usec  )
+                  - ((int64_t)time_start.tv_sec  * 1000000 + time_start.tv_usec);
+            if (usecs > DUMP_CSV_MSECS_WORK * 1000) {
+                set_timer = 1;
+                break;
+            }
+            c = 0;
         }
     }
     
@@ -645,7 +657,7 @@ void do_dump_csv(int fd, short what, void *ctx)
 
 void set_dump_csv_timer(struct evhttp_request *req)
 {
-    struct timeval tv = {0, 100000}; // loop every 0.1 seconds
+    struct timeval tv = {0, DUMP_CSV_MSECS_SLEEP * 1000};
     
     evtimer_del(&dump_ev);
     evtimer_set(&dump_ev, do_dump_csv, req);
