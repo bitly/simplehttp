@@ -10,12 +10,16 @@
 #include <json/json.h>
 #include <leveldb/c.h>
 
+#include <sys/socket.h>
+#include "http-internal.h"
+
 #define NAME            "simpleleveldb"
 #define VERSION         "0.4"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
 #define DUMP_CSV_MSECS_SLEEP      100
+#define DUMP_CSV_MAX_BUFFER        (8*1024*1024)
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
@@ -605,9 +609,19 @@ void do_dump_csv(int fd, short what, void *ctx)
     const char *key, *value;
     size_t key_len, value_len;
     struct timeval time_start, time_now;
+    struct evhttp_connection *evcon;
+    unsigned long output_buffer_length;
     
     gettimeofday(&time_start, NULL);
     evb = req->output_buffer;
+    
+    // if backed up, continue later
+    evcon = (struct evhttp_connection *)req->evcon;
+    output_buffer_length = evcon->output_buffer ? (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer) : 0;
+    if (output_buffer_length > DUMP_CSV_MAX_BUFFER) {
+        set_dump_csv_timer(req);
+        return;
+    }
     
     while (leveldb_iter_valid(dump_iter)) {
         key = leveldb_iter_key(dump_iter, &key_len);
