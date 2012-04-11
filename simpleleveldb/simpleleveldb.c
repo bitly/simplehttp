@@ -32,6 +32,7 @@ void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void do_dump_csv(int fd, short what, void *ctx);
 void set_dump_csv_timer(struct evhttp_request *req);
+void cleanup_dump_csv_cb(struct evhttp_connection *evcon, void *arg);
 
 leveldb_t *ldb;
 leveldb_options_t *ldb_options;
@@ -590,6 +591,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
     json_object_put(jsobj);
     evhttp_send_reply_start(req, 200, "OK");
+    evhttp_connection_set_closecb(req->evcon, cleanup_dump_csv_cb, NULL);
     
     /* run the first dump loop */
     do_dump_csv(0, 0, req);
@@ -648,11 +650,7 @@ void do_dump_csv(int fd, short what, void *ctx)
         set_dump_csv_timer(req);
     } else {
         evhttp_send_reply_end(req);
-        is_currently_dumping = 0;
-        leveldb_iter_destroy(dump_iter);
-        leveldb_readoptions_destroy(dump_read_options);
-        leveldb_release_snapshot(ldb, dump_snapshot);
-        free(dump_fwmatch_key);
+        // cleanup_cump_csv_cb() automatically called
     }
 }
 
@@ -665,6 +663,15 @@ void set_dump_csv_timer(struct evhttp_request *req)
     evtimer_add(&dump_ev, &tv);
 }
 
+void cleanup_dump_csv_cb(struct evhttp_connection *evcon, void *arg)
+{
+    evtimer_del(&dump_ev);
+    leveldb_iter_destroy(dump_iter);
+    leveldb_readoptions_destroy(dump_read_options);
+    leveldb_release_snapshot(ldb, dump_snapshot);
+    free(dump_fwmatch_key);
+    is_currently_dumping = 0;
+}
 
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
