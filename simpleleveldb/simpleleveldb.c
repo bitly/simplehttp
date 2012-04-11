@@ -630,8 +630,8 @@ void do_dump_csv(int fd, short what, void *ctx)
         if (c == DUMP_CSV_ITERS_CHECK) {
             int64_t usecs;
             gettimeofday(&time_now, NULL);
-            usecs = ((int64_t)time_now.tv_sec    * 1000000 + time_now.tv_usec  )
-                  - ((int64_t)time_start.tv_sec  * 1000000 + time_start.tv_usec);
+            usecs = 0 + ((int64_t)time_now  .tv_sec * 1000000 + time_now  .tv_usec)
+                    -   ((int64_t)time_start.tv_sec * 1000000 + time_start.tv_usec);
             if (usecs > DUMP_CSV_MSECS_WORK * 1000) {
                 set_timer = 1;
                 break;
