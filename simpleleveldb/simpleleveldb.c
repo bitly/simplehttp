@@ -573,6 +573,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         free(dump_fwmatch_key);
         return;
     }
+    is_currently_dumping = 1;
     
     /* init the state for dumping data */
     dump_read_options = leveldb_readoptions_create();
