@@ -10,12 +10,16 @@
 #include <json/json.h>
 #include <leveldb/c.h>
 
+#include <sys/socket.h>
+#include "http-internal.h"
+
 #define NAME            "simpleleveldb"
-#define VERSION         "0.4"
+#define VERSION         "0.5"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
 #define DUMP_CSV_MSECS_SLEEP      100
+#define DUMP_CSV_MAX_BUFFER        (8*1024*1024)
 
 void finalize_request(int response_code, char *error, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open();
@@ -32,6 +36,7 @@ void list_remove_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void do_dump_csv(int fd, short what, void *ctx);
 void set_dump_csv_timer(struct evhttp_request *req);
+void cleanup_dump_csv_cb(struct evhttp_connection *evcon, void *arg);
 
 leveldb_t *ldb;
 leveldb_options_t *ldb_options;
@@ -573,6 +578,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         free(dump_fwmatch_key);
         return;
     }
+    is_currently_dumping = 1;
     
     /* init the state for dumping data */
     dump_read_options = leveldb_readoptions_create();
@@ -589,6 +595,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     evhttp_clear_headers(&args);
     json_object_put(jsobj);
     evhttp_send_reply_start(req, 200, "OK");
+    evhttp_connection_set_closecb(req->evcon, cleanup_dump_csv_cb, NULL);
     
     /* run the first dump loop */
     do_dump_csv(0, 0, req);
@@ -602,9 +609,19 @@ void do_dump_csv(int fd, short what, void *ctx)
     const char *key, *value;
     size_t key_len, value_len;
     struct timeval time_start, time_now;
+    struct evhttp_connection *evcon;
+    unsigned long output_buffer_length;
     
     gettimeofday(&time_start, NULL);
     evb = req->output_buffer;
+    
+    // if backed up, continue later
+    evcon = (struct evhttp_connection *)req->evcon;
+    output_buffer_length = evcon->output_buffer ? (unsigned long)EVBUFFER_LENGTH(evcon->output_buffer) : 0;
+    if (output_buffer_length > DUMP_CSV_MAX_BUFFER) {
+        set_dump_csv_timer(req);
+        return;
+    }
     
     while (leveldb_iter_valid(dump_iter)) {
         key = leveldb_iter_key(dump_iter, &key_len);
@@ -627,8 +644,8 @@ void do_dump_csv(int fd, short what, void *ctx)
         if (c == DUMP_CSV_ITERS_CHECK) {
             int64_t usecs;
             gettimeofday(&time_now, NULL);
-            usecs = ((int64_t)time_now.tv_sec    * 1000000 + time_now.tv_usec  )
-                  - ((int64_t)time_start.tv_sec  * 1000000 + time_start.tv_usec);
+            usecs = 0 + ((int64_t)time_now  .tv_sec * 1000000 + time_now  .tv_usec)
+                    -   ((int64_t)time_start.tv_sec * 1000000 + time_start.tv_usec);
             if (usecs > DUMP_CSV_MSECS_WORK * 1000) {
                 set_timer = 1;
                 break;
@@ -647,11 +664,7 @@ void do_dump_csv(int fd, short what, void *ctx)
         set_dump_csv_timer(req);
     } else {
         evhttp_send_reply_end(req);
-        is_currently_dumping = 0;
-        leveldb_iter_destroy(dump_iter);
-        leveldb_readoptions_destroy(dump_read_options);
-        leveldb_release_snapshot(ldb, dump_snapshot);
-        free(dump_fwmatch_key);
+        // cleanup_cump_csv_cb() automatically called
     }
 }
 
@@ -664,6 +677,15 @@ void set_dump_csv_timer(struct evhttp_request *req)
     evtimer_add(&dump_ev, &tv);
 }
 
+void cleanup_dump_csv_cb(struct evhttp_connection *evcon, void *arg)
+{
+    evtimer_del(&dump_ev);
+    leveldb_iter_destroy(dump_iter);
+    leveldb_readoptions_destroy(dump_read_options);
+    leveldb_release_snapshot(ldb, dump_snapshot);
+    free(dump_fwmatch_key);
+    is_currently_dumping = 0;
+}
 
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
