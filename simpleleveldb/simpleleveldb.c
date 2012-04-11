@@ -14,7 +14,7 @@
 #include "http-internal.h"
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.4"
+#define VERSION         "0.5"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
