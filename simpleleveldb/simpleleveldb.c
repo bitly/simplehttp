@@ -14,7 +14,7 @@
 #include "http-internal.h"
 
 #define NAME            "simpleleveldb"
-#define VERSION         "0.5"
+#define VERSION         "0.6"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
@@ -664,7 +664,9 @@ void do_dump_csv(int fd, short what, void *ctx)
         set_dump_csv_timer(req);
     } else {
         evhttp_send_reply_end(req);
-        // cleanup_cump_csv_cb() automatically called
+        // we're finished this request, but connection might be reused
+        evhttp_connection_set_closecb(req->evcon, NULL, NULL);
+        cleanup_dump_csv_cb(NULL, NULL);
     }
 }
 
