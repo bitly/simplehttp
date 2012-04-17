@@ -13,7 +13,7 @@
 #include <simplehttp/simplehttp.h>
 
 #define NAME        "sortdb"
-#define VERSION     "1.5"
+#define VERSION     "1.5.1"
 #define DEBUG       1
 
 void stats_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
@@ -377,7 +377,7 @@ int main(int argc, char **argv)
     define_simplehttp_options();
     option_define_str("db_file", OPT_REQUIRED, NULL, &db_filename, NULL, NULL);
     option_define_bool("memory_lock", OPT_OPTIONAL, 0, NULL, NULL, "lock data file pages into memory");
-    option_define_char("field_separator", OPT_OPTIONAL, '\0', &deliminator, NULL, "field separator (eg: comma, tab, pipe). default: TAB");
+    option_define_char("field_separator", OPT_OPTIONAL, '\t', &deliminator, NULL, "field separator (eg: comma, tab, pipe). default: TAB");
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     
     if (!option_parse_command_line(argc, argv)) {
