@@ -58,11 +58,23 @@ API endpoints:
 
     parameters: `key` (multiple), `format`
 
+ * /fwmatch
+
+    parameters: `key`, `limit`
+
+ * /range_match
+
+    parameters: `start`, `end`, `limit`
+
  * /put
 
     parameters: `key`, `value`, `format`
     
     Note: `value` can also be specified as the raw POST body content
+
+ * /mput
+    
+    takes CSV values in the body of the request.
 
  * /del
 
