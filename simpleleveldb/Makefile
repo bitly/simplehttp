@@ -11,16 +11,19 @@ AR = ar
 AR_FLAGS = rc
 RANLIB = ranlib
 
-all: simpleleveldb leveldb_to_csv csv_to_leveldb
+TARGETS = simpleleveldb leveldb_to_csv csv_to_leveldb
 
-leveldb_to_csv: leveldb_to_csv.c
-	$(CC) $(CFLAGS) -o $@ leveldb_to_csv.c $(LIBS)
+SOURCES_simpleleveldb = simpleleveldb.c str_list_set.c
+SOURCES_leveldb_to_csv = leveldb_to_csv.c
+SOURCES_csv_to_leveldb = csv_to_leveldb.c
 
-csv_to_leveldb: csv_to_leveldb.c
-	$(CC) $(CFLAGS) -o $@ csv_to_leveldb.c $(LIBS)
+all: $(TARGETS)
 
-simpleleveldb: simpleleveldb.c
-	$(CC) $(CFLAGS) -o $@ simpleleveldb.c $(LIBS)
+-include $(TARGETS:%=%.deps)
+
+$(TARGETS): %: %.c
+	$(CC) $(CFLAGS) -MM -MT $@ -MF $@.deps $(SOURCES_$@)
+	$(CC) $(CFLAGS) -o $@ $(SOURCES_$@) $(LIBS)
 
 install:
 	/usr/bin/install -d $(TARGET)/bin/
@@ -29,4 +32,4 @@ install:
 	/usr/bin/install csv_to_leveldb $(TARGET)/bin/
 
 clean:
-	rm -rf *.a *.o simpleleveldb leveldb_to_csv csv_to_leveldb *.dSYM
+	rm -rf *.a *.o *.deps *.dSYM $(TARGETS)

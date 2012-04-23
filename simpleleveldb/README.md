@@ -51,39 +51,95 @@ OPTIONS
 API endpoints:
 
  * /get
- 
-    parameters: `key`, `format`
-    
+
+    parameters: `key`
+
  * /mget
 
-    parameters: `key` (multiple), `format`
+    parameters: `key` (multiple)
 
  * /fwmatch
 
-    parameters: `key`, `limit`
+    parameters: `key`, `limit` (default 500)
 
  * /range_match
 
-    parameters: `start`, `end`, `limit`
+    parameters: `start`, `end`, `limit` (default 500)
 
  * /put
 
-    parameters: `key`, `value`, `format`
-    
+    parameters: `key`, `value`
+
     Note: `value` can also be specified as the raw POST body content
 
  * /mput
-    
-    takes CSV values in the body of the request.
+
+    Note: takes separator-separated key/value pairs in separate lines in the POST body
+
+ * /list_append
+
+    parameters: `key`, `value` (multiple)
+
+ * /list_prepend
+
+    parameters: `key`, `value` (multiple)
+
+ * /list_remove
+
+    parameters: `key`, `value` (multiple)
+
+ * /list_pop
+
+    parameters: `key`, `position` (default 0), `count` (default 1)
+
+    Note: a negative position does a reverse count from the end of the list
+
+ * /set_add
+
+    parameters: `key`, `value` (multiple)
+
+ * /set_remove
+
+    parameters: `key`, `value` (multiple)
+
+ * /set_pop
+
+    parameters: `key`, `count` (default 1)
+
+ * /dump_csv
+
+    parameters: `key` (optional)
+
+    Note: dumps the entire database starting at `key` or else at the beginning, in txt format csv
 
  * /del
 
-    parameters: `key`, `format`
+    parameters: `key`
 
  * /stats
- 
- * /exit (cause the current process to exit)
 
+ * /exit
+
+    Note: causes the process to exit
+
+All endpoints take a `format` parameter which affects whether error conditions
+are represented by the HTTP response code (format=txt) or by the "status_code"
+member of the json result (format=json) (in which case the HTTP response code
+is always 200 if the server isn't broken). `format` also affects the output
+data for all endpoints except /put, /mput, /exit, /del, and /dump_csv.
+
+Output data in json format is under the "data" member of the root json object,
+sometimes as a string (/get), sometimes as an array (/mget), sometimes as an
+object with some metadata (/list_remove).
+
+Most endpoints take a `separator` parameter which defaults to "," (but can be
+set to any single character), which affects txt format output data. It also
+affects the deserialization and serialization of lists and sets stored in the
+db, and the input parsing of /mput.
+
+All list and set endpoints take a `return_data` parameter; set it to 1 to additionally
+return the new value of the list or set. However, this doesn't work for list_pop
+or set_pop endpoints in txt format.
 
 Utilities
 ---------

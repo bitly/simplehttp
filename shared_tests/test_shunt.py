@@ -34,26 +34,26 @@ def http_fetch(endpoint, params=None, response_code=200, body=None):
     assert res.code == response_code
     return res.body
 
-
-def valgrind_cmd(cmd, *options):
+def valgrind_cmd(test_output_dir, *options):
     assert isinstance(options, (list, tuple))
-    assert cmd.startswith("/"), "valgrind_cmd must take a fully qualified executible path not %s" % cmd
-    test_output_dir = os.path.join(os.path.dirname(cmd), "test_output")
-    return [
+    cmdlist = list(options)
+    if '--no-valgrind' not in sys.argv:
+        cmdlist = [
         'valgrind',
         '-v',
         '--tool=memcheck',
         '--trace-children=yes',
-        # '--demangle=yes',
         '--log-file=%s/vg.out' % test_output_dir,
         '--leak-check=full',
-        '--show-reachable=yes',
+       #'--show-reachable=yes',
         '--run-libc-freeres=yes',
-        '%s' % cmd,
-    ] + list(options)
-
+        ] + cmdlist
+    return cmdlist
 
 def check_valgrind_output(filename):
+    if '--no-valgrind' in sys.argv:
+        return
+    
     assert os.path.exists(filename)
     time.sleep(.15)
     vg_output = open(filename, 'r').readlines()
@@ -75,30 +75,26 @@ def check_valgrind_output(filename):
     assert lost
     assert lost[0] == "possibly lost: 0 bytes in 0 blocks"
 
-
 class SubprocessTest(unittest.TestCase):
     process_options = []
     binary_name = ""
     working_dir = None
-    def setUp(self):
-        """setup method that starts up mongod instances using `self.mongo_options`"""
+    test_output_dir = None
+    
+    @classmethod
+    def setUpClass(self):
+        """setup method that starts up target instances using `self.process_options`"""
         self.temp_dirs = []
         self.processes = []
         assert self.binary_name, "you must override self.binary_name"
         assert self.working_dir, "set workign dir to os.path.dirname(__file__)"
         
-        exe = os.path.join(self.working_dir, self.binary_name)
-        if os.path.exists(exe):
-            logging.info('removing old %s' % exe)
-            os.unlink(exe)
-        
+        # make should update the executable if needed
         logging.info('running make')
-        pipe = subprocess.Popen(['make'])
-        pipe.wait()
+        pipe = subprocess.Popen(['make', '-C', self.working_dir])
+        assert pipe.wait() == 0, "compile failed"
         
-        assert os.path.exists(exe), "compile failed"
-        
-        test_output_dir = os.path.join(self.working_dir, "test_output")
+        test_output_dir = self.test_output_dir
         if os.path.exists(test_output_dir):
             logging.info('removing %s' % test_output_dir)
             pipe = subprocess.Popen(['rm', '-rf', test_output_dir])
@@ -108,16 +104,14 @@ class SubprocessTest(unittest.TestCase):
             os.makedirs(test_output_dir)
         
         for options in self.process_options:
-            
             logging.info(' '.join(options))
-            # self.stdout = open(test_output_dir + '/test.out', 'w')
-            # self.stderr = open(test_output_dir + '/test.err', 'w')
-            pipe = subprocess.Popen(options)#, stdout=self.stdout, stderr=self.stderr)
+            pipe = subprocess.Popen(options)
             self.processes.append(pipe)
             logging.debug('started process %s' % pipe.pid)
         
-        self.wait_for('http://127.0.0.1:8080/', max_time=5)
+        self.wait_for('http://127.0.0.1:8080/', max_time=9)
     
+    @classmethod
     def wait_for(self, url, max_time):
         # check up to 15 times till the endpoint specified is available waiting max_time
         step = max_time / float(15)
@@ -131,6 +125,7 @@ class SubprocessTest(unittest.TestCase):
                 pass
             time.sleep(step)
     
+    @classmethod
     def graceful_shutdown(self):
         try:
             http_fetch('/exit', dict())
@@ -138,8 +133,9 @@ class SubprocessTest(unittest.TestCase):
             # we never get a reply if this works correctly
             time.sleep(1)
     
-    def tearDown(self):
-        """teardown method that cleans up child mongod instances, and removes their temporary data files"""
+    @classmethod
+    def tearDownClass(self):
+        """teardown method that cleans up child target instances, and removes their temporary data files"""
         logging.debug('teardown')
         try:
             self.graceful_shutdown()

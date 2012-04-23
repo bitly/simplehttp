@@ -2,14 +2,14 @@ import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "../shared_tests"))
 
-import logging
 import simplejson as json
 from test_shunt import valgrind_cmd, SubprocessTest, http_fetch, http_fetch_json
 
 class SimplequeueTest(SubprocessTest):
     binary_name = "simplequeue"
-    process_options = [valgrind_cmd(os.path.abspath('simplequeue'), '--enable-logging')]
     working_dir = os.path.dirname(__file__)
+    test_output_dir = os.path.join(working_dir, "test_output")
+    process_options = [valgrind_cmd(test_output_dir, os.path.join(working_dir, binary_name), '--enable-logging')]
    
     def test_basic(self):
         # put/get in order

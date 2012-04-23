@@ -7,13 +7,6 @@
 #include <evhttp.h>
 
 #define SIMPLEHTTP_VERSION "0.1.3"
-#ifndef DUPE_N_TERMINATE
-#define DUPE_N_TERMINATE(buf, len, tmp) \
-            tmp = malloc((len) + 1); \
-            memcpy(tmp, buf, (len)); \
-            tmp[(len)]  = '\0'; \
-            buf = tmp;
-#endif
 
 #if _POSIX_TIMERS > 0
 
