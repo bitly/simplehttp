@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // for strndup()
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -58,7 +59,6 @@ uint64_t ninety_five_percent(int64_t *int_array, int length)
 int simplehttp_parse_url(char *endpoint, size_t endpoint_len, char **address, int *port, char **path)
 {
     // parse out address, port, path
-    char *tmp = NULL;
     char *tmp_port = NULL;
     char *tmp_pointer;
     size_t address_len;
@@ -98,8 +98,8 @@ int simplehttp_parse_url(char *endpoint, size_t endpoint_len, char **address, in
     }
     
     path_len = (endpoint + endpoint_len) - *path;
-    DUPE_N_TERMINATE(*address, address_len, tmp);
-    DUPE_N_TERMINATE(*path, path_len, tmp);
+    *address = strndup(*address, address_len);
+    *path = strndup(*path, path_len);
     
     return 1;
 }

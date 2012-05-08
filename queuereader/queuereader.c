@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // for strndup()
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +29,6 @@ void queuereader_increment_backoff();
 void queuereader_decrement_backoff();
 
 static char *message = NULL;
-static size_t message_len;
 static int backoff_counter = 0;
 static struct GlobalData *data = NULL;
 static struct event ev;
@@ -137,7 +137,6 @@ void queuereader_source_cb(struct evhttp_request *req, void *cbarg)
     struct GlobalData *client_data = (struct GlobalData *)cbarg;
     char *line;
     size_t line_len;
-    char *tmp = NULL;
     struct evbuffer *evb;
     int ret = QR_EMPTY;
     
@@ -150,9 +149,7 @@ void queuereader_source_cb(struct evhttp_request *req, void *cbarg)
     line = (char *)EVBUFFER_DATA(evb);
     line_len = EVBUFFER_LENGTH(evb);
     if (line_len) {
-        message = line;
-        message_len = line_len;
-        DUPE_N_TERMINATE(message, message_len, tmp);
+        message = strndup(line, line_len);
         ret = (*client_data->message_cb)(message, client_data->cbarg);
     }
     
