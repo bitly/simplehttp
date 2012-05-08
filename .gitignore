@@ -2,6 +2,7 @@
 *.a
 *.dSYM
 *.pyc
+*.deps
 build
 dist
 sortdb/sortdb
