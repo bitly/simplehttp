@@ -18,10 +18,11 @@
 
 // defined values
 #define NAME            "simpleleveldb"
-#define VERSION         "0.8"
+#define VERSION         "0.9"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
+#define DUMP_CSV_RECORDS_WORK     500
 #define DUMP_CSV_MSECS_SLEEP      100
 #define DUMP_CSV_MAX_BUFFER        (8*1024*1024)
 
@@ -1309,7 +1310,7 @@ void do_dump_csv(int fd, short what, void *ctx)
 {
     struct evhttp_request *req = (struct evhttp_request *)ctx;
     struct evbuffer *evb;
-    int c = 0, set_timer = 0, send_reply = 0;
+    int iter = 0, total = 0, set_timer = 0, send_reply = 0;
     const char *key, *value;
     size_t key_len, value_len;
     struct timeval time_start, time_now;
@@ -1344,8 +1345,9 @@ void do_dump_csv(int fd, short what, void *ctx)
         leveldb_iter_next(dump_iter);
         
         send_reply = 1;
-        c++;
-        if (c == DUMP_CSV_ITERS_CHECK) {
+        iter++;
+        total++;
+        if (iter >= DUMP_CSV_ITERS_CHECK) {
             int64_t usecs;
             gettimeofday(&time_now, NULL);
             usecs = 0 + ((int64_t)time_now  .tv_sec * 1000000 + time_now  .tv_usec)
@@ -1354,7 +1356,11 @@ void do_dump_csv(int fd, short what, void *ctx)
                 set_timer = 1;
                 break;
             }
-            c = 0;
+            iter = 0;
+        }
+        if (total >= DUMP_CSV_RECORDS_WORK) {
+            set_timer = 1;
+            break;
         }
     }
     
