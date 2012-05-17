@@ -35,6 +35,6 @@ void queuereader_init(struct json_object *tasks,
 void queuereader_finish_message(int return_code);
 void queuereader_set_sleeptime_queue_empty_ms(int milliseconds);
 struct json_object *queuereader_copy_tasks(struct json_object *input_array);
-void queuereader_finish_task(int index);
+void queuereader_finish_task_by_name(const char *finished_task);
 
 #endif
