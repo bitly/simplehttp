@@ -31,7 +31,7 @@ static inline void serialize_list_item(struct evbuffer *output, const char *item
     evbuffer_add_printf(output, "%s", item);
 }
 
-static inline void add_new_set_item(struct SetItem **set, char *value_ptr)
+static inline void add_new_set_item(struct SetItem **set, const char *value_ptr)
 {
     struct SetItem *set_item;
     set_item = calloc(1, sizeof(struct SetItem));

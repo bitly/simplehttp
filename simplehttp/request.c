@@ -114,33 +114,33 @@ void simplehttp_async_finish(struct evhttp_request *req)
 int get_argument_format(struct evkeyvalq *args)
 {
     int format_code = json_format;
-    char *format = (char *)evhttp_find_header(args, "format");
+    const char *format = evhttp_find_header(args, "format");
     if (format && !strncmp(format, "txt", 3)) {
         format_code = txt_format;
     }
     return format_code;
 }
 
-int get_int_argument(struct evkeyvalq *args, char *key, int default_value)
+int get_int_argument(struct evkeyvalq *args, const char *key, int default_value)
 {
-    char *tmp;
+    const char *tmp;
     if (!key) {
         return default_value;
     }
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
+    tmp = evhttp_find_header(args, key);
     if (tmp) {
         return atoi(tmp);
     }
     return default_value;
 }
 
-double get_double_argument(struct evkeyvalq *args, char *key, double default_value)
+double get_double_argument(struct evkeyvalq *args, const char *key, double default_value)
 {
-    char *tmp;
+    const char *tmp;
     if (!key) {
         return default_value;
     }
-    tmp = (char *)evhttp_find_header(args, (const char *)key);
+    tmp = evhttp_find_header(args, key);
     if (tmp) {
         return atof(tmp);
     }

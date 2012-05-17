@@ -49,7 +49,7 @@ static void async_simplehttp_log(struct evhttp_request *req, struct AsyncCallbac
     }
 }
 
-struct evhttp_connection *get_connection(char *address, int port, struct Connection **store_conn)
+struct evhttp_connection *get_connection(const char *address, int port, struct Connection **store_conn)
 {
     struct Connection *conn;
     int i;
@@ -103,15 +103,14 @@ void free_async_callback_group(struct AsyncCallbackGroup *callback_group)
     }
 }
 
-struct AsyncCallback *new_async_request(char *address, int port, char *path,
+struct AsyncCallback *new_async_request(const char *address, int port, const char *path,
                                         void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
     return new_async_request_with_body(EVHTTP_REQ_GET, address, port, path, NULL, NULL, cb, cb_arg);
 }
 
-struct AsyncCallback *new_async_request_with_body(int request_method, char *address, int port, char *path,
-        struct RequestHeader *header_list, char *body,
-        void (*cb)(struct evhttp_request *, void *), void *cb_arg)
+struct AsyncCallback *new_async_request_with_body(int request_method, const char *address, int port, const char *path,
+        struct RequestHeader *header_list, const char *body, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
     static uint64_t counter = 0;
     // create new connection to endpoint
@@ -167,8 +166,8 @@ struct AsyncCallback *new_async_request_with_body(int request_method, char *addr
     return callback;
 }
 
-int new_async_callback(struct AsyncCallbackGroup *callback_group, char *address, int port, char *path,
-                       void (*cb)(struct evhttp_request *, void *), void *cb_arg)
+int new_async_callback(struct AsyncCallbackGroup *callback_group, const char *address, int port,
+                       const char *path, void (*cb)(struct evhttp_request *, void *), void *cb_arg)
 {
     struct AsyncCallback *callback = NULL;
     

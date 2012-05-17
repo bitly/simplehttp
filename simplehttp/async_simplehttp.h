@@ -49,7 +49,7 @@ struct Connection {
 };
 
 void finish_async_request(struct evhttp_request *req, void *cb_arg);
-struct evhttp_connection *get_connection(char *address, int port, struct Connection **store_conn);
+struct evhttp_connection *get_connection(const char *address, int port, struct Connection **store_conn);
 void free_async_callback(struct AsyncCallback *callback);
 
 #endif

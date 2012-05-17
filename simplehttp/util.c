@@ -56,11 +56,10 @@ uint64_t ninety_five_percent(int64_t *int_array, int length)
     return value;
 }
 
-int simplehttp_parse_url(char *endpoint, size_t endpoint_len, char **address, int *port, char **path)
+int simplehttp_parse_url(const char *endpoint, size_t endpoint_len, char **address, int *port, char **path)
 {
     // parse out address, port, path
-    char *tmp_port = NULL;
-    char *tmp_pointer;
+    const char *address_p, *path_p, *tmp_pointer, *tmp_port;
     size_t address_len;
     size_t path_len;
     
@@ -70,36 +69,35 @@ int simplehttp_parse_url(char *endpoint, size_t endpoint_len, char **address, in
     }
     
     // find the first /
-    *address = (char *)strchr(endpoint, '/'); // http:/
-    if (!*address) {
+    address_p = strchr(endpoint, '/'); // http:/
+    if (!address_p) {
         return 0;
     }
     
     // move past the two slashes
-    *address = *address + 2;
+    address_p += 2;
     
     // check for the colon specifying a port
-    tmp_pointer = (char *)strchr(*address, ':');
-    *path = (char *)strchr(*address, '/');
+    tmp_pointer = strchr(address_p, ':');
+    path_p = strchr(address_p, '/');
     
-    if (!*path) {
+    if (!path_p) {
         return 0;
     }
     
     if (tmp_pointer) {
-        address_len = tmp_pointer - *address;
-        tmp_port = *address + address_len + 1;
-        **path = '\0';
+        address_len = tmp_pointer - address_p;
+        tmp_port = address_p + address_len + 1;
+        // atoi() will stop at the first non-digit which will be '/'
         *port = atoi(tmp_port);
-        **path = '/';
     } else {
-        address_len = *path - *address;
+        address_len = path_p - address_p;
         *port = 80;
     }
     
-    path_len = (endpoint + endpoint_len) - *path;
-    *address = strndup(*address, address_len);
-    *path = strndup(*path, path_len);
+    path_len = (endpoint + endpoint_len) - path_p;
+    *address = strndup(address_p, address_len);
+    *path = strndup(path_p, path_len);
     
     return 1;
 }
