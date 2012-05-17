@@ -169,7 +169,7 @@ void simplehttp_free()
     simplehttp_stats_destruct();
 }
 
-void simplehttp_set_cb(char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
+void simplehttp_set_cb(const char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx)
 {
     struct cb_entry *cbPtr;
     

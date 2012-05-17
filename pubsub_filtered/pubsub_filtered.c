@@ -65,7 +65,7 @@ int filter_message(char *subject, pcre *filter, struct json_object *json_in);
 
 int parse_encrypted_fields(char *str);
 int parse_blacklisted_fields(char *str);
-int parse_fields(char *str, char **field_array);
+int parse_fields(const char *str, char **field_array);
 
 int can_kick(struct cli *client);
 int is_slow(struct cli *client);
@@ -158,7 +158,7 @@ int parse_encrypted_fields(char *str)
  * in an char array. Array better have enough slots
  * because I didn't have time to work out the memory allocation.
  */
-int parse_fields(char *str, char **field_array)
+int parse_fields(const char *str, char **field_array)
 {
     int i;
     const char delim[] = ",";

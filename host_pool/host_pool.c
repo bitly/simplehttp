@@ -52,7 +52,7 @@ void free_host_pool(struct HostPool *host_pool)
 }
 
 struct HostPoolEndpoint *new_host_pool_endpoint(struct HostPool *host_pool,
-        char *address, int port, char *path)
+        const char *address, int port, char *path)
 {
     struct HostPoolEndpoint *host_pool_endpoint;
     

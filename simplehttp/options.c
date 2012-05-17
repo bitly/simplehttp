@@ -320,7 +320,7 @@ int option_define_int(const char *option_name, int required, int default_val, in
     return 1;
 }
 
-int option_define_str(const char *option_name, int required, char *default_val, char **dest, int(*cb)(char *value), const char *help)
+int option_define_str(const char *option_name, int required, const char *default_val, char **dest, int(*cb)(char *value), const char *help)
 {
     struct Option *option = new_option(option_name, required, help);
     if (!option) {
