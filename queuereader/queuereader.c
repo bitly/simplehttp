@@ -226,19 +226,21 @@ struct json_object *queuereader_copy_tasks(struct json_object *input_array)
     return tasks_array;
 }
 
-void queuereader_finish_task(int index)
+void queuereader_finish_task_by_name(const char *finished_task)
 {
     struct json_object *new_tasks_array;
     struct json_object *tasks;
     int i;
     const char *task;
     
-    // walk the array of tasks_left and skip the one that matches the index specified...
+    // walk the array of tasks_left and skip the one that matches the tast string specified...
     tasks = json_object_object_get(json_msg, "tasks_left");
     new_tasks_array = json_object_new_array();
-    for (i = 0; (i < json_object_array_length(tasks)) && (i != index); i++) {
+    for (i = 0; i < json_object_array_length(tasks); i++) {
         task = json_object_get_string(json_object_array_get_idx(tasks, i));
-        json_object_array_add(new_tasks_array, json_object_new_string(task));
+        if (strcmp(finished_task, task) != 0) {
+            json_object_array_add(new_tasks_array, json_object_new_string(task));
+        }
     }
     json_object_object_add(json_msg, "tasks_left", new_tasks_array);
 }
