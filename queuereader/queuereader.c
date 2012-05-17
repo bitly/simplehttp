@@ -245,23 +245,6 @@ void queuereader_finish_task_by_name(const char *finished_task)
     json_object_object_add(json_msg, "tasks_left", new_tasks_array);
 }
 
-void queuereader_finish_task(int index)
-{
-    struct json_object *new_tasks_array;
-    struct json_object *tasks;
-    int i;
-    const char *task;
-    
-    // walk the array of tasks_left and skip the one that matches the index specified...
-    tasks = json_object_object_get(json_msg, "tasks_left");
-    new_tasks_array = json_object_new_array();
-    for (i = 0; (i < json_object_array_length(tasks)) && (i != index); i++) {
-        task = json_object_get_string(json_object_array_get_idx(tasks, i));
-        json_object_array_add(new_tasks_array, json_object_new_string(task));
-    }
-    json_object_object_add(json_msg, "tasks_left", new_tasks_array);
-}
-
 void queuereader_source_request(int fd, short what, void *cbarg)
 {
     struct GlobalData *client_data = (struct GlobalData *)cbarg;
