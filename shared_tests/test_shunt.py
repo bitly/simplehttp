@@ -152,4 +152,4 @@ class SubprocessTest(unittest.TestCase):
             logging.debug('cleaning up %s' % dirname)
             pipe = subprocess.Popen(['rm', '-rf', dirname])
             pipe.wait()
-        check_valgrind_output('test_output/vg.out')
+        check_valgrind_output(os.path.join(self.test_output_dir, 'vg.out'))
