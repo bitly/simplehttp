@@ -18,7 +18,7 @@
 
 // defined values
 #define NAME            "simpleleveldb"
-#define VERSION         "0.8"
+#define VERSION         "0.9"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
@@ -431,7 +431,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void range_match_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *start_key, *end_key, *key_clean;
+    char *start_key, *end_key;
     const char *key, *value;
     char sep;
     size_t key_len, value_len;
@@ -477,10 +477,8 @@ void range_match_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     while (leveldb_iter_valid(bt_iter) && (result_limit == 0 || result_count < result_limit)) {
         key = leveldb_iter_key(bt_iter, &key_len);
-        key_clean = strndup(key, key_len);
         
-        if (strcmp(key_clean, end_key) > 0) {
-            free(key_clean);
+        if (strncmp(key, end_key, key_len) > 0) {
             break;
         }
         
@@ -488,18 +486,18 @@ void range_match_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         
         if (format == json_format) {
             tmp_obj = json_object_new_object();
-            json_object_object_add(tmp_obj, key_clean, json_object_new_string_len(value, value_len));
+            json_object_object_add(tmp_obj, "key", json_object_new_string_len(key, key_len));
+            json_object_object_add(tmp_obj, "value", json_object_new_string_len(value, value_len));
             json_object_array_add(result_array, tmp_obj);
         } else {
-            evbuffer_add_printf(evb, "%s%c", key_clean, sep);
+            evbuffer_add(evb, key, key_len);
+            evbuffer_add_printf(evb, "%c", sep);
             evbuffer_add(evb, value, value_len);
             evbuffer_add_printf(evb, "\n");
         }
         
         leveldb_iter_next(bt_iter);
         result_count ++;
-        
-        free(key_clean);
     }
     if (format == json_format) {
         json_object_object_add(jsobj, "status", json_object_new_string(result_count ? "ok" : "no results"));
@@ -514,7 +512,7 @@ void range_match_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 
 void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
 {
-    char *fw_key, *key_clean;
+    char *fw_key;
     const char *key, *value;
     char sep;
     size_t key_len, value_len;
@@ -555,30 +553,28 @@ void fwmatch_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
     
     while (leveldb_iter_valid(fw_iter) && (result_limit == 0 || result_count < result_limit)) {
         key = leveldb_iter_key(fw_iter, &key_len);
-        key_clean = strndup(key, key_len);
         
         // this is the case where we are only fwing keys of this prefix
         // so we need to break out of the loop at the last key
-        if (strlen(fw_key) > key_len || strncmp(key_clean, fw_key, strlen(fw_key)) != 0 ) {
-            free(key_clean);
+        if (strlen(fw_key) > key_len || strncmp(key, fw_key, strlen(fw_key)) != 0 ) {
             break;
         }
         value = leveldb_iter_value(fw_iter, &value_len);
         
         if (format == json_format) {
             tmp_obj = json_object_new_object();
-            json_object_object_add(tmp_obj, key_clean, json_object_new_string_len(value, value_len));
+            json_object_object_add(tmp_obj, "key", json_object_new_string_len(key, key_len));
+            json_object_object_add(tmp_obj, "value", json_object_new_string_len(value, value_len));
             json_object_array_add(result_array, tmp_obj);
         } else {
-            evbuffer_add_printf(evb, "%s%c", key_clean, sep);
+            evbuffer_add(evb, key, key_len);
+            evbuffer_add_printf(evb, "%c", sep);
             evbuffer_add(evb, value, value_len);
             evbuffer_add_printf(evb, "\n");
         }
         
         leveldb_iter_next(fw_iter);
         result_count ++;
-        
-        free(key_clean);
     }
     if (format == json_format) {
         json_object_object_add(jsobj, "status", json_object_new_string(result_count ? "ok" : "no results"));

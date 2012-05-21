@@ -74,7 +74,11 @@ class SimpleLeveldbTest(SubprocessTest):
         data = http_fetch('/mget', dict(key=['test_multikey_1', 'test_multikey_2', 'test_multikey_3'], format='txt'))
         assert data == 'test_multikey_1,asdf1\ntest_multikey_2,asdf2\n'
         data = http_fetch_json("/fwmatch", dict(key="test_multikey"))
-        assert data == [{'test_multikey_1': 'asdf1'}, {'test_multikey_2': 'asdf2'}]
+        assert data == [{'key':'test_multikey_1', 'value':'asdf1'}, {'key':'test_multikey_2', 'value':'asdf2'}]
+        data = http_fetch_json("/range_match", dict(start="test_multikey_1", end="test_multikey_2"))
+        assert data == [{'key':'test_multikey_1', 'value':'asdf1'}, {'key':'test_multikey_2', 'value':'asdf2'}]
+        data = http_fetch("/range_match", dict(start="test_multikey_1", end="test_multikey_2", format='txt'))
+        assert data == "test_multikey_1,asdf1\ntest_multikey_2,asdf2\n"
         data = http_fetch("/fwmatch", dict(key="test_multikey", format="txt"))
         assert data == "test_multikey_1,asdf1\ntest_multikey_2,asdf2\n"
         http_fetch_json('/mput', body='test_multikey_3,mv1a;mv1b\ntest_multikey_4,mv2a;mv2b\ntest_multikey_5,mv3a')
