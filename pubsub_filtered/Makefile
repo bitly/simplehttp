@@ -5,11 +5,13 @@ LIBSIMPLEHTTP ?= /usr/local
 CFLAGS = -I. -I$(LIBSIMPLEHTTP)/include -I.. -I$(LIBEVENT)/include -g 
 LIBS = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -L$(LIBEVENT)/lib -levent -lsimplehttp -ljson -lpcre -lm -lpubsubclient -lcrypto
 
+LIBS_STREAM_FILTER = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -lsimplehttp -ljson
+
 pubsub_filtered: pubsub_filtered.c md5.c
 	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS)
 
 stream_filter: stream_filter.c md5.c
-	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS)
+	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS_STREAM_FILTER)
 
 install:
 	/usr/bin/install -d $(TARGET)/bin/
