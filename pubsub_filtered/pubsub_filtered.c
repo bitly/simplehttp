@@ -701,8 +701,8 @@ int main(int argc, char **argv)
         }
     }
     
-    if ( !!expected_key ^ !!( expected_key || expected_value_regex ) ) {
-        fprintf(stderr, "--expected-key and --expected-value must be used together\n");
+    if ( !!expected_key ^ !!( expected_value || expected_value_regex ) ) {
+        fprintf(stderr, "--expected-key and --expected-value[-regex] must be used together\n");
         exit(1);
     }
     if (!simplehttp_parse_url(pubsub_url, strlen(pubsub_url), &source_address, &source_port, &source_path)) {
