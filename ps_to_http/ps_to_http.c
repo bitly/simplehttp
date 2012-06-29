@@ -13,7 +13,7 @@
 #define _DEBUG(...) do {;} while (0)
 #endif
 
-#define VERSION "0.5.1"
+#define VERSION "0.5.2"
 
 struct destination_url {
     char *address;
@@ -175,12 +175,14 @@ void free_destination_urls()
 int main(int argc, char **argv)
 {
     char *pubsub_url;
+    char *secondary_pubsub_url = NULL;
     char *address;
     int port;
     char *path;
     
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
     option_define_str("pubsub_url", OPT_REQUIRED, "http://127.0.0.1:80/sub?multipart=0", &pubsub_url, NULL, "url of pubsub to read from");
+    option_define_str("secondary_pubsub_url", OPT_OPTIONAL, NULL, &secondary_pubsub_url, NULL, "url of pubsub to read from");
     option_define_bool("round_robin", OPT_OPTIONAL, 0, &round_robin, NULL, "write round-robin to destination urls");
     option_define_str("destination_get_url", OPT_OPTIONAL, NULL, NULL, destination_get_url_cb, "(multiple) url(s) to HTTP GET to\n\t\t\t This URL must contain a %s for the message data\n\t\t\t for a simplequeue use \"http://127.0.0.1:8080/put?data=%s\"");
     option_define_str("destination_post_url", OPT_OPTIONAL, NULL, NULL, destination_post_url_cb, "(multiple) url(s) to HTTP POST to\n\t\t\t For a pubsub endpoint use \"http://127.0.0.1:8080/pub\"");
@@ -206,18 +208,36 @@ int main(int argc, char **argv)
         }
         
         pubsubclient_run();
-        pubsubclient_free();
         
         free(address);
         free(path);
+        free(pubsub_url);
     } else {
         fprintf(stderr, "ERROR: failed to parse pubsub_url\n");
+    }
+    if (secondary_pubsub_url && simplehttp_parse_url(secondary_pubsub_url, strlen(secondary_pubsub_url), &address, &port, &path)) {
+	    pubsubclient_init(address, port, path, process_message_cb, error_cb, NULL);
+
+        if (option_get_int("max_silence") > 0) {
+            _DEBUG("Registering timer.\n");
+            max_silence_time.tv_sec = option_get_int("max_silence");
+            evtimer_set(&silence_ev, silence_cb, NULL);
+            evtimer_add(&silence_ev, &max_silence_time);
+        }
+
+        pubsubclient_run();
+
+        free(address);
+        free(path);
+        free(secondary_pubsub_url);
+    } else {
+        fprintf(stderr, "ERROR: failed to parse secondary_pubsub_url\n");
     }
     
     free_destination_urls();
     free_async_connection_pool();
     free_options();
-    free(pubsub_url);
+    pubsubclient_free();
     
     return 0;
 }
