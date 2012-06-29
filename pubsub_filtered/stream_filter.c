@@ -6,7 +6,7 @@
 #include <simplehttp/options.h>
 #include "md5.h"
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 
 #define BUF_SZ (1024 * 16)
 
@@ -21,6 +21,10 @@ static char *blacklisted_fields[64];
 static int  num_blacklisted_fields = 0;
 static char *expected_key = NULL;
 static char *expected_value = NULL;
+static int verbose;
+
+static uint64_t msgRecv = 0;
+static uint64_t msgFail = 0;
 
 static char buf[BUF_SZ];
 
@@ -121,7 +125,10 @@ void process_message(const char *source)
     json_in = json_tokener_parse(source);
     
     if (json_in == NULL) {
-        fprintf(stderr, "ERR: unable to parse json %s\n", source);
+        msgFail++;
+        if (verbose) {
+            fprintf(stderr, "ERR: unable to parse json '%s'\n", source);
+        }
         return;
     }
     
@@ -179,9 +186,8 @@ int version_cb(int value)
 
 int main(int argc, char **argv)
 {
-    uint64_t msgRecv = 0;
-    
     option_define_bool("version", OPT_OPTIONAL, 0, NULL, version_cb, VERSION);
+    option_define_bool("verbose", OPT_OPTIONAL, 0, &verbose, NULL, "verbose output (to stderr)");
     option_define_str("blacklist_fields", OPT_OPTIONAL, NULL, NULL, parse_blacklisted_fields, "comma separated list of fields to remove");
     option_define_str("encrypted_fields", OPT_OPTIONAL, NULL, NULL, parse_encrypted_fields, "comma separated list of fields to encrypt");
     option_define_str("expected_key", OPT_OPTIONAL, NULL, &expected_key, NULL, "key to expect in messages before echoing to clients");
@@ -197,14 +203,11 @@ int main(int argc, char **argv)
     }
     
     while (fgets(buf, BUF_SZ, stdin)) {
-        process_message(buf);
-        
         msgRecv++;
-        if (msgRecv % 5000) {
-            fprintf(stderr, "message #%lu\r", msgRecv);
-        }
+        process_message(buf);
     }
     
+    fprintf(stderr, "processed %lu lines, failed to parse %lu of them\n", msgRecv, msgFail);
     free_options();
     
     return 0;
