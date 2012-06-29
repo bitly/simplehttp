@@ -175,7 +175,7 @@ void free_destination_urls()
 int main(int argc, char **argv)
 {
     char *pubsub_url;
-    char *secondary_pubsub_url = NULL;
+    char *secondary_pubsub_url;
     char *address;
     int port;
     char *path;
@@ -215,23 +215,26 @@ int main(int argc, char **argv)
     } else {
         fprintf(stderr, "ERROR: failed to parse pubsub_url\n");
     }
-    if (secondary_pubsub_url && simplehttp_parse_url(secondary_pubsub_url, strlen(secondary_pubsub_url), &address, &port, &path)) {
+    if (secondary_pubsub_url) {
+        if (simplehttp_parse_url(secondary_pubsub_url, strlen(secondary_pubsub_url), &address, &port, &path)) {
 	    pubsubclient_init(address, port, path, process_message_cb, error_cb, NULL);
 
-        if (option_get_int("max_silence") > 0) {
-            _DEBUG("Registering timer.\n");
-            max_silence_time.tv_sec = option_get_int("max_silence");
-            evtimer_set(&silence_ev, silence_cb, NULL);
-            evtimer_add(&silence_ev, &max_silence_time);
+            if (option_get_int("max_silence") > 0) {
+                _DEBUG("Registering timer.\n");
+                max_silence_time.tv_sec = option_get_int("max_silence");
+                evtimer_del(&silence_ev);
+                evtimer_set(&silence_ev, silence_cb, NULL);
+                evtimer_add(&silence_ev, &max_silence_time);
+            }
+
+            pubsubclient_run();
+
+            free(address);
+            free(path);
+            free(secondary_pubsub_url);
+        } else {
+            fprintf(stderr, "ERROR: failed to parse secondary_pubsub_url\n");
         }
-
-        pubsubclient_run();
-
-        free(address);
-        free(path);
-        free(secondary_pubsub_url);
-    } else {
-        fprintf(stderr, "ERROR: failed to parse secondary_pubsub_url\n");
     }
     
     free_destination_urls();
