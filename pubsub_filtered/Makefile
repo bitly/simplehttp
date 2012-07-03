@@ -1,25 +1,49 @@
-LIBEVENT ?= /usr/local
 TARGET ?= /usr/local
+LIBEVENT ?= /usr/local
 LIBSIMPLEHTTP ?= /usr/local
+BLDDIR = build
+
+BINARIES = pubsub_filtered stream_filter
+
+SRCS_pubsub_filtered = pubsub_filtered.c md5.c shared.c
+SRCS_stream_filter   = stream_filter.c md5.c shared.c
+
+all: $(BINARIES)
 
 CFLAGS = -I. -I$(LIBSIMPLEHTTP)/include -I.. -I$(LIBEVENT)/include -g 
-LIBS = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -L$(LIBEVENT)/lib -levent -lsimplehttp -ljson -lpcre -lm -lpubsubclient -lcrypto
+LDFLAGS_pubsub_filtered = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -L$(LIBEVENT)/lib -levent -lsimplehttp -ljson -lpcre -lm -lpubsubclient -lcrypto
+LDFLAGS_stream_filter = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -lsimplehttp -ljson
 
-LIBS_STREAM_FILTER = -L. -L$(LIBSIMPLEHTTP)/lib -L../simplehttp -lsimplehttp -ljson
+OBJS_pubsub_filtered := $(patsubst %.c, $(BLDDIR)/%.o, $(SRCS_pubsub_filtered))
+OBJS_stream_filter   := $(patsubst %.c, $(BLDDIR)/%.o, $(SRCS_stream_filter))
+OBJS_all             := $(OBJS_pubsub_filtered) $(OBJS_stream_filter)
 
-pubsub_filtered: pubsub_filtered.c md5.c
-	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS)
+DEPS := $(patsubst %.o, %.o.deps, $(OBJS_all))
+# sort removes duplicates
+-include $(sort $(DEPS))
 
-stream_filter: stream_filter.c md5.c
-	$(CC) $(CFLAGS) -o $@ md5.c $< $(LIBS_STREAM_FILTER)
+pubsub_filtered: $(OBJS_pubsub_filtered)
+stream_filter: $(OBJS_stream_filter)
 
-install:
-	/usr/bin/install -d $(TARGET)/bin/
-	/usr/bin/install pubsub_filtered $(TARGET)/bin/
+$(BINARIES): %:
+	@echo " LD " $@
+	@mkdir -p $(dir $@)
+	@$(CC) -o $@ $(OBJS_$@) $(LDFLAGS_$@)
 
-install_stream_filter:
-	/usr/bin/install -d $(TARGET)/bin/
-	/usr/bin/install stream_filter $(TARGET)/bin/
+$(BLDDIR)/%.o: %.c
+	@echo " CC " $@
+	@mkdir -p $(dir $@)
+	@$(CC) -o $@ -c $< $(CFLAGS) -MMD -MF $@.deps
+
+install: $(patsubst %, $(TARGET)/bin/%, $(BINARIES))
+
+$(TARGET)/bin/%: %
+	@echo " INSTALL " $@
+	@/usr/bin/install -d $(dir $@)
+	@/usr/bin/install -D $< $@
 
 clean:
-	rm -rf *.o pubsub_filtered stream_filter *.dSYM
+	@echo " RM " $(BINARIES) $(OBJS_all) $(DEPS)
+	@rm -rf      $(BINARIES) $(OBJS_all) $(DEPS)
+
+.PHONY: all install clean

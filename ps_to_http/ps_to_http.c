@@ -13,7 +13,7 @@
 #define _DEBUG(...) do {;} while (0)
 #endif
 
-#define VERSION "0.5.2"
+#define VERSION "0.5.3"
 
 struct destination_url {
     char *address;
@@ -217,8 +217,8 @@ int main(int argc, char **argv)
     }
     if (secondary_pubsub_url) {
         if (simplehttp_parse_url(secondary_pubsub_url, strlen(secondary_pubsub_url), &address, &port, &path)) {
-	    pubsubclient_init(address, port, path, process_message_cb, error_cb, NULL);
-
+            pubsubclient_init(address, port, path, process_message_cb, error_cb, NULL);
+            
             if (option_get_int("max_silence") > 0) {
                 _DEBUG("Registering timer.\n");
                 max_silence_time.tv_sec = option_get_int("max_silence");
@@ -226,9 +226,9 @@ int main(int argc, char **argv)
                 evtimer_set(&silence_ev, silence_cb, NULL);
                 evtimer_add(&silence_ev, &max_silence_time);
             }
-
+            
             pubsubclient_run();
-
+            
             free(address);
             free(path);
             free(secondary_pubsub_url);
