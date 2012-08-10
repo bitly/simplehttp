@@ -87,16 +87,14 @@ int option_parse_command_line(int argc, char **argv)
             fprintf(stderr, "ERROR: invalid argument \"%s\"\n", option_str);
             return 0;
         }
-        option_name = strchr(option_str, '-');
-        option_name++;
-        option_name = strchr(option_name, '-');
-        option_name++;
+        option_name = option_str + 2;
         value = strchr(option_name, '=');
-        option_name_len = strlen(option_str) - (option_name - option_str);
         if (value != NULL) {
-            option_name_len -= strlen(value);
+            option_name_len = value - option_name;
             *value = '\0';
             value++;
+        } else {
+            option_name_len = strlen(option_name);
         }
         if (format_option_name(option_name)) {
             fprintf(stderr, "ERROR: unknown option \"--%s\"\n", option_name); // option_str ?
