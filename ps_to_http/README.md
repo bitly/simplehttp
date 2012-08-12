@@ -18,7 +18,7 @@ OPTIONS
   --destination-post-url=<str> (multiple) url(s) to HTTP POST to
                          For a pubsub endpoint use "http://127.0.0.1:8080/pub"
   --help                 list usage
-  --pubsub-url=<str>     url of pubsub to read from
+  --pubsub-url=<str>     (multiple) pubsub url(s) to read from
                          default: http://127.0.0.1:80/sub?multipart=0
   --round-robin          write round-robin to destination urls
   --max-silence          Maximum amount of time (in seconds) between messages from
