@@ -1,7 +1,14 @@
 simpleleveldb
 =============
 
-HTTP based leveldb server. 
+HTTP based leveldb server.
+
+NOTE: there is a known issue with long-running leveldb processes resulting 
+in unbounded memory growth of the process.  This is due to the fact that 
+the MANIFEST file is never compacted.  We've provided a `/hup` handler that 
+will close and re-open the database (twice) in order to trigger compaction 
+and removal of the MANIFEST.  
+(see [issue #70](https://github.com/bitly/simplehttp/issues/70))
 
 Building
 --------

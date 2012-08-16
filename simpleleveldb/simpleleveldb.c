@@ -11,14 +11,13 @@
 #include <simplehttp/simplehttp.h>
 #include <json/json.h>
 #include <leveldb/c.h>
-
 #include <sys/socket.h>
 #include "http-internal.h"
 #include "str_list_set.h"
 
 // defined values
 #define NAME            "simpleleveldb"
-#define VERSION         "0.9.1"
+#define VERSION         "0.9.2"
 
 #define DUMP_CSV_ITERS_CHECK       10
 #define DUMP_CSV_MSECS_WORK        10
@@ -63,6 +62,7 @@ void dump_csv_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 void do_dump_csv(int fd, short what, void *ctx);
 void set_dump_csv_timer(struct evhttp_request *req);
 void cleanup_dump_csv_cb(struct evhttp_connection *evcon, void *arg);
+void hup_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx);
 
 // global variables
 leveldb_t *ldb;
@@ -158,7 +158,6 @@ void db_close(void)
 int db_open(void)
 {
     char *error = NULL;
-    char *filename = option_get_str("db_file");
     
     ldb_options = leveldb_options_create();
     ldb_cache = leveldb_cache_create_lru(option_get_int("cache_size"));
@@ -176,9 +175,9 @@ int db_open(void)
     // leveldb_options_set_env(options, self->_env);
     leveldb_options_set_info_log(ldb_options, NULL);
     
-    ldb = leveldb_open(ldb_options, filename, &error);
+    ldb = leveldb_open(ldb_options, option_get_str("db_file"), &error);
     if (error) {
-        fprintf(stderr, "ERROR opening db:%s\n", error);
+        fprintf(stderr, "ERROR opening db: %s\n", error);
         free(error);
         return 0;
     }
@@ -1446,6 +1445,40 @@ int version_cb(int value)
     return 0;
 }
 
+void hup_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
+{
+    char *error = NULL;
+    
+    if (is_currently_dumping) {
+        evhttp_send_reply(req, 500, "CURRENTLY_DUMPING", evb);
+        return;
+    }
+    
+    fprintf(stdout, "closing and re-opening DB\n");
+    
+    // we use the lower level open/close functions so that we dont
+    // also purge the LRU cache
+    
+    leveldb_close(ldb);
+    ldb = leveldb_open(ldb_options, option_get_str("db_file"), &error);
+    if (error) {
+        fprintf(stderr, "ERROR opening db: %s\n", error);
+        free(error);
+        exit(1);
+    }
+    
+    // do it again, so that the MANIFEST is rolled off
+    leveldb_close(ldb);
+    ldb = leveldb_open(ldb_options, option_get_str("db_file"), &error);
+    if (error) {
+        fprintf(stderr, "ERROR opening db: %s\n", error);
+        free(error);
+        exit(1);
+    }
+    
+    evhttp_send_reply(req, HTTP_OK, "OK", evb);
+}
+
 int main(int argc, char **argv)
 {
     define_simplehttp_options();
@@ -1489,6 +1522,7 @@ int main(int argc, char **argv)
     simplehttp_set_cb("/stats*", stats_cb, NULL);
     simplehttp_set_cb("/exit*", exit_cb, NULL);
     simplehttp_set_cb("/dump_csv*", dump_csv_cb, NULL);
+    simplehttp_set_cb("/hup*", hup_cb, NULL);
     
     simplehttp_main();
     
