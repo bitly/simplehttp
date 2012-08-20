@@ -9,6 +9,7 @@ Sorted database server. Makes a tab (or comma) delimitated sorted file accessibl
 	                       default: 0.0.0.0
 	--daemon               daemonize process
 	--db-file=<str>       
+	--memory-lock          lock data file pages into memory
 	--enable-logging       request logging
 	--field-separator=<char> field separator (eg: comma, tab, pipe). default: TAB
 	--group=<str>          run as this group
