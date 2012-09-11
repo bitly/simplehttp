@@ -12,7 +12,8 @@ ps_to_http: ps_to_http.c
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 install:
-	/usr/bin/install -D ps_to_http $(TARGET)/bin/ps_to_http
+	/usr/bin/install -d $(TARGET)/bin/
+	/usr/bin/install ps_to_http $(TARGET)/bin/
 
 clean:
 	rm -rf *.o ps_to_http *.dSYM
