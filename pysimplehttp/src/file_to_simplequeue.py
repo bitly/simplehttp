@@ -11,7 +11,7 @@ except ImportError:
     import json
 
 class FileToSimplequeue(object):
-    http = tornado.httpclient.AsyncHTTPClient(max_simultaneous_connections=50, max_clients=50)
+    http = tornado.httpclient.AsyncHTTPClient()
     def __init__(self, input_file, max_concurrent, max_queue_depth, simplequeue_urls,
                 check_simplequeue_interval, stats_interval, filter_require=None, filter_exclude=None, io_loop=None):
         assert isinstance(simplequeue_urls, (list, tuple))

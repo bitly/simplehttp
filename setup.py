@@ -8,7 +8,7 @@ from setuptools import setup
 # upload .tar.gz to github
 # run python setup.py register to update pypi
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 scripts = ['pysimplehttp/scripts/ps_to_sq.py', 
            'pysimplehttp/scripts/file_to_sq.py']
 
