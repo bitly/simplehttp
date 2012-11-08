@@ -65,7 +65,7 @@ void simplehttp_log(const char *host, struct evhttp_request *req, uint64_t req_t
     
     fprintf(stdout, "[%c %s %s] %d %s %s%s", code, datetime_buf, id, response_code, method, host, uri);
     
-    if (display_post && (type == EVHTTP_REQ_POST)) {
+    if (display_post && (type == EVHTTP_REQ_POST) && EVBUFFER_DATA(req->input_buffer)) {
         fprintf(stdout, "?");
         fwrite(EVBUFFER_DATA(req->input_buffer), EVBUFFER_LENGTH(req->input_buffer), 1, stdout);
     }
