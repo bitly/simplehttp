@@ -11,7 +11,7 @@
 #include <json/json.h>
 
 #define NAME            "simpletokyo"
-#define VERSION         "2.0"
+#define VERSION         "2.1"
 
 void finalize_request(int response_code, struct evhttp_request *req, struct evbuffer *evb, struct evkeyvalq *args, struct json_object *jsobj);
 int db_open(char *addr, int port);
@@ -730,7 +730,7 @@ void mget_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         if (retry && !(value = tcrdbget2(rdb, key))) {
             db_status = tcrdbecode(rdb);
             
-            if (db_status != TTENOREC) {
+            if (db_status == TTENOREC) {
                 // skip 404 errors on txt format; they just get no key,value line
                 continue;
             }
@@ -816,7 +816,7 @@ void mget_int_cb(struct evhttp_request *req, struct evbuffer *evb, void *ctx)
         if (retry && !(value = (int *)tcrdbget2(rdb, key))) {
             db_status = tcrdbecode(rdb);
             
-            if (db_status != TTENOREC) {
+            if (db_status == TTENOREC) {
                 // skip 404 errors on txt format; they just get no key,value line
                 continue;
             }
