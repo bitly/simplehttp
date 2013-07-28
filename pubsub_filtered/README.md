@@ -17,6 +17,7 @@ OPTIONS
   --encrypted-fields=<str> comma separated list of fields to encrypt
   --expected-key=<str>   key to expect in messages before echoing to clients
   --expected-value=<str> value to expect in --expected-key field in messages before echoing to clients
+  --expected-value-regex=<str> regular expression matching expected value in --expected-key field before echoing to clients
   --group=<str>          run as this group
   --help                 list usage
   --port=<int>           port to listen on
