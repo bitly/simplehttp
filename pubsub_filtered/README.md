@@ -4,6 +4,8 @@ pubsub_filtered
 pubsub_filtered connects to a remote pubsub server and filters out or 
 hashes entries before re-publishing as a pubsub stream
 
+will not filter heartbeat messages but will pass them through to all clients
+
 if you have a message like '{desc:"ip added", ip:"127.0.0.1"}' to encrypt the ip you would start pubsub_filtered with '-e ip'
 
 OPTIONS
