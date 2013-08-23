@@ -17,7 +17,6 @@
 #include "pcre.h"
 
 
-#define DEBUG 1
 #define SUCCESS 0
 #define FAILURE 1
 #define VERSION "1.3"
@@ -198,7 +197,9 @@ void process_message_cb(char *source, void *arg)
     
     // some streams might have a heartbeat message, pass these through
     if (json_object_object_get(json_in, "_heartbeat_") != NULL) {
-        //if (DEBUG) fprintf(stdout, "heartbeat received\n");
+#ifdef DEBUG
+        fprintf(stdout, "heartbeat received\n");
+#endif
         is_heartbeat = 1;
     }
     
@@ -220,7 +221,9 @@ void process_message_cb(char *source, void *arg)
     encrypt_fields(encrypted_fields, num_encrypted_fields, json_in);
     
     json_out = json_object_to_json_string(json_in);
-    //if (DEBUG)fprintf(stdout, "json_out = %d bytes\n" , strlen(json_out));
+#ifdef DEBUG
+    fprintf(stdout, "json_out = %d bytes\n" , strlen(json_out));
+#endif
     
     // loop over the clients and send each this message
     TAILQ_FOREACH(client, &clients, entries) {
