@@ -179,6 +179,7 @@ void process_message_cb(char *source, void *arg)
     const char *raw_string;
     char *encrypted_string;
     const char *json_out;
+    int is_heartbeat = 0; // FALSE
     struct cli *client;
     struct filter *fltr;
     char *subject;
@@ -195,13 +196,19 @@ void process_message_cb(char *source, void *arg)
         return;
     }
     
+    // some streams might have a heartbeat message, pass these through
+    if (json_object_object_get(json_in, "_heartbeat_") != NULL) {
+        //if (DEBUG) fprintf(stdout, "heartbeat received\n");
+        is_heartbeat = 1;
+    }
+    
     // filter
-    if (expected_value && !filter_message_simple(expected_key, expected_value, json_in)) {
+    if (!is_heartbeat && expected_value && !filter_message_simple(expected_key, expected_value, json_in)) {
         json_object_put(json_in);
         return;
     }
     
-    if (expected_value_regex && !filter_message(expected_key, expected_value_regex, json_in)) {
+    if (!is_heartbeat && expected_value_regex && !filter_message(expected_key, expected_value_regex, json_in)) {
         json_object_put(json_in);
         return;
     }
@@ -229,7 +236,7 @@ void process_message_cb(char *source, void *arg)
             continue;
         }
         // filter
-        if (client->fltr.ok && !filter_message(client->fltr.subject, client->fltr.re, json_in)) {
+        if (!is_heartbeat && client->fltr.ok && !filter_message(client->fltr.subject, client->fltr.re, json_in)) {
             continue;
         }
         if (client->websocket) {
