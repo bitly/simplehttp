@@ -12,11 +12,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <fnmatch.h>
+
 #include "queue.h"
 #include "simplehttp.h"
 #include "stat.h"
 #include "request.h"
 #include "options.h"
+#include <event2/http_struct.h>
+#include <event2/http_compat.h>
+#include <event2/event_struct.h>
 
 typedef struct cb_entry {
     char *path;
@@ -30,8 +34,8 @@ int simplehttp_logging = 0;
 int callback_count = 0;
 uint64_t request_count = 0;
 struct evhttp *httpd;
-struct event pipe_ev;
-extern struct event_base *current_base;
+struct event *pipe_ev;
+struct event_base *simplehttp_event_base = NULL;
 
 int help_cb(int *value);
 
@@ -41,7 +45,7 @@ static void ignore_cb(int sig, short what, void *arg)
 
 void termination_handler(int signum)
 {
-    event_loopbreak();
+    simplehttp_loopbreak();
 }
 
 int get_uid(char *user)
@@ -149,8 +153,8 @@ void generic_request_handler(struct evhttp_request *req, void *arg)
 
 void simplehttp_init()
 {
-    if (!current_base) {
-        event_init();
+    if (!simplehttp_event_base) {
+        simplehttp_event_base = event_base_new();
     }
     TAILQ_INIT(&callbacks);
     TAILQ_INIT(&simplehttp_reqs);
@@ -165,7 +169,9 @@ void simplehttp_free()
         free(entry->path);
         free(entry);
     }
+    event_free(pipe_ev);
     evhttp_free(httpd);
+    event_base_free(simplehttp_event_base);
     simplehttp_stats_destruct();
 }
 
@@ -249,10 +255,10 @@ int simplehttp_listen()
     
     if (root != NULL) {
         if (chroot(root) != 0) {
-            err(1, strerror(errno));
+            err(1, "%s", strerror(errno));
         }
         if (chdir("/") != 0) {
-            err(1, strerror(errno));
+            err(1, "%s", strerror(errno));
         }
     }
     
@@ -278,13 +284,13 @@ int simplehttp_listen()
     signal(SIGQUIT, termination_handler);
     signal(SIGTERM, termination_handler);
     
-    signal_set(&pipe_ev, SIGPIPE, ignore_cb, NULL);
-    signal_add(&pipe_ev, NULL);
+    pipe_ev = event_new(simplehttp_event_base, SIGPIPE, EV_SIGNAL|EV_PERSIST, ignore_cb, NULL);
+    event_add(pipe_ev, NULL);
     
     simplehttp_stats_init();
     
-    httpd = evhttp_start(address, port);
-    if (!httpd) {
+    httpd = evhttp_new(simplehttp_event_base);
+    if (evhttp_bind_socket(httpd, address, port) == -1) {
         printf("could not bind to %s:%d\n", address, port);
         return 0;
     }
@@ -295,9 +301,13 @@ int simplehttp_listen()
     return 1;
 }
 
+void simplehttp_loopbreak()
+{
+    event_base_loopbreak(simplehttp_event_base);
+}
 void simplehttp_run()
 {
-    event_dispatch();
+    event_base_dispatch(simplehttp_event_base);
 }
 
 int simplehttp_main()

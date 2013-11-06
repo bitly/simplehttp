@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <time.h>
 #include "async_simplehttp.h"
+#include <event2/http_struct.h>
 
 // this is set as a parameter to init_async_connection_pool()
 static int request_logging = 0;
@@ -65,7 +66,7 @@ struct evhttp_connection *get_connection(const char *address, int port, struct C
     conn->port = port;
     conn->next_evcon = 0;
     for (i = 0; i < ASYNC_PER_HOST_CONNECTION_LIMIT; i++) {
-        conn->evcon[i] = evhttp_connection_new(address, port);
+        conn->evcon[i] = evhttp_connection_base_new(simplehttp_event_base, NULL, address, port);
         evhttp_connection_set_retries(conn->evcon[i], 0);
     }
     TAILQ_INSERT_TAIL(&connection_pool, conn, next);

@@ -2,9 +2,10 @@
 #define _SIMPLEHTTP_H
 
 #include "queue.h"
+#include <event2/event.h>
+#include <event2/buffer.h>
+#include <event2/http.h>
 #include "options.h"
-#include <event.h>
-#include <evhttp.h>
 
 #define SIMPLEHTTP_VERSION "0.1.3"
 
@@ -33,9 +34,12 @@ struct simplehttp_stats {
     int callback_count;
 };
 
+extern struct event_base *simplehttp_event_base;
+
 void simplehttp_init();
 int simplehttp_main();
 int simplehttp_listen();
+void simplehttp_loopbreak();
 void simplehttp_run();
 void simplehttp_free();
 void simplehttp_set_cb(const char *path, void (*cb)(struct evhttp_request *, struct evbuffer *, void *), void *ctx);
